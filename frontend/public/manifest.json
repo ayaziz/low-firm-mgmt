@@ -1,0 +1,9 @@
+{
+  "name": "LOMA",
+  "short_name": "LOMA",
+  "description": "Law Office Management Application",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#1a237e",
+  "theme_color": "#1a237e"
+}

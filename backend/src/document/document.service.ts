@@ -1,0 +1,247 @@
+import {
+  Injectable, NotFoundException, ConflictException,
+  ForbiddenException, UnprocessableEntityException, BadRequestException,
+} from '@nestjs/common';
+import { InjectQueue } from '@nestjs/bullmq';
+import { Queue } from 'bullmq';
+import { PrismaService } from '../prisma/prisma.service';
+import { AuditService } from '../audit/audit.service';
+import { StorageService } from './storage.service';
+import { v4 as uuidv4 } from 'uuid';
+import { CreateDocumentDto, CheckinDocumentDto, ShareDocumentDto } from './document.dto';
+
+const CHECKOUT_LOCK_HOURS = 4;
+const MAX_FILE_SIZE_MB = 50;
+
+@Injectable()
+export class DocumentService {
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly audit: AuditService,
+    private readonly storage: StorageService,
+    @InjectQueue('document-scan') private readonly scanQueue: Queue,
+  ) {}
+
+  async create(tenantSlug: string, tenantId: string, dto: CreateDocumentDto, userId: string) {
+    const docId = uuidv4();
+    const versionId = uuidv4();
+    const rowVersion = uuidv4();
+
+    const storageKey = this.storage.buildKey(tenantId, dto.customerId || null, dto.caseId || null, dto.docTypeId, docId, versionId);
+
+    // Create document record
+    await this.prisma.executeTenant(
+      tenantSlug,
+      `INSERT INTO documents (id, title, doc_type_id, customer_id, case_id, confidentiality_level, current_version_id, is_checked_out, is_deleted, has_legal_hold, row_version, created_by, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, false, false, false, $8, $9, NOW(), NOW())`,
+      [docId, dto.title, dto.docTypeId, dto.customerId || null, dto.caseId || null,
+       dto.confidentialityLevel || 'Standard', versionId, rowVersion, userId],
+    );
+
+    // Create pending version
+    await this.prisma.executeTenant(
+      tenantSlug,
+      `INSERT INTO document_versions (id, document_id, version_number, file_name, mime_type, storage_key, scan_status, uploaded_by, created_at)
+       VALUES ($1, $2, 1, $3, $4, $5, 'Pending', $6, NOW())`,
+      [versionId, docId, dto.fileName, dto.mimeType, storageKey, userId],
+    );
+
+    // Generate presigned upload URL
+    const uploadUrl = await this.storage.getUploadUrl(storageKey, dto.mimeType);
+
+    // Queue scan job
+    await this.scanQueue.add('scan', { tenantSlug, docId, versionId, fileName: dto.fileName, storageKey }, { delay: 2000 });
+
+    await this.audit.log({ tenantSlug, eventType: 'DOC_CREATED', actorUserId: userId, entityType: 'Document', entityId: docId, payload: { title: dto.title } });
+
+    return { id: docId, versionId, uploadUrl };
+  }
+
+  async getById(tenantSlug: string, docId: string, userId: string) {
+    const rows: any[] = await this.prisma.queryTenant(tenantSlug, `SELECT * FROM documents WHERE id = $1 AND is_deleted = false`, [docId]);
+    if (!rows?.length) throw new NotFoundException('Document not found');
+    const doc = rows[0];
+
+    // Check access for HighlyConfidential docs
+    if (doc.confidentiality_level === 'HighlyConfidential') {
+      const acl: any[] = await this.prisma.queryTenant(tenantSlug, `SELECT * FROM document_acl WHERE document_id = $1 AND user_id = $2`, [docId, userId]);
+      if (!acl?.length && doc.created_by !== userId) {
+        throw new ForbiddenException('Access denied to highly confidential document');
+      }
+    }
+
+    const versions: any[] = await this.prisma.queryTenant(tenantSlug, `SELECT * FROM document_versions WHERE document_id = $1 ORDER BY version_number DESC`, [docId]);
+    return { ...doc, versions: versions || [] };
+  }
+
+  async download(tenantSlug: string, docId: string, versionId: string | null, userId: string) {
+    const doc = await this.getById(tenantSlug, docId, userId);
+
+    const targetVersionId = versionId || doc.current_version_id;
+    const version = doc.versions?.find((v: any) => v.id === targetVersionId);
+    if (!version) throw new NotFoundException('Document version not found');
+
+    if (version.scan_status !== 'Passed') {
+      throw new UnprocessableEntityException('Document has not passed scan. Current status: ' + version.scan_status);
+    }
+
+    const downloadUrl = await this.storage.getDownloadUrl(version.storage_key);
+    return { downloadUrl, fileName: version.file_name, mimeType: version.mime_type };
+  }
+
+  async checkout(tenantSlug: string, docId: string, userId: string) {
+    const rows: any[] = await this.prisma.queryTenant(tenantSlug, `SELECT * FROM documents WHERE id = $1 AND is_deleted = false`, [docId]);
+    if (!rows?.length) throw new NotFoundException('Document not found');
+    const doc = rows[0];
+
+    if (doc.has_legal_hold) throw new UnprocessableEntityException('Document is under legal hold');
+    if (doc.is_checked_out) {
+      // Check if lock expired (4 hours)
+      const lockTime = new Date(doc.checked_out_at).getTime();
+      if (Date.now() - lockTime < CHECKOUT_LOCK_HOURS * 3600000) {
+        throw new ConflictException(`Document is checked out by user ${doc.checked_out_by} until lock expires`);
+      }
+    }
+
+    await this.prisma.executeTenant(
+      tenantSlug,
+      `UPDATE documents SET is_checked_out = true, checked_out_by = $1, checked_out_at = NOW(), updated_at = NOW() WHERE id = $2`,
+      [userId, docId],
+    );
+
+    await this.audit.log({ tenantSlug, eventType: 'DOC_CHECKED_OUT', actorUserId: userId, entityType: 'Document', entityId: docId });
+    return { message: 'Document checked out successfully' };
+  }
+
+  async checkin(tenantSlug: string, tenantId: string, docId: string, dto: CheckinDocumentDto, userId: string) {
+    const rows: any[] = await this.prisma.queryTenant(tenantSlug, `SELECT * FROM documents WHERE id = $1 AND is_deleted = false`, [docId]);
+    if (!rows?.length) throw new NotFoundException('Document not found');
+    const doc = rows[0];
+
+    if (!doc.is_checked_out) throw new UnprocessableEntityException('Document is not checked out');
+    if (doc.checked_out_by !== userId) throw new ForbiddenException('Document is checked out by another user');
+
+    // Get latest version number
+    const latestVer: any[] = await this.prisma.queryTenant(tenantSlug, `SELECT MAX(version_number) as max_ver FROM document_versions WHERE document_id = $1`, [docId]);
+    const nextVer = (latestVer?.[0]?.max_ver || 0) + 1;
+    const versionId = uuidv4();
+
+    const storageKey = this.storage.buildKey(tenantId, doc.customer_id, doc.case_id, doc.doc_type_id, docId, versionId);
+
+    // Create new version
+    await this.prisma.executeTenant(
+      tenantSlug,
+      `INSERT INTO document_versions (id, document_id, version_number, file_name, mime_type, storage_key, scan_status, change_note, uploaded_by, created_at)
+       VALUES ($1, $2, $3, $4, $5, $6, 'Pending', $7, $8, NOW())`,
+      [versionId, docId, nextVer, dto.fileName, dto.mimeType, storageKey, dto.changeNote || null, userId],
+    );
+
+    // Update document
+    await this.prisma.executeTenant(
+      tenantSlug,
+      `UPDATE documents SET current_version_id = $1, is_checked_out = false, checked_out_by = NULL, checked_out_at = NULL, row_version = $2, updated_at = NOW() WHERE id = $3`,
+      [versionId, uuidv4(), docId],
+    );
+
+    const uploadUrl = await this.storage.getUploadUrl(storageKey, dto.mimeType);
+    await this.scanQueue.add('scan', { tenantSlug, docId, versionId, fileName: dto.fileName, storageKey }, { delay: 2000 });
+
+    await this.audit.log({ tenantSlug, eventType: 'DOC_CHECKED_IN', actorUserId: userId, entityType: 'Document', entityId: docId, payload: { versionNumber: nextVer } });
+
+    return { versionId, uploadUrl };
+  }
+
+  async breakLock(tenantSlug: string, docId: string, userId: string) {
+    const rows: any[] = await this.prisma.queryTenant(tenantSlug, `SELECT * FROM documents WHERE id = $1`, [docId]);
+    if (!rows?.length) throw new NotFoundException('Document not found');
+    if (!rows[0].is_checked_out) throw new UnprocessableEntityException('Document is not checked out');
+
+    await this.prisma.executeTenant(
+      tenantSlug,
+      `UPDATE documents SET is_checked_out = false, checked_out_by = NULL, checked_out_at = NULL, updated_at = NOW() WHERE id = $1`,
+      [docId],
+    );
+
+    await this.audit.log({ tenantSlug, eventType: 'DOC_LOCK_BROKEN', actorUserId: userId, entityType: 'Document', entityId: docId, payload: { previousLockedBy: rows[0].checked_out_by } });
+    return { message: 'Lock broken' };
+  }
+
+  async shareDocument(tenantSlug: string, docId: string, dto: ShareDocumentDto, userId: string) {
+    const aclId = uuidv4();
+    await this.prisma.executeTenant(
+      tenantSlug,
+      `INSERT INTO document_acl (id, document_id, user_id, permission, granted_by, created_at) VALUES ($1, $2, $3, $4, $5, NOW())`,
+      [aclId, docId, dto.userId, dto.permission || 'Read', userId],
+    );
+    await this.audit.log({ tenantSlug, eventType: 'DOC_SHARED', actorUserId: userId, entityType: 'Document', entityId: docId, payload: { sharedWith: dto.userId } });
+    return { id: aclId };
+  }
+
+  async setLegalHold(tenantSlug: string, docId: string, userId: string) {
+    await this.prisma.executeTenant(
+      tenantSlug,
+      `UPDATE documents SET has_legal_hold = true, updated_at = NOW() WHERE id = $1`,
+      [docId],
+    );
+    await this.prisma.executeTenant(
+      tenantSlug,
+      `INSERT INTO legal_holds (id, document_id, placed_by, placed_at, is_active) VALUES ($1, $2, $3, NOW(), true)`,
+      [uuidv4(), docId, userId],
+    );
+    await this.audit.log({ tenantSlug, eventType: 'LEGAL_HOLD_PLACED', actorUserId: userId, entityType: 'Document', entityId: docId });
+    return { message: 'Legal hold placed' };
+  }
+
+  async removeLegalHold(tenantSlug: string, docId: string, userId: string) {
+    await this.prisma.executeTenant(
+      tenantSlug,
+      `UPDATE documents SET has_legal_hold = false, updated_at = NOW() WHERE id = $1`,
+      [docId],
+    );
+    await this.prisma.executeTenant(
+      tenantSlug,
+      `UPDATE legal_holds SET is_active = false, lifted_by = $1, lifted_at = NOW() WHERE document_id = $2 AND is_active = true`,
+      [userId, docId],
+    );
+    await this.audit.log({ tenantSlug, eventType: 'LEGAL_HOLD_LIFTED', actorUserId: userId, entityType: 'Document', entityId: docId });
+    return { message: 'Legal hold removed' };
+  }
+
+  async softDelete(tenantSlug: string, docId: string, userId: string) {
+    const rows: any[] = await this.prisma.queryTenant(tenantSlug, `SELECT * FROM documents WHERE id = $1`, [docId]);
+    if (!rows?.length) throw new NotFoundException('Document not found');
+    if (rows[0].has_legal_hold) throw new UnprocessableEntityException('Cannot delete document under legal hold');
+
+    await this.prisma.executeTenant(tenantSlug, `UPDATE documents SET is_deleted = true, updated_at = NOW() WHERE id = $1`, [docId]);
+    await this.audit.log({ tenantSlug, eventType: 'DOC_DELETED', actorUserId: userId, entityType: 'Document', entityId: docId });
+    return { message: 'Document deleted' };
+  }
+
+  async restore(tenantSlug: string, docId: string, userId: string) {
+    await this.prisma.executeTenant(tenantSlug, `UPDATE documents SET is_deleted = false, updated_at = NOW() WHERE id = $1`, [docId]);
+    await this.audit.log({ tenantSlug, eventType: 'DOC_RESTORED', actorUserId: userId, entityType: 'Document', entityId: docId });
+    return { message: 'Document restored' };
+  }
+
+  async list(tenantSlug: string, caseId?: string, customerId?: string, docTypeId?: string, cursor?: string, limit = 20) {
+    let sql = `SELECT d.*, dv.file_name, dv.scan_status FROM documents d
+               LEFT JOIN document_versions dv ON d.current_version_id = dv.id
+               WHERE d.is_deleted = false`;
+    const params: any[] = [];
+    let idx = 1;
+
+    if (caseId) { sql += ` AND d.case_id = $${idx++}`; params.push(caseId); }
+    if (customerId) { sql += ` AND d.customer_id = $${idx++}`; params.push(customerId); }
+    if (docTypeId) { sql += ` AND d.doc_type_id = $${idx++}`; params.push(docTypeId); }
+    if (cursor) { sql += ` AND d.created_at < $${idx++}`; params.push(cursor); }
+
+    sql += ` ORDER BY d.created_at DESC LIMIT $${idx}`;
+    params.push(limit + 1);
+
+    const rows: any[] = await this.prisma.queryTenant(tenantSlug, sql, params);
+    const hasMore = rows.length > limit;
+    const data = hasMore ? rows.slice(0, limit) : rows;
+
+    return { data, nextCursor: hasMore && data.length > 0 ? data[data.length - 1].created_at : null, hasMore };
+  }
+}

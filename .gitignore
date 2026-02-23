@@ -1,0 +1,132 @@
+# ──────────────────────────────────────────────────────────────
+# LOMA - Law Office Management Application
+# Git Ignore Configuration
+# ──────────────────────────────────────────────────────────────
+
+# ── Node.js ──
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+pnpm-debug.log*
+.npm
+.yarn/
+.pnp.*
+
+# ── Environment & Secrets ──
+.env
+.env.local
+.env.development
+.env.test
+.env.production
+.env*.local
+*.key
+*.pem
+*.crt
+secrets/
+
+# ── Build Outputs ──
+dist/
+build/
+out/
+.next/
+.nuxt/
+.cache/
+*.tsbuildinfo
+tsconfig.tsbuildinfo
+
+# ── Backend (NestJS) ──
+backend/dist/
+backend/build/
+backend/coverage/
+backend/.env
+backend/uploads/
+backend/logs/
+
+# ── Frontend (Next.js) ──
+frontend/.next/
+frontend/out/
+frontend/build/
+frontend/.cache/
+frontend/.env
+frontend/.env*.local
+frontend/public/uploads/
+
+# ── Testing ──
+coverage/
+*.lcov
+.nyc_output/
+test-results/
+playwright-report/
+.jest-cache/
+
+# ── Database ──
+*.db
+*.sqlite
+*.sqlite3
+*.db-journal
+prisma/migrations/.migrate_*
+prisma/dev.db*
+
+# ── Docker ──
+docker-compose.override.yml
+.dockerignore.local
+
+# ── OS Files ──
+.DS_Store
+Thumbs.db
+Desktop.ini
+*.swp
+*.swo
+*~
+.directory
+
+# ── IDEs & Editors ──
+.idea/
+.vscode/
+!.vscode/extensions.json
+!.vscode/settings.json
+*.sublime-project
+*.sublime-workspace
+.history/
+*.iml
+.project
+.classpath
+.c9/
+*.launch
+.settings/
+
+# ── Logs ──
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# ── Temporary Files ──
+tmp/
+temp/
+*.tmp
+*.bak
+*.orig
+*.rej
+.temp/
+
+# ── Package Manager Locks (keep package-lock.json, remove others if not used) ──
+# yarn.lock
+# pnpm-lock.yaml
+
+# ── Documentation Generated ──
+docs/.vitepress/dist/
+docs/.vitepress/cache/
+
+# ── Misc ──
+.turbo/
+.vercel/
+.netlify/
+.output/
+.changeset/
+.husky/_/

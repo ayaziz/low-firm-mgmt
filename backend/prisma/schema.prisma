@@ -1,0 +1,67 @@
+// Prisma schema for LOMA - Platform schema
+// Business data uses schema-per-tenant via raw SQL migrations
+// This schema defines the platform tables + tenant template tables
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ── Platform Schema ──────────────────────────────────────────
+
+model Tenant {
+  id            String   @id @default(uuid())
+  name          String
+  slug          String   @unique
+  currency      String   @default("USD")
+  timezone      String   @default("UTC")
+  locale        String   @default("en")
+  planTier      String   @default("Standard") // Standard | Enterprise
+  lawyerCanDraft Boolean @default(true)
+  isActive      Boolean  @default(true)
+  storageMode   String   @default("shared") // shared | dedicated
+  storageProvider String @default("s3") // s3 | azureBlob
+  storageBucket String   @default("loma-documents")
+  storageEndpoint String @default("")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  users         User[]
+
+  @@map("tenants")
+}
+
+model User {
+  id            String   @id @default(uuid())
+  tenantId      String
+  tenant        Tenant   @relation(fields: [tenantId], references: [id])
+  email         String
+  displayName   String
+  passwordHash  String   @default("") // dev auth only
+  roles         String[] // Lawyer, Accountant, TenantAdmin, SystemAdmin
+  isActive      Boolean  @default(true)
+  language      String   @default("en")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@unique([tenantId, email])
+  @@map("users")
+}
+
+model IdempotencyRecord {
+  id            String   @id @default(uuid())
+  tenantId      String
+  idempotencyKey String
+  endpoint      String
+  requestHash   String
+  responseCode  Int
+  responseBody  String
+  createdAt     DateTime @default(now())
+  expiresAt     DateTime
+
+  @@unique([tenantId, idempotencyKey, endpoint])
+  @@map("idempotency_records")
+}

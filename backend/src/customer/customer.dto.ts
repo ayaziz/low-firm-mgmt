@@ -1,0 +1,128 @@
+import { IsString, IsOptional, IsEnum, IsArray, ValidateNested } from 'class-validator';
+import { Type } from 'class-transformer';
+
+export class CreateContactDto {
+  @IsString()
+  name: string;
+
+  @IsOptional()
+  @IsString()
+  email?: string;
+
+  @IsOptional()
+  @IsString()
+  phone?: string;
+
+  @IsOptional()
+  @IsString()
+  roleId?: string;
+
+  @IsOptional()
+  isPrimary?: boolean;
+}
+
+export class CreateAddressDto {
+  @IsOptional()
+  @IsString()
+  type?: string;
+
+  @IsOptional()
+  isPrimary?: boolean;
+
+  @IsOptional()
+  @IsString()
+  lines?: string;
+
+  @IsOptional()
+  @IsString()
+  city?: string;
+
+  @IsOptional()
+  @IsString()
+  state?: string;
+
+  @IsOptional()
+  @IsString()
+  postalCode?: string;
+
+  @IsOptional()
+  @IsString()
+  country?: string;
+}
+
+export class CreateCustomerDto {
+  @IsString()
+  name: string;
+
+  @IsEnum(['Individual', 'Organization'])
+  customerType: 'Individual' | 'Organization';
+
+  @IsOptional()
+  @IsEnum(['Active', 'Inactive', 'Prospect'])
+  status?: string;
+
+  @IsOptional()
+  @IsString()
+  notes?: string;
+
+  @IsOptional()
+  @IsString()
+  nationalId?: string;
+
+  @IsOptional()
+  @IsString()
+  passportNumber?: string;
+
+  @IsOptional()
+  @IsString()
+  registrationId?: string;
+
+  @IsOptional()
+  @IsString()
+  taxId?: string;
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => CreateContactDto)
+  contacts?: CreateContactDto[];
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => CreateAddressDto)
+  addresses?: CreateAddressDto[];
+}
+
+export class UpdateCustomerDto {
+  @IsOptional()
+  @IsString()
+  name?: string;
+
+  @IsOptional()
+  @IsEnum(['Active', 'Inactive', 'Prospect'])
+  status?: string;
+
+  @IsOptional()
+  @IsString()
+  notes?: string;
+
+  @IsOptional()
+  @IsString()
+  nationalId?: string;
+
+  @IsOptional()
+  @IsString()
+  passportNumber?: string;
+
+  @IsOptional()
+  @IsString()
+  registrationId?: string;
+
+  @IsOptional()
+  @IsString()
+  taxId?: string;
+
+  @IsString()
+  rowVersion: string;
+}

@@ -1,0 +1,17 @@
+# Lightweight image for DB migrations and seeding
+FROM node:20-alpine
+WORKDIR /app
+
+# Install OpenSSL for Prisma
+RUN apk add --no-cache openssl
+
+COPY package.json package-lock.json* ./
+RUN npm ci --legacy-peer-deps
+
+COPY prisma/ prisma/
+COPY tsconfig.json ./
+COPY src/ src/
+
+RUN npx prisma generate
+
+CMD ["sh", "-c", "npx prisma migrate deploy && npx ts-node prisma/seed.ts && echo 'Database initialized successfully'"]
