@@ -18,12 +18,37 @@ import {
 import { useAuth } from '@/context/AuthContext';
 
 const DEV_USERS = [
-  { label: 'admin@loma.dev', email: 'admin@loma.dev', password: 'admin', roles: 'SystemAdmin, TenantAdmin' },
-  { label: 'lawyer1@loma.dev', email: 'lawyer1@loma.dev', password: 'password', roles: 'Lawyer' },
-  { label: 'lawyer2@loma.dev', email: 'lawyer2@loma.dev', password: 'password', roles: 'Lawyer' },
-  { label: 'accountant@loma.dev', email: 'accountant@loma.dev', password: 'password', roles: 'Accountant' },
-  { label: 'manager@loma.dev', email: 'manager@loma.dev', password: 'password', roles: 'TenantAdmin' },
-];
+	{
+		label: 'admin@demo.com',
+		email: 'admin@demo.com',
+		password: 'admin',
+		roles: 'SystemAdmin, TenantAdmin',
+	},
+	{
+		label: 'lawyer1@demo.com',
+		email: 'lawyer1@demo.com',
+		password: 'password',
+		roles: 'Lawyer',
+	},
+	{
+		label: 'lawyer2@demo.com',
+		email: 'lawyer2@demo.com',
+		password: 'password',
+		roles: 'Lawyer',
+	},
+	{
+		label: 'accountant@demo.com',
+		email: 'accountant@demo.com',
+		password: 'password',
+		roles: 'Accountant',
+	},
+	{
+		label: 'manager@demo.com',
+		email: 'manager@demo.com',
+		password: 'password',
+		roles: 'TenantAdmin',
+	},
+]
 
 export default function LoginPage() {
   const { t } = useTranslation();
