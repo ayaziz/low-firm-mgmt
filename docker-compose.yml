@@ -1,6 +1,5 @@
 # LOMA – Law Office Management Application
 # docker-compose up --build
-version: "3.9"
 
 services:
   # ── PostgreSQL ──

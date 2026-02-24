@@ -9,7 +9,7 @@ COPY tsconfig.json next.config.js ./
 COPY src/ src/
 COPY public/ public/
 
-ENV NEXT_PUBLIC_API_URL=http://localhost:4000
+ENV NEXT_PUBLIC_API_URL=http://backend:4000
 ENV NEXT_TELEMETRY_DISABLED=1
 
 RUN npm run build
