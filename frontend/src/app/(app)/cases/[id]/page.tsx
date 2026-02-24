@@ -28,9 +28,9 @@ import {
   Typography,
   CircularProgress,
 } from '@mui/material';
-import { Add as AddIcon, Edit as EditIcon } from '@mui/icons-material';
-import { caseApi } from '@/api';
-import type { Case, Task, Session, Filing, Note, Communication, CompletenessResult } from '@/types';
+import { Add as AddIcon, Edit as EditIcon, Delete as DeleteIcon, Download as DownloadIcon } from '@mui/icons-material';
+import { caseApi, documentApi, auditApi, accountingApi } from '@/api';
+import type { Case, Task, Session, Filing, Note, Communication, CompletenessResult, Document as Doc, AuditEvent, Invoice } from '@/types';
 
 function TabPanel({ children, value, index }: { children: React.ReactNode; value: number; index: number }) {
   return value === index ? <Box py={2}>{children}</Box> : null;
@@ -64,6 +64,11 @@ export default function CaseDetailPage() {
   const [filings, setFilings] = useState<Filing[]>([]);
   const [notes, setNotes] = useState<Note[]>([]);
   const [comms, setComms] = useState<Communication[]>([]);
+  const [memberships, setMemberships] = useState<Array<{ userId: string; role: string; displayName: string }>>([]);
+  const [parties, setParties] = useState<Array<{ id: string; party_id: string; role_in_case: string; party_name: string }>>([]);
+  const [documents, setDocuments] = useState<Doc[]>([]);
+  const [invoices, setInvoices] = useState<Invoice[]>([]);
+  const [auditEvents, setAuditEvents] = useState<AuditEvent[]>([]);
 
   // Dialogs
   const [taskOpen, setTaskOpen] = useState(false);
@@ -83,7 +88,7 @@ export default function CaseDetailPage() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [caseData, comp, taskRes, sessRes, filRes, noteRes, commRes] = await Promise.all([
+      const [caseData, comp, taskRes, sessRes, filRes, noteRes, commRes, memberRes, partyRes, docRes, invRes, auditRes] = await Promise.all([
         caseApi.getById(id),
         caseApi.getCompleteness(id).catch(() => null),
         caseApi.listTasks(id).catch(() => ({ data: [] })),
@@ -91,6 +96,11 @@ export default function CaseDetailPage() {
         caseApi.listFilings(id).catch(() => ({ data: [] })),
         caseApi.listNotes(id).catch(() => ({ data: [] })),
         caseApi.listCommunications(id).catch(() => ({ data: [] })),
+        caseApi.listMemberships(id).catch(() => []),
+        caseApi.listParties(id).catch(() => []),
+        documentApi.list({ caseId: id, limit: 100 }).catch(() => ({ data: [] })),
+        accountingApi.listInvoices({ caseId: id }).catch(() => ({ data: [] })),
+        auditApi.getByEntity('Case', id).catch(() => ({ data: [] })),
       ]);
       setCs(caseData);
       setCompleteness(comp);
@@ -99,6 +109,11 @@ export default function CaseDetailPage() {
       setFilings(filRes.data);
       setNotes(noteRes.data);
       setComms(commRes.data);
+      setMemberships(Array.isArray(memberRes) ? memberRes : []);
+      setParties(Array.isArray(partyRes) ? partyRes : []);
+      setDocuments(docRes.data);
+      setInvoices(invRes.data);
+      setAuditEvents(auditRes.data);
     } finally {
       setLoading(false);
     }
@@ -221,6 +236,10 @@ export default function CaseDetailPage() {
         <Tab label={`${t('case.filings')} (${filings.length})`} />
         <Tab label={`${t('case.notes')} (${notes.length})`} />
         <Tab label={`${t('case.communications')} (${comms.length})`} />
+        <Tab label={`${t('case.participants')} (${memberships.length + parties.length})`} />
+        <Tab label={`${t('case.documents')} (${documents.length})`} />
+        <Tab label={t('case.financialSummary')} />
+        <Tab label={t('case.audit')} />
       </Tabs>
 
       {/* Overview */}
@@ -371,6 +390,131 @@ export default function CaseDetailPage() {
             </List>
           </Card>
         ) : <Typography variant="body2" color="text.secondary">{t('common.noData')}</Typography>}
+      </TabPanel>
+
+      {/* Participants Tab */}
+      <TabPanel value={tab} index={6}>
+        <Typography variant="h6" mb={2}>{t('case.participants')}</Typography>
+        {memberships.length > 0 && (
+          <>
+            <Typography variant="subtitle2" color="text.secondary" mb={1}>Team Members</Typography>
+            <Card sx={{ mb: 2 }}>
+              <List disablePadding>
+                {memberships.map((m, i) => (
+                  <React.Fragment key={m.userId}>
+                    {i > 0 && <Divider />}
+                    <ListItem>
+                      <ListItemText primary={m.displayName} secondary={m.role} />
+                    </ListItem>
+                  </React.Fragment>
+                ))}
+              </List>
+            </Card>
+          </>
+        )}
+        {parties.length > 0 && (
+          <>
+            <Typography variant="subtitle2" color="text.secondary" mb={1}>Case Parties</Typography>
+            <Card>
+              <List disablePadding>
+                {parties.map((p, i) => (
+                  <React.Fragment key={p.id}>
+                    {i > 0 && <Divider />}
+                    <ListItem>
+                      <ListItemText primary={p.party_name} secondary={p.role_in_case} />
+                    </ListItem>
+                  </React.Fragment>
+                ))}
+              </List>
+            </Card>
+          </>
+        )}
+        {memberships.length === 0 && parties.length === 0 && (
+          <Typography variant="body2" color="text.secondary">{t('common.noData')}</Typography>
+        )}
+      </TabPanel>
+
+      {/* Documents Tab */}
+      <TabPanel value={tab} index={7}>
+        <Typography variant="h6" mb={2}>{t('case.documents')}</Typography>
+        {documents.length > 0 ? (
+          <Card>
+            <List disablePadding>
+              {documents.map((doc, i) => (
+                <React.Fragment key={doc.id}>
+                  {i > 0 && <Divider />}
+                  <ListItem
+                    secondaryAction={
+                      <IconButton edge="end" onClick={async () => {
+                        const res = await documentApi.download(doc.id);
+                        window.open(res.downloadUrl, '_blank');
+                      }}>
+                        <DownloadIcon fontSize="small" />
+                      </IconButton>
+                    }
+                  >
+                    <ListItemText
+                      primary={doc.title}
+                      secondary={`${doc.doc_type || ''} • ${doc.confidentiality || ''} • ${new Date(doc.created_at).toLocaleDateString()}`}
+                    />
+                    <Chip label={doc.scan_status} size="small" variant="outlined" sx={{ mr: 1 }} />
+                  </ListItem>
+                </React.Fragment>
+              ))}
+            </List>
+          </Card>
+        ) : (
+          <Typography variant="body2" color="text.secondary">{t('common.noData')}</Typography>
+        )}
+      </TabPanel>
+
+      {/* Financial Summary Tab */}
+      <TabPanel value={tab} index={8}>
+        <Typography variant="h6" mb={2}>{t('case.financialSummary')}</Typography>
+        {invoices.length > 0 ? (
+          <Card>
+            <List disablePadding>
+              {invoices.map((inv, i) => (
+                <React.Fragment key={inv.id}>
+                  {i > 0 && <Divider />}
+                  <ListItem>
+                    <ListItemText
+                      primary={`${inv.invoice_number || inv.id} — ${inv.status}`}
+                      secondary={`Due: ${inv.due_date ? new Date(inv.due_date).toLocaleDateString() : '—'} • Total: ${(inv.total_amount ?? 0).toLocaleString()}`}
+                    />
+                    <Chip label={inv.status} size="small" color={inv.status === 'Paid' ? 'success' : inv.status === 'Voided' ? 'error' : 'default'} />
+                  </ListItem>
+                </React.Fragment>
+              ))}
+            </List>
+          </Card>
+        ) : (
+          <Typography variant="body2" color="text.secondary">{t('common.noData')}</Typography>
+        )}
+      </TabPanel>
+
+      {/* Audit Tab */}
+      <TabPanel value={tab} index={9}>
+        <Typography variant="h6" mb={2}>{t('case.audit')}</Typography>
+        {auditEvents.length > 0 ? (
+          <Card>
+            <List disablePadding>
+              {auditEvents.map((ev, i) => (
+                <React.Fragment key={ev.id}>
+                  {i > 0 && <Divider />}
+                  <ListItem>
+                    <ListItemText
+                      primary={ev.action}
+                      secondary={`${ev.actor_name || ev.actor_id} • ${new Date(ev.created_at).toLocaleString()}`}
+                    />
+                  </ListItem>
+                </React.Fragment>
+              ))}
+            </List>
+          </Card>
+        ) : (
+          <Typography variant="body2" color="text.secondary">{t('common.noData')}</Typography>
+        )}
       </TabPanel>
 
       {/* Task Dialog */}

@@ -19,6 +19,7 @@ export class SearchController {
     return this.searchService.globalSearch(
       user.tenantSlug, user.sub, q, type, cursor,
       limit ? parseInt(limit, 10) : undefined,
+      !!user.stepUp,
     );
   }
 }

@@ -31,12 +31,12 @@ export class DocumentController {
 
   @Get(':id')
   getById(@CurrentUser() user: any, @Param('id') id: string) {
-    return this.documentService.getById(user.tenantSlug, id, user.sub);
+    return this.documentService.getById(user.tenantSlug, id, user.sub, !!user.stepUp);
   }
 
   @Get(':id/download')
   download(@CurrentUser() user: any, @Param('id') id: string, @Query('versionId') versionId?: string) {
-    return this.documentService.download(user.tenantSlug, id, versionId || null, user.sub);
+    return this.documentService.download(user.tenantSlug, id, versionId || null, user.sub, !!user.stepUp);
   }
 
   @Post(':id/checkout')
@@ -91,5 +91,23 @@ export class DocumentController {
   @Roles('TenantAdmin', 'SystemAdmin')
   restore(@CurrentUser() user: any, @Param('id') id: string) {
     return this.documentService.restore(user.tenantSlug, id, user.sub);
+  }
+
+  /* ── Case-level legal hold ── */
+
+  @Post('cases/:caseId/legal-hold')
+  @Roles('TenantAdmin', 'SystemAdmin')
+  @UseGuards(StepUpGuard)
+  @RequireStepUp()
+  setCaseLegalHold(@CurrentUser() user: any, @Param('caseId') caseId: string) {
+    return this.documentService.setCaseLegalHold(user.tenantSlug, caseId, user.sub);
+  }
+
+  @Delete('cases/:caseId/legal-hold')
+  @Roles('TenantAdmin', 'SystemAdmin')
+  @UseGuards(StepUpGuard)
+  @RequireStepUp()
+  removeCaseLegalHold(@CurrentUser() user: any, @Param('caseId') caseId: string) {
+    return this.documentService.removeCaseLegalHold(user.tenantSlug, caseId, user.sub);
   }
 }

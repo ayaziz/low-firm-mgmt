@@ -91,4 +91,54 @@ describe('SearchService', () => {
       expect(result).toContain('\u0627\u062D\u0645\u062F'); // أحمد → احمد
     });
   });
+
+  // ── HC filtering (FR-SEARCH-03) ──
+
+  describe('globalSearch – HC filtering', () => {
+    let searchService: SearchService;
+    let mockPrisma: any;
+
+    beforeEach(() => {
+      mockPrisma = {
+        queryTenant: jest.fn().mockResolvedValue([]),
+      };
+      searchService = new SearchService(mockPrisma);
+    });
+
+    it('should exclude HC docs when hasStepUp=false', async () => {
+      await searchService.globalSearch('test-firm', 'user-1', 'contract', 'document', undefined, 20, false);
+
+      expect(mockPrisma.queryTenant).toHaveBeenCalledWith(
+        'test-firm',
+        expect.stringContaining("!= 'HC'"),
+        expect.any(Array),
+      );
+    });
+
+    it('should include HC docs when hasStepUp=true', async () => {
+      await searchService.globalSearch('test-firm', 'user-1', 'contract', 'document', undefined, 20, true);
+
+      expect(mockPrisma.queryTenant).toHaveBeenCalledWith(
+        'test-firm',
+        expect.not.stringContaining("!= 'HC'"),
+        expect.any(Array),
+      );
+    });
+
+    it('should return empty results for queries shorter than 2 chars', async () => {
+      const result = await searchService.globalSearch('test-firm', 'user-1', 'a');
+      expect(result).toEqual({ results: [], cursor: null });
+      expect(mockPrisma.queryTenant).not.toHaveBeenCalled();
+    });
+
+    it('should default hasStepUp to false', async () => {
+      await searchService.globalSearch('test-firm', 'user-1', 'contract', 'document');
+
+      expect(mockPrisma.queryTenant).toHaveBeenCalledWith(
+        'test-firm',
+        expect.stringContaining("!= 'HC'"),
+        expect.any(Array),
+      );
+    });
+  });
 });

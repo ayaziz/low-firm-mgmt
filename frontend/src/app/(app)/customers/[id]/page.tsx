@@ -8,6 +8,7 @@ import {
   Button,
   Card,
   CardContent,
+  Checkbox,
   Chip,
   Dialog,
   DialogActions,
@@ -16,8 +17,10 @@ import {
   Divider,
   Grid,
   IconButton,
+  LinearProgress,
   List,
   ListItem,
+  ListItemIcon,
   ListItemText,
   Stack,
   Tab,
@@ -26,9 +29,9 @@ import {
   Typography,
   CircularProgress,
 } from '@mui/material';
-import { Add as AddIcon, Edit as EditIcon, Delete as DeleteIcon } from '@mui/icons-material';
-import { customerApi } from '@/api';
-import type { Customer, Contact, Address } from '@/types';
+import { Add as AddIcon, Edit as EditIcon, Delete as DeleteIcon, Download as DownloadIcon } from '@mui/icons-material';
+import { customerApi, documentApi, auditApi } from '@/api';
+import type { Customer, Contact, Address, Document as Doc, AuditEvent } from '@/types';
 
 function TabPanel({ children, value, index }: { children: React.ReactNode; value: number; index: number }) {
   return value === index ? <Box py={2}>{children}</Box> : null;
@@ -54,12 +57,28 @@ export default function CustomerDetailPage() {
   const [addressOpen, setAddressOpen] = useState(false);
   const [addressForm, setAddressForm] = useState({ address_type: '', line1: '', line2: '', city: '', country: '' });
 
+  // New tab data
+  const [documents, setDocuments] = useState<Doc[]>([]);
+  const [checklist, setChecklist] = useState<Array<{ id: string; label: string; is_met: boolean }>>([]);
+  const [auditEvents, setAuditEvents] = useState<AuditEvent[]>([]);
+  const [financialSummary, setFinancialSummary] = useState<{ totalInvoiced: number; totalPaid: number; outstanding: number } | null>(null);
+
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const c = await customerApi.getById(id);
+      const [c, docs, complianceRes, auditRes, finRes] = await Promise.all([
+        customerApi.getById(id),
+        documentApi.list({ customerId: id, limit: 100 }).catch(() => ({ data: [] })),
+        customerApi.getChecklist(id).catch(() => ({ items: [] })),
+        auditApi.getByEntity('Customer', id).catch(() => ({ data: [] })),
+        customerApi.getFinancialSummary(id).catch(() => null),
+      ]);
       setCustomer(c);
       setEditForm({ full_name: c.full_name, notes: c.notes || '' });
+      setDocuments(docs.data);
+      setChecklist(complianceRes.items);
+      setAuditEvents(auditRes.data);
+      setFinancialSummary(finRes);
     } finally {
       setLoading(false);
     }
@@ -143,10 +162,14 @@ export default function CustomerDetailPage() {
 
       <Divider />
 
-      <Tabs value={tab} onChange={(_, v) => setTab(v)} sx={{ mt: 1 }}>
+      <Tabs value={tab} onChange={(_, v) => setTab(v)} sx={{ mt: 1 }} variant="scrollable" scrollButtons="auto">
         <Tab label={t('customer.overview')} />
         <Tab label={t('customer.contacts')} />
         <Tab label={t('customer.addresses')} />
+        <Tab label={`${t('customer.documents')} (${documents.length})`} />
+        <Tab label={t('customer.compliance')} />
+        <Tab label={t('customer.financialSummary')} />
+        <Tab label={t('customer.audit')} />
       </Tabs>
 
       {/* Overview Tab */}
@@ -247,6 +270,130 @@ export default function CustomerDetailPage() {
           <Typography variant="body2" color="text.secondary">
             {t('common.noData')}
           </Typography>
+        )}
+      </TabPanel>
+
+      {/* Documents Tab */}
+      <TabPanel value={tab} index={3}>
+        <Typography variant="h6" mb={2}>{t('customer.documents')}</Typography>
+        {documents.length > 0 ? (
+          <Card>
+            <List disablePadding>
+              {documents.map((doc, i) => (
+                <React.Fragment key={doc.id}>
+                  {i > 0 && <Divider />}
+                  <ListItem
+                    secondaryAction={
+                      <IconButton edge="end" onClick={async () => {
+                        const res = await documentApi.download(doc.id);
+                        window.open(res.downloadUrl, '_blank');
+                      }}>
+                        <DownloadIcon fontSize="small" />
+                      </IconButton>
+                    }
+                  >
+                    <ListItemText
+                      primary={doc.title}
+                      secondary={`${doc.doc_type || ''} • ${doc.confidentiality || ''} • ${new Date(doc.created_at).toLocaleDateString()}`}
+                    />
+                    <Chip label={doc.scan_status} size="small" variant="outlined" sx={{ mr: 1 }} />
+                  </ListItem>
+                </React.Fragment>
+              ))}
+            </List>
+          </Card>
+        ) : (
+          <Typography variant="body2" color="text.secondary">{t('common.noData')}</Typography>
+        )}
+      </TabPanel>
+
+      {/* Compliance Checklist Tab */}
+      <TabPanel value={tab} index={4}>
+        <Typography variant="h6" mb={2}>{t('customer.compliance')}</Typography>
+        {checklist.length > 0 ? (
+          <Card>
+            <List disablePadding>
+              {checklist.map((item, i) => (
+                <React.Fragment key={item.id}>
+                  {i > 0 && <Divider />}
+                  <ListItem>
+                    <ListItemIcon>
+                      <Checkbox
+                        edge="start"
+                        checked={item.is_met}
+                        onChange={async (e) => {
+                          await customerApi.toggleChecklistItem(id, item.id, e.target.checked);
+                          setChecklist(prev => prev.map(ci => ci.id === item.id ? { ...ci, is_met: e.target.checked } : ci));
+                        }}
+                      />
+                    </ListItemIcon>
+                    <ListItemText primary={item.label} />
+                  </ListItem>
+                </React.Fragment>
+              ))}
+            </List>
+          </Card>
+        ) : (
+          <Typography variant="body2" color="text.secondary">{t('common.noData')}</Typography>
+        )}
+      </TabPanel>
+
+      {/* Financial Summary Tab */}
+      <TabPanel value={tab} index={5}>
+        <Typography variant="h6" mb={2}>{t('customer.financialSummary')}</Typography>
+        {financialSummary ? (
+          <Grid container spacing={3}>
+            <Grid item xs={12} sm={4}>
+              <Card>
+                <CardContent>
+                  <Typography variant="caption" color="text.secondary">{t('accounting.totalInvoiced') || 'Total Invoiced'}</Typography>
+                  <Typography variant="h5" fontWeight={700}>{financialSummary.totalInvoiced.toLocaleString()}</Typography>
+                </CardContent>
+              </Card>
+            </Grid>
+            <Grid item xs={12} sm={4}>
+              <Card>
+                <CardContent>
+                  <Typography variant="caption" color="text.secondary">{t('accounting.totalPaid') || 'Total Paid'}</Typography>
+                  <Typography variant="h5" fontWeight={700} color="success.main">{financialSummary.totalPaid.toLocaleString()}</Typography>
+                </CardContent>
+              </Card>
+            </Grid>
+            <Grid item xs={12} sm={4}>
+              <Card>
+                <CardContent>
+                  <Typography variant="caption" color="text.secondary">{t('customer.outstanding')}</Typography>
+                  <Typography variant="h5" fontWeight={700} color="error.main">{financialSummary.outstanding.toLocaleString()}</Typography>
+                </CardContent>
+              </Card>
+            </Grid>
+          </Grid>
+        ) : (
+          <Typography variant="body2" color="text.secondary">{t('common.noData')}</Typography>
+        )}
+      </TabPanel>
+
+      {/* Audit Tab */}
+      <TabPanel value={tab} index={6}>
+        <Typography variant="h6" mb={2}>{t('customer.audit')}</Typography>
+        {auditEvents.length > 0 ? (
+          <Card>
+            <List disablePadding>
+              {auditEvents.map((ev, i) => (
+                <React.Fragment key={ev.id}>
+                  {i > 0 && <Divider />}
+                  <ListItem>
+                    <ListItemText
+                      primary={ev.action}
+                      secondary={`${ev.actor_name || ev.actor_id} • ${new Date(ev.created_at).toLocaleString()}`}
+                    />
+                  </ListItem>
+                </React.Fragment>
+              ))}
+            </List>
+          </Card>
+        ) : (
+          <Typography variant="body2" color="text.secondary">{t('common.noData')}</Typography>
         )}
       </TabPanel>
 

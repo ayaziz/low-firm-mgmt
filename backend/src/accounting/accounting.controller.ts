@@ -20,7 +20,7 @@ export class AccountingController {
   @Post('invoices')
   @Roles('Lawyer', 'Accountant', 'TenantAdmin', 'SystemAdmin')
   createInvoice(@CurrentUser() user: any, @Body() dto: CreateInvoiceDto) {
-    return this.accountingService.createInvoice(user.tenantSlug, dto, user.sub);
+    return this.accountingService.createInvoice(user.tenantSlug, dto, user.sub, user.roles || []);
   }
 
   @Get('invoices')
@@ -88,7 +88,7 @@ export class AccountingController {
   @Post('expenses/:id/approve')
   @Roles('Accountant', 'TenantAdmin', 'SystemAdmin')
   approveExpense(@CurrentUser() user: any, @Param('id') id: string, @Body() dto: ApproveExpenseDto) {
-    return this.accountingService.approveExpense(user.tenantSlug, id, dto, user.sub);
+    return this.accountingService.approveExpense(user.tenantSlug, id, dto, user.sub, user.roles || []);
   }
 
   @Post('expenses/:id/reject')

@@ -1,4 +1,4 @@
-import { IsString, IsOptional, IsEnum, IsArray, ValidateNested } from 'class-validator';
+import { IsString, IsOptional, IsEnum, IsArray, IsDateString, ValidateNested } from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class CreateContactDto {
@@ -125,4 +125,31 @@ export class UpdateCustomerDto {
 
   @IsString()
   rowVersion: string;
+}
+
+export class CreateCustomerCommunicationDto {
+  @IsString()
+  typeId: string;
+
+  @IsDateString()
+  dateTime: string;
+
+  @IsEnum(['Inbound', 'Outbound'])
+  direction: string;
+
+  @IsOptional()
+  @IsString()
+  summary?: string;
+
+  @IsOptional()
+  @IsString()
+  nextSteps?: string;
+
+  @IsOptional()
+  @IsEnum(['LegalOnly', 'FinanceAllowed'])
+  visibilityScope?: string;
+
+  @IsOptional()
+  @IsString()
+  participants?: string;
 }

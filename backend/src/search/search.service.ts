@@ -30,6 +30,7 @@ export class SearchService {
     entityType?: string,
     cursor?: string,
     limit = 20,
+    hasStepUp = false,
   ) {
     if (!query || query.length < 2) return { results: [], cursor: null };
     const safeLimit = Math.min(limit, 50);
@@ -84,13 +85,15 @@ export class SearchService {
       }
     }
 
-    // Search Documents (metadata only)
+    // Search Documents (metadata only — filter HC if no step-up)
     if (!entityType || entityType === 'document') {
+      const hcFilter = hasStepUp ? '' : `AND COALESCE(d.confidentiality_level, 'Standard') != 'HC'`;
       const docResults = await this.prisma.queryTenant(tenantSlug,
         `SELECT d.id, d.title, d.file_name
          FROM documents d
          WHERE d.is_deleted = false
            AND (LOWER(d.title) LIKE $1 OR LOWER(COALESCE(d.file_name,'')) LIKE $1)
+           ${hcFilter}
          ${cursor ? `AND d.id > $3` : ''}
          ORDER BY d.id LIMIT $2`,
         cursor ? [likePattern, safeLimit, cursor] : [likePattern, safeLimit]);

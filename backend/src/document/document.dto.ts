@@ -1,4 +1,4 @@
-import { IsString, IsOptional, IsEnum, IsUUID } from 'class-validator';
+import { IsString, IsOptional, IsEnum, IsUUID, IsDateString } from 'class-validator';
 
 export class CreateDocumentDto {
   @IsString() title: string;
@@ -20,4 +20,5 @@ export class CheckinDocumentDto {
 export class ShareDocumentDto {
   @IsUUID() userId: string;
   @IsOptional() @IsEnum(['Read', 'ReadWrite']) permission?: string;
+  @IsOptional() @IsDateString() expiresAt?: string;
 }

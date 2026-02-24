@@ -3,7 +3,7 @@ import {
   UseGuards, Request, HttpCode, HttpStatus,
 } from '@nestjs/common';
 import { CustomerService } from './customer.service';
-import { CreateCustomerDto, UpdateCustomerDto, CreateContactDto } from './customer.dto';
+import { CreateCustomerDto, UpdateCustomerDto, CreateContactDto, CreateCustomerCommunicationDto } from './customer.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
 import { Roles } from '../common/decorators';
@@ -91,5 +91,24 @@ export class CustomerController {
     @Param('customerId') customerId: string,
   ) {
     return this.customerService.getComplianceChecklist(req.user.tenantSlug, customerId);
+  }
+
+  @Post(':customerId/communications')
+  @Roles('Lawyer', 'TenantAdmin', 'SystemAdmin')
+  @HttpCode(HttpStatus.CREATED)
+  async createCommunication(
+    @Request() req: any,
+    @Param('customerId') customerId: string,
+    @Body() dto: CreateCustomerCommunicationDto,
+  ) {
+    return this.customerService.createCommunication(req.user.tenantSlug, customerId, dto, req.user.id);
+  }
+
+  @Get(':customerId/communications')
+  async listCommunications(
+    @Request() req: any,
+    @Param('customerId') customerId: string,
+  ) {
+    return this.customerService.listCommunications(req.user.tenantSlug, customerId);
   }
 }

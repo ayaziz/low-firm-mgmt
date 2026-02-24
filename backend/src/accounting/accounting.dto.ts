@@ -15,6 +15,7 @@ export class CreateInvoiceDto {
   @IsOptional() @IsString() currency?: string;
   @IsOptional() @IsDateString() dueDate?: string;
   @IsOptional() @IsString() notes?: string;
+  @IsOptional() @IsNumber() discountRatePct?: number;
   @IsArray()
   @ValidateNested({ each: true })
   @Type(() => InvoiceLineItemDto)

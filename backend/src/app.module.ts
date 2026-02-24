@@ -2,6 +2,7 @@ import { Module, NestModule, MiddlewareConsumer } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { BullModule } from '@nestjs/bullmq';
 import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
+import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { PrismaModule } from './prisma/prisma.module';
 import { AuthModule } from './auth/auth.module';
 import { TenantModule } from './tenant/tenant.module';
@@ -26,6 +27,19 @@ import { CorrelationMiddleware } from './common/correlation.middleware';
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
     LoggingModule,
+    ThrottlerModule.forRoot([{
+      name: 'short',
+      ttl: 1000,   // 1 second window
+      limit: 20,   // 20 requests per second
+    }, {
+      name: 'medium',
+      ttl: 60000,  // 1 minute window
+      limit: 200,  // 200 requests per minute
+    }, {
+      name: 'long',
+      ttl: 3600000, // 1 hour window
+      limit: 5000,  // 5000 requests per hour
+    }]),
     BullModule.forRoot({
       connection: {
         host: process.env.REDIS_HOST || 'localhost',
@@ -55,6 +69,11 @@ import { CorrelationMiddleware } from './common/correlation.middleware';
     {
       provide: APP_GUARD,
       useClass: TenantGuard,
+    },
+    // Global rate limiter — protects all endpoints
+    {
+      provide: APP_GUARD,
+      useClass: ThrottlerGuard,
     },
     // Global HTTP logging interceptor — logs every request/response with
     // correlation ID, user context, and timing.

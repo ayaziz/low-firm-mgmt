@@ -1,6 +1,6 @@
 import {
   Injectable, NotFoundException, ConflictException,
-  UnprocessableEntityException, BadRequestException,
+  UnprocessableEntityException, BadRequestException, ForbiddenException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
@@ -20,7 +20,15 @@ export class AccountingService {
 
   // ===================== INVOICES =====================
 
-  async createInvoice(tenantSlug: string, dto: CreateInvoiceDto, userId: string) {
+  async createInvoice(tenantSlug: string, dto: CreateInvoiceDto, userId: string, userRoles: string[] = []) {
+    // Lawyer draft gate: check tenant setting
+    if (userRoles.includes('Lawyer') && !userRoles.includes('TenantAdmin') && !userRoles.includes('SystemAdmin')) {
+      const tenant = await this.prisma.tenant.findUnique({ where: { slug: tenantSlug } });
+      if (!tenant?.lawyerCanDraft) {
+        throw new ForbiddenException('Lawyers are not allowed to create draft invoices in this tenant');
+      }
+    }
+
     const invoiceId = uuidv4();
 
     // Generate invoice number: INV-YYYY-SEQ
@@ -30,7 +38,7 @@ export class AccountingService {
     const seqRows: any[] = await this.prisma.queryTenant(tenantSlug, `SELECT last_seq FROM invoice_sequences WHERE year = $1`, [year]);
     const invoiceNumber = `INV-${year}-${String(seqRows[0]?.last_seq || 1).padStart(4, '0')}`;
 
-    // Calculate totals
+    // Calculate totals with discount support
     let subtotal = 0;
     let totalTax = 0;
     for (const item of dto.lineItems) {
@@ -39,14 +47,16 @@ export class AccountingService {
       subtotal += lineTotal;
       totalTax += lineTax;
     }
-    const totalAmount = subtotal + totalTax;
+    const discountRatePct = dto.discountRatePct ?? 0;
+    const discountAmount = subtotal * (discountRatePct / 100);
+    const totalAmount = subtotal - discountAmount + totalTax;
 
     await this.prisma.executeTenant(
       tenantSlug,
-      `INSERT INTO invoices (id, invoice_number, case_id, customer_id, status, currency, subtotal, tax_amount, total_amount, paid_amount, due_date, notes, row_version, created_by, created_at, updated_at)
-       VALUES ($1, $2, $3, $4, 'Draft', $5, $6, $7, $8, 0, $9, $10, $11, $12, NOW(), NOW())`,
+      `INSERT INTO invoices (id, invoice_number, case_id, customer_id, status, currency, subtotal, tax_amount, discount_rate_pct, discount_amount, total_amount, paid_amount, due_date, notes, row_version, created_by, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, 'Draft', $5, $6, $7, $8, $9, $10, 0, $11, $12, $13, $14, NOW(), NOW())`,
       [invoiceId, invoiceNumber, dto.caseId, dto.customerId, dto.currency || 'SAR',
-       subtotal, totalTax, totalAmount, dto.dueDate || null, dto.notes || null, uuidv4(), userId],
+       subtotal, totalTax, discountRatePct, discountAmount, totalAmount, dto.dueDate || null, dto.notes || null, uuidv4(), userId],
     );
 
     // Insert line items
@@ -221,24 +231,35 @@ export class AccountingService {
     return { id: expenseId };
   }
 
-  async approveExpense(tenantSlug: string, expenseId: string, dto: ApproveExpenseDto, userId: string) {
+  async approveExpense(tenantSlug: string, expenseId: string, dto: ApproveExpenseDto, userId: string, userRoles: string[] = []) {
     const rows: any[] = await this.prisma.queryTenant(tenantSlug, `SELECT * FROM expenses WHERE id = $1`, [expenseId]);
     if (!rows?.length) throw new NotFoundException('Expense not found');
     if (rows[0].status === 'Approved') throw new UnprocessableEntityException('Expense already approved');
     if (rows[0].status === 'Rejected') throw new UnprocessableEntityException('Expense was rejected');
 
-    // Get workflow to determine steps
-    const workflows: any[] = await this.prisma.queryTenant(tenantSlug, `SELECT * FROM expense_approval_workflows ORDER BY step_order`, []);
-    const approvals: any[] = await this.prisma.queryTenant(tenantSlug, `SELECT * FROM expense_approvals WHERE expense_id = $1 ORDER BY step_order`, [expenseId]);
+    // Get active workflow to determine steps & required approver roles
+    const workflows: any[] = await this.prisma.queryTenant(tenantSlug,
+      `SELECT * FROM expense_approval_workflows WHERE is_active = true LIMIT 1`, []);
+    const approvals: any[] = await this.prisma.queryTenant(tenantSlug,
+      `SELECT * FROM expense_approvals WHERE expense_id = $1 ORDER BY step_order`, [expenseId]);
 
     const nextStep = (approvals?.length || 0) + 1;
-    const isLastStep = !workflows?.length || nextStep >= workflows.length;
+    const workflowSteps = workflows?.length ? (typeof workflows[0].steps === 'string' ? JSON.parse(workflows[0].steps) : workflows[0].steps) : [];
+    const isLastStep = !workflowSteps.length || nextStep >= workflowSteps.length;
+
+    // Validate approver role matches workflow step config
+    if (workflowSteps.length > 0) {
+      const stepConfig = workflowSteps.find((s: any) => s.stepOrder === nextStep);
+      if (stepConfig?.approverRole && !userRoles.includes(stepConfig.approverRole)) {
+        throw new ForbiddenException(`Step ${nextStep} requires role '${stepConfig.approverRole}'. Your roles: ${userRoles.join(', ')}`);
+      }
+    }
 
     await this.prisma.executeTenant(
       tenantSlug,
-      `INSERT INTO expense_approvals (id, expense_id, step_order, approver_user_id, decision, comment, decided_at)
-       VALUES ($1, $2, $3, $4, 'Approved', $5, NOW())`,
-      [uuidv4(), expenseId, nextStep, userId, dto.comment || null],
+      `INSERT INTO expense_approvals (id, expense_id, step_order, approver_user_id, approver_role, decision, comment, decided_at)
+       VALUES ($1, $2, $3, $4, $5, 'Approved', $6, NOW())`,
+      [uuidv4(), expenseId, nextStep, userId, userRoles[0] || null, dto.comment || null],
     );
 
     if (isLastStep) {

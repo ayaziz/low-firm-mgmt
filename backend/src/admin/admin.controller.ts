@@ -7,6 +7,7 @@ import {
   CreateUserDto, UpdateUserDto,
   CreateMasterDataDto, UpdateMasterDataDto,
   SaveExpenseWorkflowDto, UpdateTenantSettingsDto,
+  UpsertRetentionPolicyDto, CreateCourtDto, UpdateCourtDto,
 } from './admin.dto';
 
 @Controller('admin')
@@ -137,5 +138,32 @@ export class AdminController {
 			dto,
 			user.sub,
 		)
+	}
+
+	// --- Retention Policies ---
+	@Get('retention-policies')
+	listRetentionPolicies(@CurrentUser() user: any) {
+		return this.adminService.listRetentionPolicies(user.tenantSlug);
+	}
+
+	@Post('retention-policies')
+	upsertRetentionPolicy(@CurrentUser() user: any, @Body() dto: UpsertRetentionPolicyDto) {
+		return this.adminService.upsertRetentionPolicy(user.tenantSlug, dto.docTypeCode, dto.retentionDays, dto.description, user.sub);
+	}
+
+	// --- Courts ---
+	@Get('courts')
+	listCourts(@CurrentUser() user: any) {
+		return this.adminService.listCourts(user.tenantSlug);
+	}
+
+	@Post('courts')
+	createCourt(@CurrentUser() user: any, @Body() dto: CreateCourtDto) {
+		return this.adminService.createCourt(user.tenantSlug, dto, user.sub);
+	}
+
+	@Patch('courts/:id')
+	updateCourt(@CurrentUser() user: any, @Param('id') id: string, @Body() dto: UpdateCourtDto) {
+		return this.adminService.updateCourt(user.tenantSlug, id, dto, user.sub);
 	}
 }

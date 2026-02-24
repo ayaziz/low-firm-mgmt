@@ -2,7 +2,7 @@ import { Injectable, ConflictException, NotFoundException, BadRequestException }
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { v4 as uuidv4 } from 'uuid';
-import { CreateCustomerDto, UpdateCustomerDto, CreateContactDto, CreateAddressDto } from './customer.dto';
+import { CreateCustomerDto, UpdateCustomerDto, CreateContactDto, CreateAddressDto, CreateCustomerCommunicationDto } from './customer.dto';
 
 @Injectable()
 export class CustomerService {
@@ -330,6 +330,30 @@ export class CustomerService {
         throw new ConflictException(msg);
       }
     }
+  }
+
+  // --- Customer-level Communications ---
+  async createCommunication(tenantSlug: string, customerId: string, dto: CreateCustomerCommunicationDto, userId: string) {
+    await this.getById(tenantSlug, customerId); // ensure customer exists
+    const commId = uuidv4();
+    await this.prisma.executeTenant(
+      tenantSlug,
+      `INSERT INTO communications (id, case_id, customer_id, type_id, date_time, direction, participants, summary, next_steps, visibility_scope, created_by, created_at, updated_at)
+       VALUES ($1, NULL, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW(), NOW())`,
+      [commId, customerId, dto.typeId, dto.dateTime, dto.direction,
+       dto.participants || null, dto.summary || null, dto.nextSteps || null,
+       dto.visibilityScope || 'LegalOnly', userId],
+    );
+    await this.audit.log({ tenantSlug, eventType: 'COMM_CREATED', actorUserId: userId, entityType: 'Communication', entityId: commId, payload: { customerId } });
+    return { id: commId };
+  }
+
+  async listCommunications(tenantSlug: string, customerId: string) {
+    return this.prisma.queryTenant(
+      tenantSlug,
+      `SELECT * FROM communications WHERE customer_id = $1 ORDER BY date_time DESC`,
+      [customerId],
+    );
   }
 
   private async applyDefaultTemplates(tenantSlug: string, customerId: string) {

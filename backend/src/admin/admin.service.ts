@@ -330,4 +330,64 @@ export class AdminService {
 
     return updated;
   }
+
+  /* ───── Retention Policies ───── */
+
+  async listRetentionPolicies(tenantSlug: string) {
+    return this.prisma.queryTenant(tenantSlug,
+      `SELECT * FROM retention_policies ORDER BY doc_type_code`);
+  }
+
+  async upsertRetentionPolicy(tenantSlug: string, docTypeCode: string, retentionDays: number, description: string, actorId: string) {
+    const existing: any[] = await this.prisma.queryTenant(tenantSlug,
+      `SELECT id FROM retention_policies WHERE doc_type_code = $1`, [docTypeCode]);
+
+    if (existing?.length) {
+      await this.prisma.executeTenant(tenantSlug,
+        `UPDATE retention_policies SET retention_days = $1, description = $2 WHERE doc_type_code = $3`,
+        [retentionDays, description || null, docTypeCode]);
+      await this.audit.log({ tenantSlug, eventType: 'RETENTION_POLICY_UPDATED', actorUserId: actorId, entityType: 'RetentionPolicy', entityId: existing[0].id, payload: { docTypeCode, retentionDays } });
+      return { id: existing[0].id, docTypeCode, retentionDays, description };
+    }
+
+    const id = uuidv4();
+    await this.prisma.executeTenant(tenantSlug,
+      `INSERT INTO retention_policies (id, doc_type_code, retention_days, description) VALUES ($1, $2, $3, $4)`,
+      [id, docTypeCode, retentionDays, description || null]);
+    await this.audit.log({ tenantSlug, eventType: 'RETENTION_POLICY_CREATED', actorUserId: actorId, entityType: 'RetentionPolicy', entityId: id, payload: { docTypeCode, retentionDays } });
+    return { id, docTypeCode, retentionDays, description };
+  }
+
+  /* ───── Courts ───── */
+
+  async listCourts(tenantSlug: string) {
+    return this.prisma.queryTenant(tenantSlug,
+      `SELECT * FROM courts ORDER BY name`);
+  }
+
+  async createCourt(tenantSlug: string, body: { name: string; notes?: string; addressText?: string }, actorId: string) {
+    const id = uuidv4();
+    await this.prisma.executeTenant(tenantSlug,
+      `INSERT INTO courts (id, name, notes, address_text) VALUES ($1, $2, $3, $4)`,
+      [id, body.name, body.notes || null, body.addressText || null]);
+    await this.audit.log({ tenantSlug, eventType: 'COURT_CREATED', actorUserId: actorId, entityType: 'Court', entityId: id, payload: body });
+    return { id, ...body };
+  }
+
+  async updateCourt(tenantSlug: string, courtId: string, body: { name?: string; notes?: string; addressText?: string }, actorId: string) {
+    const sets: string[] = [];
+    const params: any[] = [];
+    let idx = 1;
+    if (body.name !== undefined) { sets.push(`name = $${idx++}`); params.push(body.name); }
+    if (body.notes !== undefined) { sets.push(`notes = $${idx++}`); params.push(body.notes); }
+    if (body.addressText !== undefined) { sets.push(`address_text = $${idx++}`); params.push(body.addressText); }
+
+    if (sets.length === 0) throw new BadRequestException('No fields to update');
+
+    params.push(courtId);
+    await this.prisma.executeTenant(tenantSlug,
+      `UPDATE courts SET ${sets.join(', ')} WHERE id = $${idx}`, params);
+    await this.audit.log({ tenantSlug, eventType: 'COURT_UPDATED', actorUserId: actorId, entityType: 'Court', entityId: courtId, payload: body });
+    return { id: courtId, ...body };
+  }
 }

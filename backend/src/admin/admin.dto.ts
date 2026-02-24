@@ -47,3 +47,21 @@ export class UpdateTenantSettingsDto {
   @IsOptional() @IsEnum(['Standard', 'Enterprise']) planTier?: string;
   @IsOptional() @IsBoolean() lawyerCanDraft?: boolean;
 }
+
+export class UpsertRetentionPolicyDto {
+  @IsString() docTypeCode: string;
+  @IsInt() @Min(1) retentionDays: number;
+  @IsOptional() @IsString() description?: string;
+}
+
+export class CreateCourtDto {
+  @IsString() name: string;
+  @IsOptional() @IsString() notes?: string;
+  @IsOptional() @IsString() addressText?: string;
+}
+
+export class UpdateCourtDto {
+  @IsOptional() @IsString() name?: string;
+  @IsOptional() @IsString() notes?: string;
+  @IsOptional() @IsString() addressText?: string;
+}

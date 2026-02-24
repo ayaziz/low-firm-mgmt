@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException, ConflictException, BadRequestException, UnprocessableEntityException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
+import { NotificationService } from '../notification/notification.service';
 import { v4 as uuidv4 } from 'uuid';
 import { VALID_STATE_TRANSITIONS } from '../common/types';
 import {
@@ -16,6 +17,7 @@ export class CaseService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
+    private readonly notifications: NotificationService,
   ) {}
 
   async create(tenantSlug: string, dto: CreateCaseDto, userId: string) {
@@ -224,6 +226,30 @@ export class CaseService {
        dto.priority || 'Medium', dto.dueDate || null, dto.startDate || null, JSON.stringify(dto.tags || [])],
     );
     await this.audit.log({ tenantSlug, eventType: 'TASK_CREATED', actorUserId: userId, entityType: 'Task', entityId: taskId, payload: { caseId, title: dto.title } });
+
+    // Notify assignee (skip if self-assigned)
+    if (dto.assigneeUserId && dto.assigneeUserId !== userId) {
+      await this.notifications.create(tenantSlug, {
+        userId: dto.assigneeUserId,
+        title: 'New task assigned to you',
+        body: `Task "${dto.title}" has been assigned to you.`,
+        type: 'task',
+        entityType: 'Task',
+        entityId: taskId,
+      });
+    }
+    // Notify reviewer if set
+    if (dto.reviewerUserId && dto.reviewerUserId !== userId) {
+      await this.notifications.create(tenantSlug, {
+        userId: dto.reviewerUserId,
+        title: 'You are reviewer on a new task',
+        body: `You have been assigned as reviewer for task "${dto.title}".`,
+        type: 'task',
+        entityType: 'Task',
+        entityId: taskId,
+      });
+    }
+
     return { id: taskId };
   }
 
@@ -275,6 +301,25 @@ export class CaseService {
       [sessionId, caseId, dto.typeId, dto.title, dto.startDateTime, dto.endDateTime, dto.location || null, dto.courtId || null],
     );
     await this.audit.log({ tenantSlug, eventType: 'SESSION_CREATED', actorUserId: userId, entityType: 'Session', entityId: sessionId, payload: { caseId, title: dto.title } });
+
+    // Notify all case members about the new session
+    const members: any[] = await this.prisma.queryTenant(
+      tenantSlug,
+      `SELECT user_id FROM case_memberships WHERE case_id = $1`,
+      [caseId],
+    );
+    for (const m of members) {
+      if (m.user_id === userId) continue; // skip creator
+      await this.notifications.create(tenantSlug, {
+        userId: m.user_id,
+        title: 'New session scheduled',
+        body: `Session "${dto.title}" has been scheduled for ${dto.startDateTime}.`,
+        type: 'session',
+        entityType: 'Session',
+        entityId: sessionId,
+      });
+    }
+
     return { id: sessionId };
   }
 

@@ -6,6 +6,7 @@ describe('CaseService', () => {
   let service: CaseService;
   let mockPrisma: any;
   let mockAudit: any;
+  let mockNotifications: any;
 
   beforeEach(() => {
     mockPrisma = {
@@ -15,7 +16,10 @@ describe('CaseService', () => {
     mockAudit = {
       log: jest.fn(),
     };
-    service = new CaseService(mockPrisma, mockAudit);
+    mockNotifications = {
+      send: jest.fn(),
+    };
+    service = new CaseService(mockPrisma, mockAudit, mockNotifications);
   });
 
   describe('VALID_STATE_TRANSITIONS map', () => {
