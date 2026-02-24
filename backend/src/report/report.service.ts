@@ -12,7 +12,7 @@ export class ReportService {
   /* ───── Operational Reports ───── */
 
   async casesByState(tenantSlug: string, filters: { caseTypeId?: string; assignedLawyerUserId?: string }) {
-    const conditions = ['is_deleted = false'];
+    const conditions = ['1=1'];
     const params: any[] = [];
     let idx = 1;
     if (filters.caseTypeId) { conditions.push(`case_type_id = $${idx++}`); params.push(filters.caseTypeId); }
@@ -28,10 +28,10 @@ export class ReportService {
 
   async casesByType(tenantSlug: string) {
     const rows = await this.prisma.queryTenant(tenantSlug,
-      `SELECT ct.name AS key, COUNT(c.id)::int AS count
+      `SELECT ct.label_en AS key, COUNT(c.id)::int AS count
        FROM cases c JOIN case_types ct ON c.case_type_id = ct.id
-       WHERE c.is_deleted = false
-       GROUP BY ct.name ORDER BY count DESC`);
+        WHERE 1=1
+        GROUP BY ct.label_en ORDER BY count DESC`);
     return { groups: rows };
   }
 
@@ -39,7 +39,7 @@ export class ReportService {
     const rows = await this.prisma.queryTenant(tenantSlug,
       `SELECT c.assigned_lawyer_user_id AS key, COUNT(*)::int AS count
        FROM cases c
-       WHERE c.is_deleted = false AND c.assigned_lawyer_user_id IS NOT NULL
+      WHERE c.assigned_lawyer_user_id IS NOT NULL
        GROUP BY c.assigned_lawyer_user_id ORDER BY count DESC`);
     return { groups: rows };
   }
@@ -64,7 +64,7 @@ export class ReportService {
   }
 
   async upcomingSessions(tenantSlug: string, days = 7, filters: { caseId?: string; userId?: string }) {
-    const conditions = ["s.status IN ('Scheduled', 'Rescheduled')", `s.start_date_time <= NOW() + INTERVAL '${days} days'`, 's.start_date_time >= NOW()'];
+    const conditions = ["s.status IN ('Planned', 'Postponed')", `s.start_date_time <= NOW() + INTERVAL '${days} days'`, 's.start_date_time >= NOW()'];
     const params: any[] = [];
     let idx = 1;
     if (filters.caseId) { conditions.push(`s.case_id = $${idx++}`); params.push(filters.caseId); }
@@ -82,15 +82,15 @@ export class ReportService {
     // Return customers or cases with low completeness
     if (entityType === 'customer') {
       const rows = await this.prisma.queryTenant(tenantSlug,
-        `SELECT id, full_name AS name, completeness_pct FROM customers
-         WHERE is_deleted = false AND completeness_pct < $1
+        `SELECT id, name, completeness_pct FROM customers
+         WHERE deleted_at IS NULL AND completeness_pct < $1
          ORDER BY completeness_pct ASC LIMIT 100`, [thresholdPct]);
       return { items: rows.map((r: any) => ({ entityType: 'customer', entityId: r.id, name: r.name, completenessPct: r.completeness_pct })) };
     }
     // For cases, we compute on-the-fly via completeness_pct if stored, or just return all
     const rows = await this.prisma.queryTenant(tenantSlug,
       `SELECT id, title AS name, completeness_pct FROM cases
-       WHERE is_deleted = false AND COALESCE(completeness_pct, 0) < $1
+        WHERE COALESCE(completeness_pct, 0) < $1
        ORDER BY completeness_pct ASC LIMIT 100`, [thresholdPct]);
     return { items: rows.map((r: any) => ({ entityType: 'case', entityId: r.id, name: r.name, completenessPct: r.completeness_pct || 0 })) };
   }
@@ -107,9 +107,9 @@ export class ReportService {
     const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
     const rows = await this.prisma.queryTenant(tenantSlug,
       `SELECT i.customer_id, COUNT(i.id)::int AS invoice_count,
-              SUM(i.total_amount)::numeric AS total_amount,
-              SUM(i.paid_amount)::numeric AS paid_amount,
-              SUM(i.total_amount - i.paid_amount)::numeric AS outstanding_amount
+              SUM(i.total)::numeric AS total_amount,
+              SUM(i.amount_paid)::numeric AS paid_amount,
+              SUM(i.total - i.amount_paid)::numeric AS outstanding_amount
        FROM invoices i ${where}
        GROUP BY i.customer_id`, params);
 
@@ -127,19 +127,19 @@ export class ReportService {
     const conditions: string[] = [];
     const params: any[] = [];
     let idx = 1;
-    if (startMonth) { conditions.push(`TO_CHAR(p.payment_date, 'YYYY-MM') >= $${idx++}`); params.push(startMonth); }
-    if (endMonth) { conditions.push(`TO_CHAR(p.payment_date, 'YYYY-MM') <= $${idx++}`); params.push(endMonth); }
+    if (startMonth) { conditions.push(`TO_CHAR(p.paid_at, 'YYYY-MM') >= $${idx++}`); params.push(startMonth); }
+    if (endMonth) { conditions.push(`TO_CHAR(p.paid_at, 'YYYY-MM') <= $${idx++}`); params.push(endMonth); }
 
     const paymentWhere = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
 
     const paymentRows = await this.prisma.queryTenant(tenantSlug,
-      `SELECT TO_CHAR(p.payment_date, 'YYYY-MM') AS period,
+      `SELECT TO_CHAR(p.paid_at, 'YYYY-MM') AS period,
               SUM(p.amount)::numeric AS received
        FROM payments p ${paymentWhere}
        GROUP BY period ORDER BY period`, params);
 
     const expenseRows = await this.prisma.queryTenant(tenantSlug,
-      `SELECT TO_CHAR(e.expense_date, 'YYYY-MM') AS period,
+      `SELECT TO_CHAR(e.created_at, 'YYYY-MM') AS period,
               SUM(e.amount)::numeric AS expenses
        FROM expenses e WHERE e.status = 'Approved'
        GROUP BY period ORDER BY period`);
@@ -164,10 +164,10 @@ export class ReportService {
     const params = filters.status ? [filters.status] : [];
 
     const rows = await this.prisma.queryTenant(tenantSlug,
-      `SELECT md.label_en AS category, COUNT(e.id)::int AS count, SUM(e.amount)::numeric AS total_amount
-       FROM expenses e LEFT JOIN master_data md ON e.category_id = md.id
+      `SELECT e.category AS category, COUNT(e.id)::int AS count, SUM(e.amount)::numeric AS total_amount
+       FROM expenses e
        WHERE 1=1 ${condition}
-       GROUP BY md.label_en ORDER BY total_amount DESC`, params);
+       GROUP BY e.category ORDER BY total_amount DESC`, params);
 
     const total = rows.reduce((acc: number, r: any) => acc + parseFloat(r.total_amount || 0), 0);
     return { categories: rows, total };

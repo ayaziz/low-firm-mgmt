@@ -76,7 +76,7 @@ export default function MasterDataTab() {
   };
 
   const handleDelete = async (id: string) => {
-    await adminApi.deleteMasterData(id);
+    await adminApi.deleteMasterData(category, id);
     load();
   };
 

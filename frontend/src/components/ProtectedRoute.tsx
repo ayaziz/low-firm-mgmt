@@ -19,6 +19,15 @@ export default function ProtectedRoute({ children, requiredRoles }: ProtectedRou
     if (!loading && !isAuthenticated) {
       router.replace('/login');
     }
+    if (
+      !loading
+      && isAuthenticated
+      && requiredRoles
+      && requiredRoles.length > 0
+      && !hasAnyRole(...requiredRoles)
+    ) {
+      router.replace('/403');
+    }
   }, [loading, isAuthenticated, router]);
 
   if (loading) {
@@ -32,14 +41,7 @@ export default function ProtectedRoute({ children, requiredRoles }: ProtectedRou
   if (!isAuthenticated) return null;
 
   if (requiredRoles && requiredRoles.length > 0 && !hasAnyRole(...requiredRoles)) {
-    return (
-      <Box display="flex" justifyContent="center" alignItems="center" minHeight="100vh">
-        <Box sx={{ textAlign: 'center' }}>
-          <h2>Access Denied</h2>
-          <p>You do not have permission to view this page.</p>
-        </Box>
-      </Box>
-    );
+    return null;
   }
 
   return <>{children}</>;

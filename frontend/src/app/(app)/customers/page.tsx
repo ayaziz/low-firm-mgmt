@@ -28,10 +28,13 @@ import {
 import { Add as AddIcon, Visibility as ViewIcon, Refresh as RefreshIcon } from '@mui/icons-material';
 import { customerApi } from '@/api';
 import type { Customer, CustomerType } from '@/types';
+import { useAuth } from '@/context/AuthContext';
+import { CAPABILITIES } from '@/auth/capabilities';
 
 export default function CustomerListPage() {
   const { t } = useTranslation();
   const router = useRouter();
+  const { hasAnyRole } = useAuth();
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(true);
   const [cursor, setCursor] = useState<string | null>(null);
@@ -82,9 +85,11 @@ export default function CustomerListPage() {
               <RefreshIcon />
             </IconButton>
           </Tooltip>
-          <Button variant="contained" startIcon={<AddIcon />} onClick={() => setDialogOpen(true)}>
-            {t('customer.add')}
-          </Button>
+          {hasAnyRole(...CAPABILITIES.canCreateCustomer) && (
+            <Button variant="contained" startIcon={<AddIcon />} onClick={() => setDialogOpen(true)}>
+              {t('customer.add')}
+            </Button>
+          )}
         </Stack>
       </Stack>
 

@@ -205,6 +205,44 @@ export class CaseService {
     return { id: membershipId };
   }
 
+  async listMemberships(tenantSlug: string, caseId: string) {
+    return this.prisma.queryTenant(
+      tenantSlug,
+      `SELECT id, case_id, user_id, role, created_at FROM case_memberships WHERE case_id = $1 ORDER BY created_at DESC`,
+      [caseId],
+    );
+  }
+
+  async removeMembershipByUser(tenantSlug: string, caseId: string, membershipUserId: string, actorUserId: string) {
+    const rows: any[] = await this.prisma.queryTenant(
+      tenantSlug,
+      `SELECT id FROM case_memberships WHERE case_id = $1 AND user_id = $2 LIMIT 1`,
+      [caseId, membershipUserId],
+    );
+
+    if (!rows || rows.length === 0) {
+      throw new NotFoundException('Case membership not found');
+    }
+
+    const membershipId = rows[0].id;
+    await this.prisma.executeTenant(
+      tenantSlug,
+      `DELETE FROM case_memberships WHERE id = $1`,
+      [membershipId],
+    );
+
+    await this.audit.log({
+      tenantSlug,
+      eventType: 'CASE_MEMBERSHIP_REMOVED',
+      actorUserId,
+      entityType: 'CaseMembership',
+      entityId: membershipId,
+      payload: { caseId, targetUserId: membershipUserId },
+    });
+
+    return { success: true };
+  }
+
   async updateMembership(tenantSlug: string, caseId: string, membershipId: string, role: string, userId: string) {
     await this.prisma.executeTenant(
       tenantSlug,
@@ -480,6 +518,14 @@ export class CaseService {
        dto.visibilityScope || 'LegalOnly', dto.notes || null],
     );
     return { id };
+  }
+
+  async listCaseParties(tenantSlug: string, caseId: string) {
+    return this.prisma.queryTenant(
+      tenantSlug,
+      `SELECT * FROM case_parties WHERE case_id = $1 ORDER BY created_at DESC`,
+      [caseId],
+    );
   }
 
   private async ensureNotArchived(tenantSlug: string, caseId: string) {

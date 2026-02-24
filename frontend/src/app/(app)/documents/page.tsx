@@ -49,7 +49,7 @@ export default function DocumentListPage() {
   const [hasMore, setHasMore] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [cases, setCases] = useState<Case[]>([]);
-  const [form, setForm] = useState({ title: '', caseId: '', confidentiality: 'Internal' });
+  const [form, setForm] = useState({ title: '', caseId: '', confidentiality: 'Standard' });
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [saving, setSaving] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -89,8 +89,8 @@ export default function DocumentListPage() {
         fileName: selectedFile.name,
         mimeType: selectedFile.type || 'application/octet-stream',
         fileSize: selectedFile.size,
-        docType: 'General',
-        confidentiality: form.confidentiality,
+        docTypeId: 'General',
+        confidentialityLevel: form.confidentiality,
       });
       // Upload file to presigned URL
       if (result.uploadUrl) {
@@ -101,7 +101,7 @@ export default function DocumentListPage() {
         });
       }
       setDialogOpen(false);
-      setForm({ title: '', caseId: '', confidentiality: 'Internal' });
+      setForm({ title: '', caseId: '', confidentiality: 'Standard' });
       setSelectedFile(null);
       load();
     } finally {
@@ -214,10 +214,9 @@ export default function DocumentListPage() {
               value={form.confidentiality}
               onChange={e => setForm(f => ({ ...f, confidentiality: e.target.value }))}
             >
-              <MenuItem value="Public">Public</MenuItem>
-              <MenuItem value="Internal">Internal</MenuItem>
+              <MenuItem value="Standard">Standard</MenuItem>
               <MenuItem value="Confidential">Confidential</MenuItem>
-              <MenuItem value="StrictlyConfidential">Strictly Confidential</MenuItem>
+              <MenuItem value="HighlyConfidential">Highly Confidential</MenuItem>
             </TextField>
             <Box>
               <input

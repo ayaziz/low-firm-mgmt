@@ -185,3 +185,32 @@
 | 401 Unauthorized | Authentication failure | Missing/expired/invalid JWT |
 | 403 Forbidden | Authorization failure | Valid JWT but user lacks required role or ABAC condition |
 | 403 + `stepUpRequired: true` | Step-up needed | Valid JWT but missing step-up for sensitive action |
+
+---
+
+## 8. Remediation Verification (2026-02-24)
+
+### 8.1 Authorization Semantics (runtime)
+
+| Check | Expected | Actual |
+|---|---:|---:|
+| `GET /customers` (no token) | 401 | 401 |
+| `GET /customers` (Lawyer) | 200 | 200 |
+| `POST /customers` (Accountant) | 403 | 403 |
+| `GET /customers` (Accountant) | 200 | 200 |
+| `GET /admin/users` (Lawyer) | 403 | 403 |
+| `GET /admin/users` (TenantAdmin) | 200 | 200 |
+| `GET /cases` (Lawyer) | 200 | 200 |
+| `GET /documents` (Lawyer) | 200 | 200 |
+
+### 8.2 Automated Security Regression
+
+- `backend` e2e permission matrix is green after remediation.
+- Result: `Test Suites: 4 passed, 4 total` and `Tests: 62 passed, 62 total`.
+
+### 8.3 Key Fixes Mapped to Security Controls
+
+- JWT identity normalization (`sub` restored in validated principal) to keep actor identity consistent across guards/audit.
+- Tenant query execution moved from Prisma raw multi-command statements to transaction-scoped `pg` client with `SET LOCAL search_path`, preventing schema bleed and 500s.
+- Frontend role gating + direct route protection consolidated through `ProtectedRoute` redirection to `/403` and capability checks for create/detail entry points.
+- API route parity repaired between frontend API clients and backend controllers, including missing customer/case contract endpoints.

@@ -2,7 +2,7 @@ import { IsString, IsOptional, IsEnum, IsUUID, IsDateString } from 'class-valida
 
 export class CreateDocumentDto {
   @IsString() title: string;
-  @IsUUID() docTypeId: string;
+  @IsString() docTypeId: string;
   @IsString() fileName: string;
   @IsString() mimeType: string;
   @IsOptional() @IsString() customerId?: string;
@@ -18,7 +18,7 @@ export class CheckinDocumentDto {
 }
 
 export class ShareDocumentDto {
-  @IsUUID() userId: string;
+  @IsString() userId: string;
   @IsOptional() @IsEnum(['Read', 'ReadWrite']) permission?: string;
   @IsOptional() @IsDateString() expiresAt?: string;
 }

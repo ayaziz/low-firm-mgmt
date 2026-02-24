@@ -2,8 +2,10 @@ import { PrismaClient } from '@prisma/client';
 import * as crypto from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
+import { Pool } from 'pg';
 
 const prisma = new PrismaClient();
+const pgPool = new Pool({ connectionString: process.env.DATABASE_URL });
 
 async function main() {
   console.log('Seeding platform database...');
@@ -30,17 +32,17 @@ async function main() {
 
   // Create users
   const users = [
-    { id: 'u-lawyer-1', email: 'lawyer@demo.com', displayName: 'Ahmed Lawyer', roles: ['Lawyer'], tenantId: tenant.id },
-    { id: 'u-lawyer-2', email: 'lawyer2@demo.com', displayName: 'Sara Lawyer', roles: ['Lawyer'], tenantId: tenant.id },
-    { id: 'u-accountant-1', email: 'accountant@demo.com', displayName: 'Omar Accountant', roles: ['Accountant'], tenantId: tenant.id },
-    { id: 'u-admin-1', email: 'admin@demo.com', displayName: 'Fatima Admin', roles: ['TenantAdmin'], tenantId: tenant.id },
-    { id: 'u-sysadmin-1', email: 'sysadmin@demo.com', displayName: 'System Admin', roles: ['SystemAdmin'], tenantId: tenant.id },
+    { id: '0f2f4f6e-8e9d-4f1f-a4f7-6e4c5a7b8c91', email: 'lawyer@demo.com', displayName: 'Ahmed Lawyer', roles: ['Lawyer'], tenantId: tenant.id },
+    { id: '2f6e1a9b-6c43-4b9a-a3ce-34f0cbe7d9ab', email: 'lawyer2@demo.com', displayName: 'Sara Lawyer', roles: ['Lawyer'], tenantId: tenant.id },
+    { id: '8b77d2f4-3d09-4bc3-a0d8-6f8f3a0f2c66', email: 'accountant@demo.com', displayName: 'Omar Accountant', roles: ['Accountant'], tenantId: tenant.id },
+    { id: 'ba0f2d55-2e84-48a8-b7d7-8ab94f6fe2c1', email: 'admin@demo.com', displayName: 'Fatima Admin', roles: ['TenantAdmin'], tenantId: tenant.id },
+    { id: '31a9c68e-67d7-4c7b-9c17-8fd4dc41237d', email: 'sysadmin@demo.com', displayName: 'System Admin', roles: ['SystemAdmin'], tenantId: tenant.id },
   ];
 
   for (const u of users) {
     await prisma.user.upsert({
       where: { tenantId_email: { tenantId: u.tenantId, email: u.email } },
-      update: { roles: u.roles },
+      update: { id: u.id, roles: u.roles },
       create: { ...u, passwordHash: 'dev' },
     });
   }
@@ -48,21 +50,27 @@ async function main() {
   // Create tenant schema and business tables
   const schemaName = `tenant_${tenant.slug.replace(/-/g, '_')}`;
   await prisma.$executeRawUnsafe(`CREATE SCHEMA IF NOT EXISTS "${schemaName}"`);
-  
+
+  const execTenant = async (sql: string, ...params: any[]) => {
+    await prisma.$transaction(async (tx) => {
+      await tx.$executeRawUnsafe(`SET LOCAL search_path TO "${schemaName}"`);
+      await tx.$executeRawUnsafe(sql, ...params);
+    });
+  };
+
   const tenantSql = fs.readFileSync(path.join(__dirname, 'tenant-schema.sql'), 'utf-8');
-  
-  // Split by semicolons and execute each statement
-  const statements = tenantSql.split(';').filter(s => s.trim().length > 0);
-  for (const stmt of statements) {
-    try {
-      await prisma.$executeRawUnsafe(`SET search_path TO "${schemaName}"`);
-      await prisma.$executeRawUnsafe(stmt);
-    } catch (e: any) {
-      // Ignore if already exists
-      if (!e.message?.includes('already exists')) {
-        console.warn('Statement warning:', e.message?.substring(0, 100));
-      }
-    }
+
+  const client = await pgPool.connect();
+  try {
+    await client.query('BEGIN');
+    await client.query(`SET LOCAL search_path TO "${schemaName}", public`);
+    await client.query(tenantSql);
+    await client.query('COMMIT');
+  } catch (e) {
+    await client.query('ROLLBACK');
+    throw e;
+  } finally {
+    client.release();
   }
 
   // Seed master data
@@ -116,8 +124,7 @@ async function main() {
 
   for (const md of masterData) {
     const configVal = (md as any).config || '{}';
-    await prisma.$executeRawUnsafe(`SET search_path TO "${schemaName}"`);
-    await prisma.$executeRawUnsafe(
+    await execTenant(
       `INSERT INTO master_data (id, category, code, label_en, label_ar, config) VALUES (gen_random_uuid(), $1, $2, $3, $4, $5::jsonb) ON CONFLICT (category, code) DO UPDATE SET label_en = $3, label_ar = $4, config = $5::jsonb`,
       md.category, md.code, md.label_en, md.label_ar || '', configVal
     );
@@ -133,16 +140,14 @@ async function main() {
   ];
 
   for (const ct of caseTypes) {
-    await prisma.$executeRawUnsafe(`SET search_path TO "${schemaName}"`);
-    await prisma.$executeRawUnsafe(
+    await execTenant(
       `INSERT INTO case_types (id, code, label_en, label_ar) VALUES (gen_random_uuid(), $1, $2, $3) ON CONFLICT (code) DO UPDATE SET label_en = $2, label_ar = $3`,
       ct.code, ct.label_en, ct.label_ar
     );
   }
 
   // Seed checklist template
-  await prisma.$executeRawUnsafe(`SET search_path TO "${schemaName}"`);
-  await prisma.$executeRawUnsafe(
+  await execTenant(
     `INSERT INTO checklist_templates (id, name, items, scope) VALUES (gen_random_uuid(), 'Default Customer Checklist', $1::jsonb, 'customer') ON CONFLICT DO NOTHING`,
     JSON.stringify([
       { label_en: 'ID Verified', label_ar: 'تم التحقق من الهوية', required: true },
@@ -152,8 +157,7 @@ async function main() {
   );
 
   // Seed doc requirement template
-  await prisma.$executeRawUnsafe(`SET search_path TO "${schemaName}"`);
-  await prisma.$executeRawUnsafe(
+  await execTenant(
     `INSERT INTO doc_requirement_templates (id, name, items, scope) VALUES (gen_random_uuid(), 'Default Customer Documents', $1::jsonb, 'customer') ON CONFLICT DO NOTHING`,
     JSON.stringify([
       { docTypeCode: 'id_document', label_en: 'National ID / Passport', label_ar: 'هوية وطنية / جواز سفر', required: true },
@@ -162,8 +166,7 @@ async function main() {
   );
 
   // Seed expense approval workflow
-  await prisma.$executeRawUnsafe(`SET search_path TO "${schemaName}"`);
-  await prisma.$executeRawUnsafe(
+  await execTenant(
     `INSERT INTO expense_approval_workflows (id, name, steps, is_active) VALUES (gen_random_uuid(), 'Default', $1::jsonb, true) ON CONFLICT DO NOTHING`,
     JSON.stringify([
       { stepOrder: 1, approverRole: 'Accountant' },
@@ -182,8 +185,7 @@ async function main() {
   ];
 
   for (const rp of retentionPolicies) {
-    await prisma.$executeRawUnsafe(`SET search_path TO "${schemaName}"`);
-    await prisma.$executeRawUnsafe(
+    await execTenant(
       `INSERT INTO retention_policies (id, doc_type_code, retention_days, description) VALUES (gen_random_uuid(), $1, $2, $3) ON CONFLICT DO NOTHING`,
       rp.doc_type_code, rp.retention_days, rp.description
     );
@@ -198,5 +200,6 @@ main()
     process.exit(1);
   })
   .finally(async () => {
+    await pgPool.end();
     await prisma.$disconnect();
   });

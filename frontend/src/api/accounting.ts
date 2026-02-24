@@ -4,11 +4,11 @@ import type { Invoice, Payment, Expense, Wage, PaginatedResult } from '@/types';
 export const accountingApi = {
   // Invoices
   listInvoices(params?: Record<string, string | number | boolean | undefined>): Promise<PaginatedResult<Invoice>> {
-    return get<PaginatedResult<Invoice>>('/accounting/invoices', params);
+    return get<PaginatedResult<Invoice>>('/invoices', params);
   },
 
   getInvoice(id: string): Promise<Invoice> {
-    return get(`/accounting/invoices/${id}`);
+    return get(`/invoices/${id}`);
   },
 
   createInvoice(data: {
@@ -18,23 +18,23 @@ export const accountingApi = {
     notes?: string;
     lineItems: Array<{ description: string; quantity: number; unitPrice: number }>;
   }): Promise<Invoice> {
-    return post<Invoice>('/accounting/invoices', data);
+    return post<Invoice>('/invoices', data);
   },
 
   finalizeInvoice(id: string, rowVersion: string): Promise<Invoice> {
-    return post<Invoice>(`/accounting/invoices/${id}/finalize`, { rowVersion });
+    return post<Invoice>(`/invoices/${id}/finalize`, { rowVersion });
   },
 
   sendInvoice(id: string, rowVersion: string): Promise<Invoice> {
-    return post<Invoice>(`/accounting/invoices/${id}/send`, { rowVersion });
+    return post<Invoice>(`/invoices/${id}/send`, { rowVersion });
   },
 
   voidInvoice(id: string, reason: string, rowVersion: string): Promise<Invoice> {
-    return post<Invoice>(`/accounting/invoices/${id}/void`, { reason, rowVersion });
+    return post<Invoice>(`/invoices/${id}/void`, { reason, rowVersion });
   },
 
   downloadInvoicePdf(id: string): Promise<void> {
-    return downloadBlob(`/accounting/invoices/${id}/pdf`, `invoice-${id}.pdf`);
+    return downloadBlob(`/invoices/${id}/pdf`, `invoice-${id}.pdf`);
   },
 
   // Payments
@@ -47,14 +47,14 @@ export const accountingApi = {
     notes?: string;
   }): Promise<Payment> {
     const idempotencyKey = crypto.randomUUID();
-    return post<Payment>('/accounting/payments', data, {
+    return post<Payment>('/payments', data, {
       'Idempotency-Key': idempotencyKey,
     });
   },
 
   // Expenses
   listExpenses(params?: Record<string, string | number | boolean | undefined>): Promise<PaginatedResult<Expense>> {
-    return get<PaginatedResult<Expense>>('/accounting/expenses', params);
+    return get<PaginatedResult<Expense>>('/expenses', params);
   },
 
   createExpense(data: {
@@ -63,20 +63,20 @@ export const accountingApi = {
     amount: number;
     description: string;
   }): Promise<Expense> {
-    return post<Expense>('/accounting/expenses', data);
+    return post<Expense>('/expenses', data);
   },
 
   approveExpense(id: string): Promise<Expense> {
-    return post<Expense>(`/accounting/expenses/${id}/approve`);
+    return post<Expense>(`/expenses/${id}/approve`);
   },
 
   rejectExpense(id: string, reason: string): Promise<Expense> {
-    return post<Expense>(`/accounting/expenses/${id}/reject`, { reason });
+    return post<Expense>(`/expenses/${id}/reject`, { reason });
   },
 
   // Wages
   listWages(params?: Record<string, string | number | boolean | undefined>): Promise<PaginatedResult<Wage>> {
-    return get<PaginatedResult<Wage>>('/accounting/wages', params);
+    return get<PaginatedResult<Wage>>('/wages', params);
   },
 
   createWage(data: {
@@ -87,11 +87,11 @@ export const accountingApi = {
     deductions?: number;
     notes?: string;
   }): Promise<Wage> {
-    return post<Wage>('/accounting/wages', data);
+    return post<Wage>('/wages', data);
   },
 
   exportWagesCsv(period?: string): Promise<void> {
     const params = period ? `?period=${period}` : '';
-    return downloadBlob(`/accounting/wages/export${params}`, `wages-${period || 'all'}.csv`);
+    return downloadBlob(`/wages/export${params}`, `wages-${period || 'all'}.csv`);
   },
 };

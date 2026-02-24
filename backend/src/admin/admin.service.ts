@@ -338,7 +338,7 @@ export class AdminService {
       `SELECT * FROM retention_policies ORDER BY doc_type_code`);
   }
 
-  async upsertRetentionPolicy(tenantSlug: string, docTypeCode: string, retentionDays: number, description: string, actorId: string) {
+  async upsertRetentionPolicy(tenantSlug: string, docTypeCode: string, retentionDays: number, description: string | undefined, actorId: string) {
     const existing: any[] = await this.prisma.queryTenant(tenantSlug,
       `SELECT id FROM retention_policies WHERE doc_type_code = $1`, [docTypeCode]);
 

@@ -23,6 +23,8 @@ import { LoggingModule } from './common/logging.module';
 import { LoggingInterceptor } from './common/logging.interceptor';
 import { CorrelationMiddleware } from './common/correlation.middleware';
 
+const isTestRuntime = !!process.env.JEST_WORKER_ID;
+
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
@@ -59,7 +61,7 @@ import { CorrelationMiddleware } from './common/correlation.middleware';
     NotificationModule,
     ReportModule,
     HealthModule,
-    WorkerModule,
+    ...(isTestRuntime ? [] : [WorkerModule]),
     TelemetryModule,
   ],
   providers: [

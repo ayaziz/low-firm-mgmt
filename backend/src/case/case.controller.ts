@@ -80,6 +80,17 @@ export class CaseController {
     return this.caseService.addMembership(user.tenantSlug, id, dto, user.sub);
   }
 
+  @Get(':id/memberships')
+  listMemberships(@CurrentUser() user: any, @Param('id') id: string) {
+    return this.caseService.listMemberships(user.tenantSlug, id);
+  }
+
+  @Delete(':id/memberships/:userId')
+  @Roles('TenantAdmin', 'SystemAdmin')
+  removeMembership(@CurrentUser() user: any, @Param('id') id: string, @Param('userId') membershipUserId: string) {
+    return this.caseService.removeMembershipByUser(user.tenantSlug, id, membershipUserId, user.sub);
+  }
+
   // --- Tasks ---
   @Post(':id/tasks')
   @Roles('Lawyer', 'TenantAdmin', 'SystemAdmin')
@@ -169,5 +180,10 @@ export class CaseController {
   @Roles('Lawyer', 'TenantAdmin', 'SystemAdmin')
   addCaseParty(@CurrentUser() user: any, @Param('id') id: string, @Body() dto: AddCasePartyDto) {
     return this.caseService.addCaseParty(user.tenantSlug, id, dto, user.sub);
+  }
+
+  @Get(':id/parties')
+  listCaseParties(@CurrentUser() user: any, @Param('id') id: string) {
+    return this.caseService.listCaseParties(user.tenantSlug, id);
   }
 }

@@ -1,6 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication, ValidationPipe } from '@nestjs/common';
-import {Request} from 'supertest';
+import request from 'supertest';
 import { AppModule } from '../src/app.module';
 
 /**
@@ -37,7 +37,7 @@ describe('App (e2e)', () => {
 
   it('/api/v1/health (GET) should return OK', async () => {
     if (!app) return;
-    const res = await Request.call(app.getHttpServer())
+    const res = await request(app.getHttpServer())
       .get('/api/v1/health')
       .expect(200);
 
@@ -46,7 +46,7 @@ describe('App (e2e)', () => {
 
   it('/api/v1/auth/dev/login (POST) should return JWT for valid user', async () => {
     if (!app) return;
-    const res = await Request.call(app.getHttpServer())
+    const res = await request(app.getHttpServer())
       .post('/api/v1/auth/dev/login')
       .send({ email: 'lawyer@demo.com' })
       .expect(200);
@@ -59,7 +59,7 @@ describe('App (e2e)', () => {
 
   it('/api/v1/auth/dev/login (POST) should reject unknown email', async () => {
     if (!app) return;
-    await Request.call(app.getHttpServer())
+    await request(app.getHttpServer())
       .post('/api/v1/auth/dev/login')
       .send({ email: 'unknown@example.com' })
       .expect(401);
@@ -67,7 +67,7 @@ describe('App (e2e)', () => {
 
   it('protected routes should reject unauthenticated requests', async () => {
     if (!app) return;
-    await Request.call(app.getHttpServer())
+    await request(app.getHttpServer())
       .get('/api/v1/customers')
       .expect(401);
   });

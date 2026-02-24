@@ -31,6 +31,8 @@ import {
 import { Add as AddIcon, Edit as EditIcon, Delete as DeleteIcon, Download as DownloadIcon } from '@mui/icons-material';
 import { caseApi, documentApi, auditApi, accountingApi } from '@/api';
 import type { Case, Task, Session, Filing, Note, Communication, CompletenessResult, Document as Doc, AuditEvent, Invoice } from '@/types';
+import ProtectedRoute from '@/components/ProtectedRoute';
+import { CAPABILITIES } from '@/auth/capabilities';
 
 function TabPanel({ children, value, index }: { children: React.ReactNode; value: number; index: number }) {
   return value === index ? <Box py={2}>{children}</Box> : null;
@@ -189,6 +191,7 @@ export default function CaseDetailPage() {
   const nextStates = TRANSITIONS[cs.state] || [];
 
   return (
+    <ProtectedRoute requiredRoles={CAPABILITIES.canAccessCaseDetails}>
     <Box>
       {/* Header */}
       <Stack direction="row" justifyContent="space-between" alignItems="flex-start" mb={2}>
@@ -602,5 +605,6 @@ export default function CaseDetailPage() {
         </DialogActions>
       </Dialog>
     </Box>
+    </ProtectedRoute>
   );
 }

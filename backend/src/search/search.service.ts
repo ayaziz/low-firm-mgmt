@@ -42,10 +42,10 @@ export class SearchService {
     // Search Customers
     if (!entityType || entityType === 'customer') {
       const customerResults = await this.prisma.queryTenant(tenantSlug,
-        `SELECT id, full_name, customer_type, status
+        `SELECT id, name, customer_type, status
          FROM customers
-         WHERE is_deleted = false
-           AND (LOWER(full_name) LIKE $1 OR LOWER(COALESCE(national_id,'')) LIKE $1
+         WHERE deleted_at IS NULL
+           AND (LOWER(name) LIKE $1 OR LOWER(COALESCE(national_id,'')) LIKE $1
                 OR LOWER(COALESCE(registration_id,'')) LIKE $1 OR LOWER(COALESCE(tax_id,'')) LIKE $1)
          ${cursor ? `AND id > $3` : ''}
          ORDER BY id LIMIT $2`,
@@ -55,7 +55,7 @@ export class SearchService {
         results.push({
           entityType: 'customer',
           entityId: c.id,
-          title: c.full_name,
+          title: c.name,
           subtitle: c.customer_type,
           matchField: 'name/id',
         });
@@ -67,7 +67,7 @@ export class SearchService {
       const caseResults = await this.prisma.queryTenant(tenantSlug,
         `SELECT c.id, c.title, c.system_case_ref, c.state, c.court_case_number
          FROM cases c
-         WHERE c.is_deleted = false
+         WHERE 1=1
            AND (LOWER(c.title) LIKE $1 OR LOWER(COALESCE(c.system_case_ref,'')) LIKE $1
                 OR LOWER(COALESCE(c.court_case_number,'')) LIKE $1)
          ${cursor ? `AND c.id > $3` : ''}
@@ -87,12 +87,13 @@ export class SearchService {
 
     // Search Documents (metadata only — filter HC if no step-up)
     if (!entityType || entityType === 'document') {
-      const hcFilter = hasStepUp ? '' : `AND COALESCE(d.confidentiality_level, 'Standard') != 'HC'`;
+      const hcFilter = hasStepUp ? '' : `AND COALESCE(d.confidentiality, 'Normal') != 'HighlyConfidential'`;
       const docResults = await this.prisma.queryTenant(tenantSlug,
-        `SELECT d.id, d.title, d.file_name
+        `SELECT d.id, d.title, COALESCE(v.original_filename, '') AS file_name
          FROM documents d
-         WHERE d.is_deleted = false
-           AND (LOWER(d.title) LIKE $1 OR LOWER(COALESCE(d.file_name,'')) LIKE $1)
+         LEFT JOIN document_versions v ON v.id = d.current_version_id
+         WHERE d.deleted_at IS NULL
+           AND (LOWER(d.title) LIKE $1 OR LOWER(COALESCE(v.original_filename,'')) LIKE $1)
            ${hcFilter}
          ${cursor ? `AND d.id > $3` : ''}
          ORDER BY d.id LIMIT $2`,
@@ -112,7 +113,7 @@ export class SearchService {
     // Search Invoices
     if (!entityType || entityType === 'invoice') {
       const invResults = await this.prisma.queryTenant(tenantSlug,
-        `SELECT i.id, i.invoice_number, i.status, i.total_amount
+        `SELECT i.id, i.invoice_number, i.status, i.total
          FROM invoices i
          WHERE LOWER(i.invoice_number) LIKE $1
          ${cursor ? `AND i.id > $3` : ''}
@@ -124,7 +125,7 @@ export class SearchService {
           entityType: 'invoice',
           entityId: inv.id,
           title: inv.invoice_number,
-          subtitle: `${inv.status} - ${inv.total_amount}`,
+          subtitle: `${inv.status} - ${inv.total}`,
           matchField: 'invoice_number',
         });
       }

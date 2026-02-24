@@ -1,8 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication, ValidationPipe } from '@nestjs/common';
-import  {Request} from 'supertest';
+import request from 'supertest';
 import { AppModule } from '../src/app.module';
-import { request } from 'express';
 
 /**
  * Integration test: Customer CRUD + identity uniqueness.
@@ -30,12 +29,12 @@ describe('Customers (e2e)', () => {
       await app.init();
 
       // Get tokens
-      const lawyerRes = await Request.call(app.getHttpServer())
+      const lawyerRes = await request(app.getHttpServer())
         .post('/api/v1/auth/dev/login')
         .send({ email: 'lawyer@demo.com' });
       lawyerToken = lawyerRes.body.accessToken;
 
-      const accountantRes = await Request.call(app.getHttpServer())
+      const accountantRes = await request(app.getHttpServer())
         .post('/api/v1/auth/dev/login')
         .send({ email: 'accountant@demo.com' });
       accountantToken = accountantRes.body.accessToken;
@@ -55,13 +54,14 @@ describe('Customers (e2e)', () => {
 
     it('should create a customer (Lawyer)', async () => {
       if (!app) return;
-      const res = await Request.call(app.getHttpServer())
+      const uniqueNationalId = `ID-E2E-${Date.now()}`;
+      const res = await request(app.getHttpServer())
 				.post('/api/v1/customers')
 				.set('Authorization', `Bearer ${lawyerToken}`)
 				.send({
 					name: 'Integration Test Customer',
 					customerType: 'Individual',
-					nationalId: 'ID-E2E-001',
+          nationalId: uniqueNationalId,
 				})
 				.expect(201)
 
@@ -73,7 +73,7 @@ describe('Customers (e2e)', () => {
 
     it('should list customers with the new entry', async () => {
       if (!app || !customerId) return;
-      const res = await Request.call(app.getHttpServer())
+      const res = await request(app.getHttpServer())
 				.get('/api/v1/customers')
 				.set('Authorization', `Bearer ${lawyerToken}`)
 				.expect(200)
@@ -84,7 +84,7 @@ describe('Customers (e2e)', () => {
 
     it('should get customer by ID', async () => {
       if (!app || !customerId) return;
-      const res = await Request.call(app.getHttpServer())
+      const res = await request(app.getHttpServer())
         .get(`/api/v1/customers/${customerId}`)
         .set('Authorization', `Bearer ${lawyerToken}`)
         .expect(200);
@@ -95,7 +95,7 @@ describe('Customers (e2e)', () => {
 
     it('should update customer with correct rowVersion', async () => {
       if (!app || !customerId || !rowVersion) return;
-      const res = await Request.call(app.getHttpServer())
+      const res = await request(app.getHttpServer())
         .patch(`/api/v1/customers/${customerId}`)
         .set('Authorization', `Bearer ${lawyerToken}`)
         .send({
@@ -111,7 +111,7 @@ describe('Customers (e2e)', () => {
   describe('Role-based access', () => {
     it('should deny Accountant from creating customers', async () => {
       if (!app) return;
-      await Request.call(app.getHttpServer())
+      await request(app.getHttpServer())
         .post('/api/v1/customers')
         .set('Authorization', `Bearer ${accountantToken}`)
         .send({
@@ -123,7 +123,7 @@ describe('Customers (e2e)', () => {
 
     it('should allow Accountant to list customers (read-only)', async () => {
       if (!app) return;
-      await Request.call(app.getHttpServer())
+      await request(app.getHttpServer())
         .get('/api/v1/customers')
         .set('Authorization', `Bearer ${accountantToken}`)
         .expect(200);
@@ -136,7 +136,7 @@ describe('Customers (e2e)', () => {
       const uniqueNationalId = `NID-DUP-${Date.now()}`;
 
       // Create first customer
-      await Request.call(app.getHttpServer())
+      await request(app.getHttpServer())
         .post('/api/v1/customers')
         .set('Authorization', `Bearer ${lawyerToken}`)
         .send({
@@ -147,7 +147,7 @@ describe('Customers (e2e)', () => {
         .expect(201);
 
       // Attempt duplicate
-      const res = await Request.call(app.getHttpServer())
+      const res = await request(app.getHttpServer())
         .post('/api/v1/customers')
         .set('Authorization', `Bearer ${lawyerToken}`)
         .send({

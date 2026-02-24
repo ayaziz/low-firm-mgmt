@@ -1,6 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication, ValidationPipe } from '@nestjs/common';
-import { Request } from 'supertest';
+import request from 'supertest';
 import { AppModule } from '../src/app.module';
 
 /**
@@ -42,7 +42,7 @@ describe('Permission Matrix (e2e)', () => {
 
       // Obtain JWT tokens for each role
       for (const u of USERS) {
-        const res = await Request.call(app.getHttpServer())
+        const res = await request(app.getHttpServer())
           .post('/api/v1/auth/dev/login')
           .send({ email: u.email });
         tokens[u.key] = res.body.accessToken;
@@ -62,12 +62,12 @@ describe('Permission Matrix (e2e)', () => {
 
   // Helper: perform authenticated request
   const authGet = (path: string, role: string) =>
-    Request.call(app.getHttpServer())
+    request(app.getHttpServer())
       .get(path)
       .set('Authorization', `Bearer ${tokens[role]}`);
 
   const authPost = (path: string, role: string, body: any = {}) =>
-    Request.call(app.getHttpServer())
+    request(app.getHttpServer())
       .post(path)
       .set('Authorization', `Bearer ${tokens[role]}`)
       .send(body);
@@ -77,14 +77,14 @@ describe('Permission Matrix (e2e)', () => {
   describe('Public / unauthenticated', () => {
     it('GET /api/v1/health → 200', async () => {
       if (!app) return;
-      await Request.call(app.getHttpServer())
+      await request(app.getHttpServer())
         .get('/api/v1/health')
         .expect(200);
     });
 
     it('GET /api/v1/customers without token → 401', async () => {
       if (!app) return;
-      await Request.call(app.getHttpServer())
+      await request(app.getHttpServer())
         .get('/api/v1/customers')
         .expect(401);
     });

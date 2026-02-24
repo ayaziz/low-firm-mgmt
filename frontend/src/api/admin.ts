@@ -1,4 +1,4 @@
-import { get, post, put, del } from './client';
+import { get, post, patch } from './client';
 import type { UserInfo, MasterDataItem, CaseType, TenantSettings, PaginatedResult } from '@/types';
 
 export const adminApi = {
@@ -22,12 +22,12 @@ export const adminApi = {
     isActive: boolean;
     language: string;
   }>): Promise<UserInfo> {
-    return put<UserInfo>(`/admin/users/${id}`, data);
+    return patch<UserInfo>(`/admin/users/${id}`, data);
   },
 
   // Master Data
   listMasterData(category: string): Promise<MasterDataItem[]> {
-    return get<MasterDataItem[]>('/admin/master-data', { category });
+    return get<MasterDataItem[]>(`/admin/master-data/${category}`);
   },
 
   createMasterData(data: {
@@ -37,20 +37,20 @@ export const adminApi = {
     labelAr: string;
     sortOrder?: number;
   }): Promise<MasterDataItem> {
-    return post<MasterDataItem>('/admin/master-data', data);
+    return post<MasterDataItem>(`/admin/master-data/${data.category}`, data);
   },
 
-  updateMasterData(id: string, data: Partial<{
+  updateMasterData(category: string, id: string, data: Partial<{
     labelEn: string;
     labelAr: string;
     isActive: boolean;
     sortOrder: number;
   }>): Promise<MasterDataItem> {
-    return put<MasterDataItem>(`/admin/master-data/${id}`, data);
+    return patch<MasterDataItem>(`/admin/master-data/${category}/${id}`, data);
   },
 
-  deleteMasterData(id: string): Promise<void> {
-    return del(`/admin/master-data/${id}`);
+  deleteMasterData(category: string, id: string): Promise<MasterDataItem> {
+    return patch<MasterDataItem>(`/admin/master-data/${category}/${id}`, { isActive: false });
   },
 
   // Case Types
@@ -69,28 +69,28 @@ export const adminApi = {
   },
 
   updateCaseType(id: string, data: Partial<CaseType>): Promise<CaseType> {
-    return put<CaseType>(`/admin/case-types/${id}`, data);
+    return patch<CaseType>(`/admin/case-types/${id}`, data);
   },
 
-  deleteCaseType(id: string): Promise<void> {
-    return del(`/admin/case-types/${id}`);
+  deleteCaseType(id: string): Promise<CaseType> {
+    return patch<CaseType>(`/admin/case-types/${id}`, { isActive: false });
   },
 
   // Expense Workflow
   getExpenseWorkflow(): Promise<{ steps: Array<{ stepOrder: number; approverRole: string }> }> {
-    return get('/admin/expense-workflow');
+    return get('/admin/expense-approval-workflow');
   },
 
   saveExpenseWorkflow(steps: Array<{ stepOrder: number; approverRole: string }>): Promise<void> {
-    return post('/admin/expense-workflow', { steps });
+    return post('/admin/expense-approval-workflow', { steps });
   },
 
   // Tenant Settings
   getTenantSettings(): Promise<TenantSettings> {
-    return get<TenantSettings>('/admin/tenant-settings');
+    return get<TenantSettings>('/admin/settings');
   },
 
   updateTenantSettings(data: Partial<TenantSettings>): Promise<TenantSettings> {
-    return put<TenantSettings>('/admin/tenant-settings', data);
+    return patch<TenantSettings>('/admin/settings', data);
   },
 };

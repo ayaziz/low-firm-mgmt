@@ -6,7 +6,7 @@ export const authApi = {
     return post<AuthResponse>('/auth/dev/login', { email, password });
   },
 
-  devStepUp(): Promise<{ access_token: string }> {
-    return post<{ access_token: string }>('/auth/dev/step-up');
+  devStepUp(): Promise<{ stepUpToken?: string; access_token?: string }> {
+    return post<{ stepUpToken?: string; access_token?: string }>('/auth/dev/step-up');
   },
 };

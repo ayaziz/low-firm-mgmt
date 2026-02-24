@@ -441,7 +441,7 @@ These items from GAPS.md were **not** addressed because they are either explicit
 
 | Issue | Description | Severity |
 |-------|-------------|----------|
-| Prisma prepared statement bug | `CaseService.list()` returns 500 with `PrismaClientKnownRequestError: cannot insert multiple commands into a prepared statement` at line 74. Affects `/api/v1/cases` endpoint. | Medium — workaround: use individual case endpoints |
+| None blocking | Prior tenant-schema prepared-statement failure is resolved by using transaction-scoped `pg` execution for tenant SQL + full SQL script execution in seed. | — |
 
 ---
 
@@ -460,3 +460,32 @@ These items from GAPS.md were **not** addressed because they are either explicit
 | Frontend pages | 14 |
 | API routes | 50+ |
 | i18n languages | 2 (English + Arabic RTL) |
+
+---
+
+## Session 12 Addendum (Auth + 404 Full Remediation)
+
+### Root Causes Closed
+
+1. Tenant schema query path failed under Prisma prepared statements (`search_path` + prepared statement binding mismatch), causing authenticated 500s.
+2. Seed bootstrap split `tenant-schema.sql` by semicolons, breaking multi-statement SQL blocks and leaving tenant tables/columns inconsistent.
+3. Frontend-backend API drift (path/method mismatches) caused broad 404 contract failures.
+4. Auth principal shape drift (`user.sub` vs `user.id`) produced invalid actor IDs in UUID-typed tenant tables and audit flows.
+
+### Fixes Implemented
+
+- Replaced tenant query execution in `PrismaService` with direct `pg` transaction client + `SET LOCAL search_path`.
+- Updated seed to execute the full tenant schema SQL script in one transaction (no semicolon splitting), and normalized seeded user IDs to UUIDs.
+- Aligned key backend service queries to actual schema columns (customers/search/reports/documents).
+- Added missing backend endpoints used by frontend (customer contacts/addresses/checklist toggle; case memberships/parties).
+- Corrected frontend API wrappers to backend route/method contracts and added route parity check script (`scripts/verify-api-routes.js`).
+- Hardened route/role UX: capability-based visibility and `/403` redirect guard.
+
+### Final Verification Proof
+
+- Backend unit: `9/9 suites`, `92/92 tests` passing.
+- Backend e2e: `4/4 suites`, `62/62 tests` passing.
+- Runtime auth matrix (Docker backend):
+	- `401`: unauthenticated protected access (`GET /customers`).
+	- `403`: forbidden role action (`Accountant POST /customers`, `Lawyer GET /admin/users`).
+	- `200`: allowed role paths (`GET /customers`, `GET /cases`, `GET /documents`, `TenantAdmin GET /admin/users`).

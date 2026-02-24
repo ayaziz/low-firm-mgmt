@@ -77,6 +77,7 @@ export class AuthService {
     });
     if (!user || !user.isActive) return null;
     return {
+      sub: user.id,
       id: user.id,
       email: user.email,
       tenantId: user.tenantId,

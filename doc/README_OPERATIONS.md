@@ -288,3 +288,47 @@ curl http://localhost/api/v1/health/ready
 | `MINIO_ENDPOINT` | — | S3 endpoint URL |
 | `FRONTEND_URL` | `http://localhost` | CORS allowed origin |
 | `PORT` | `4000` | Backend listen port |
+
+---
+
+## Deployment Verification (2026-02-24)
+
+### Commands Executed
+
+```bash
+# Frontend smoke
+cd frontend
+npm run build
+npm test -- --passWithNoTests --runInBand
+
+# Backend regression
+cd ../backend
+npm run seed
+npm run test:e2e -- --runInBand
+
+# Full deployment
+cd ..
+docker compose up -d --build
+docker compose ps
+```
+
+### Verified Results
+
+- Frontend build: success (Next.js production build completed).
+- Frontend tests: no tests found, exited with code 0 using `--passWithNoTests`.
+- Backend e2e: `4 passed, 4 total`; `62 passed, 62 total`.
+- Docker deployment: all runtime services up; core dependencies healthy (`postgres`, `redis`, `minio`).
+
+### Runtime Authorization Matrix (post-deploy)
+
+| Check | Status |
+|---|---:|
+| Nginx root (`GET /`) | 200 |
+| Backend health (`GET /api/v1/health`) | 200 |
+| Unauthenticated customers (`GET /api/v1/customers`) | 401 |
+| Lawyer customers list | 200 |
+| Accountant create customer | 403 |
+| Lawyer admin users | 403 |
+| TenantAdmin admin users | 200 |
+| Lawyer cases list | 200 |
+| Lawyer documents list | 200 |

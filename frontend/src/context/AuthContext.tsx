@@ -75,11 +75,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const login = useCallback(async (email: string, password: string) => {
     const res = await authApi.devLogin(email, password);
-    localStorage.setItem('loma_token', res.access_token);
+    const accessToken = res.accessToken || res.access_token;
+    if (!accessToken) {
+      throw new Error('Authentication response missing access token');
+    }
+    localStorage.setItem('loma_token', accessToken);
     localStorage.setItem('loma_user', JSON.stringify(res.user));
     setState({
       user: res.user,
-      token: res.access_token,
+      token: accessToken,
       isAuthenticated: true,
       isSteppedUp: false,
       loading: false,
@@ -100,10 +104,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const stepUp = useCallback(async () => {
     const res = await authApi.devStepUp();
-    localStorage.setItem('loma_token', res.access_token);
+    const stepUpToken = res.stepUpToken || res.access_token;
+    if (!stepUpToken) {
+      throw new Error('Step-up response missing token');
+    }
+    localStorage.setItem('loma_token', stepUpToken);
     setState(s => ({
       ...s,
-      token: res.access_token,
+      token: stepUpToken,
       isSteppedUp: true,
     }));
   }, []);

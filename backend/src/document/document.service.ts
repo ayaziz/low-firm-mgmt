@@ -89,17 +89,17 @@ export class DocumentService {
   }
 
   async getById(tenantSlug: string, docId: string, userId: string, hasStepUp = false) {
-    const rows: any[] = await this.prisma.queryTenant(tenantSlug, `SELECT * FROM documents WHERE id = $1 AND is_deleted = false`, [docId]);
+    const rows: any[] = await this.prisma.queryTenant(tenantSlug, `SELECT * FROM documents WHERE id = $1 AND deleted_at IS NULL`, [docId]);
     if (!rows?.length) throw new NotFoundException('Document not found');
     const doc = rows[0];
 
     // Check access for HighlyConfidential docs
-    if (doc.confidentiality_level === 'HighlyConfidential') {
+    if (doc.confidentiality === 'HighlyConfidential') {
       // Require step-up authentication for HC docs
       if (!hasStepUp) {
         throw new ForbiddenException('Step-up authentication required for highly confidential documents');
       }
-      const acl: any[] = await this.prisma.queryTenant(tenantSlug, `SELECT * FROM document_acl WHERE document_id = $1 AND user_id = $2 AND (expires_at IS NULL OR expires_at > NOW())`, [docId, userId]);
+      const acl: any[] = await this.prisma.queryTenant(tenantSlug, `SELECT * FROM document_acl WHERE document_id = $1 AND principal_type = 'User' AND principal_id = $2 AND (expires_at IS NULL OR expires_at > NOW())`, [docId, userId]);
       if (!acl?.length && doc.created_by !== userId) {
         throw new ForbiddenException('Access denied to highly confidential document');
       }
@@ -296,9 +296,9 @@ export class DocumentService {
   }
 
   async list(tenantSlug: string, caseId?: string, customerId?: string, docTypeId?: string, cursor?: string, limit = 20) {
-    let sql = `SELECT d.*, dv.file_name, dv.scan_status FROM documents d
+    let sql = `SELECT d.*, COALESCE(dv.original_filename, '') AS file_name, dv.scan_status FROM documents d
                LEFT JOIN document_versions dv ON d.current_version_id = dv.id
-               WHERE d.is_deleted = false`;
+           WHERE d.deleted_at IS NULL`;
     const params: any[] = [];
     let idx = 1;
 

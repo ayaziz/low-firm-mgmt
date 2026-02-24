@@ -28,6 +28,8 @@ import {
 import { Add as AddIcon, Refresh as RefreshIcon, Visibility as ViewIcon } from '@mui/icons-material';
 import { caseApi, customerApi } from '@/api';
 import type { Case, Customer } from '@/types';
+import { useAuth } from '@/context/AuthContext';
+import { CAPABILITIES } from '@/auth/capabilities';
 
 const STATE_COLORS: Record<string, 'default' | 'info' | 'primary' | 'warning' | 'success' | 'error'> = {
   Draft: 'default',
@@ -41,6 +43,7 @@ const STATE_COLORS: Record<string, 'default' | 'info' | 'primary' | 'warning' | 
 export default function CaseListPage() {
   const { t } = useTranslation();
   const router = useRouter();
+  const { hasAnyRole } = useAuth();
   const [cases, setCases] = useState<Case[]>([]);
   const [loading, setLoading] = useState(true);
   const [cursor, setCursor] = useState<string | null>(null);
@@ -103,9 +106,11 @@ export default function CaseListPage() {
               <RefreshIcon />
             </IconButton>
           </Tooltip>
-          <Button variant="contained" startIcon={<AddIcon />} onClick={openCreateDialog}>
-            {t('case.add')}
-          </Button>
+          {hasAnyRole(...CAPABILITIES.canCreateCase) && (
+            <Button variant="contained" startIcon={<AddIcon />} onClick={openCreateDialog}>
+              {t('case.add')}
+            </Button>
+          )}
         </Stack>
       </Stack>
 

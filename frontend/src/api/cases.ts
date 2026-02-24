@@ -1,4 +1,4 @@
-import { get, post, put, del } from './client';
+import { get, post, patch, del } from './client';
 import type {
   Case, Task, Session, Filing, Note, Communication,
   PaginatedResult, CompletenessResult,
@@ -26,7 +26,8 @@ export const caseApi = {
   },
 
   clearOnHold(id: string, rowVersion: string): Promise<Case> {
-    return post<Case>(`/cases/${id}/clear-hold`, { rowVersion });
+    void rowVersion;
+    return del<Case>(`/cases/${id}/on-hold`);
   },
 
   getCompleteness(id: string): Promise<CompletenessResult> {
@@ -43,7 +44,7 @@ export const caseApi = {
   },
 
   updateTask(caseId: string, taskId: string, data: Partial<Task>): Promise<Task> {
-    return put<Task>(`/cases/${caseId}/tasks/${taskId}`, data);
+    return patch<Task>(`/cases/${caseId}/tasks/${taskId}`, data);
   },
 
   // Sessions
@@ -69,7 +70,7 @@ export const caseApi = {
   },
 
   updateFiling(caseId: string, filingId: string, data: Partial<Filing>): Promise<Filing> {
-    return put<Filing>(`/cases/${caseId}/filings/${filingId}`, data);
+    return patch<Filing>(`/cases/${caseId}/filings/${filingId}`, data);
   },
 
   // Notes (append only)

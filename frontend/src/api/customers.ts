@@ -1,4 +1,4 @@
-import { get, post, put, del } from './client';
+import { get, post, patch, del } from './client';
 import type { Customer, Contact, Address, PaginatedResult } from '@/types';
 
 export const customerApi = {
@@ -15,7 +15,7 @@ export const customerApi = {
   },
 
   update(id: string, data: Partial<Customer>): Promise<Customer> {
-    return put<Customer>(`/customers/${id}`, data);
+    return patch<Customer>(`/customers/${id}`, data);
   },
 
   // Contacts
@@ -24,7 +24,7 @@ export const customerApi = {
   },
 
   updateContact(customerId: string, contactId: string, data: Partial<Contact>): Promise<Contact> {
-    return put<Contact>(`/customers/${customerId}/contacts/${contactId}`, data);
+    return patch<Contact>(`/customers/${customerId}/contacts/${contactId}`, data);
   },
 
   deleteContact(customerId: string, contactId: string): Promise<void> {
@@ -37,7 +37,7 @@ export const customerApi = {
   },
 
   updateAddress(customerId: string, addressId: string, data: Partial<Address>): Promise<Address> {
-    return put<Address>(`/customers/${customerId}/addresses/${addressId}`, data);
+    return patch<Address>(`/customers/${customerId}/addresses/${addressId}`, data);
   },
 
   deleteAddress(customerId: string, addressId: string): Promise<void> {
@@ -51,14 +51,10 @@ export const customerApi = {
 
   // Compliance checklist
   getChecklist(customerId: string): Promise<{ items: Array<{ id: string; label: string; is_met: boolean }> }> {
-    return get(`/customers/${customerId}/compliance`);
-  },
-
-  applyTemplate(customerId: string, templateId: string): Promise<void> {
-    return post(`/customers/${customerId}/compliance/apply-template`, { templateId });
+    return get(`/customers/${customerId}/compliance-checklist`);
   },
 
   toggleChecklistItem(customerId: string, itemId: string, isMet: boolean): Promise<void> {
-    return put(`/customers/${customerId}/compliance/${itemId}`, { is_met: isMet });
+    return patch(`/customers/${customerId}/compliance-checklist/${itemId}`, { isMet });
   },
 };

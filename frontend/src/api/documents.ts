@@ -17,8 +17,8 @@ export const documentApi = {
     fileName: string;
     mimeType: string;
     fileSize: number;
-    docType: string;
-    confidentiality: string;
+    docTypeId: string;
+    confidentialityLevel: string;
     tags?: string[];
   }): Promise<{ document: Doc; uploadUrl: string }> {
     return post('/documents', data);
@@ -45,7 +45,10 @@ export const documentApi = {
   },
 
   share(id: string, data: { targetUserId: string; permission: string }): Promise<void> {
-    return post(`/documents/${id}/share`, data);
+    return post(`/documents/${id}/share`, {
+      userId: data.targetUserId,
+      permission: data.permission,
+    });
   },
 
   setLegalHold(id: string): Promise<void> {
