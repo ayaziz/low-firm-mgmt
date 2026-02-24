@@ -1,7 +1,8 @@
 {
   "app": {
     "title": "Law Office Management",
-    "shortTitle": "LOMA"
+    "shortTitle": "LOMA",
+    "name": "LOMA"
   },
   "nav": {
     "dashboard": "Dashboard",
@@ -21,7 +22,10 @@
     "password": "Password",
     "signIn": "Sign In",
     "stepUp": "Confirm Identity",
-    "stepUpRequired": "Additional authentication required"
+    "stepUpRequired": "Additional authentication required",
+    "loginTitle": "Sign In to LOMA",
+    "loginError": "Invalid credentials. Please try again.",
+    "devAccounts": "Development Accounts"
   },
   "common": {
     "save": "Save",
@@ -54,7 +58,11 @@
     "download": "Download",
     "upload": "Upload",
     "loadMore": "Load More",
-    "saved": "Saved successfully"
+    "saved": "Saved successfully",
+    "add": "Add",
+    "createdAt": "Created At",
+    "noData": "No data available",
+    "refresh": "Refresh"
   },
   "dashboard": {
     "title": "Dashboard",
@@ -66,7 +74,12 @@
     "receivablesSummary": "Receivables Summary",
     "recentPayments": "Recent Payments",
     "pendingApprovals": "Pending Expense Approvals",
-    "pendingInvoices": "Invoices Pending Finalize"
+    "pendingInvoices": "Invoices Pending Finalize",
+    "welcome": "Welcome",
+    "activeCases": "Active Cases",
+    "notifications": "Notifications",
+    "overdueInvoices": "Overdue Invoices",
+    "recentInvoices": "Recent Invoices"
   },
   "customer": {
     "title": "Customers",
@@ -91,7 +104,21 @@
     "audit": "Audit",
     "financialSummary": "Financial Summary",
     "completeness": "Completeness",
-    "identityExists": "{{field}} already exists in this tenant."
+    "identityExists": "{{field}} already exists in this tenant.",
+    "add": "Add Customer",
+    "name": "Name",
+    "type": "Type",
+    "status": "Status",
+    "email": "Email",
+    "phone": "Phone",
+    "details": "Details",
+    "notes": "Notes",
+    "city": "City",
+    "country": "Country",
+    "addressLabel": "Address Label",
+    "addressLine1": "Address Line 1",
+    "addressLine2": "Address Line 2",
+    "contactRole": "Contact Role"
   },
   "case": {
     "title": "Cases",
@@ -126,7 +153,26 @@
     },
     "transition": "Transition State",
     "setOnHold": "Set On Hold",
-    "clearOnHold": "Clear On Hold"
+    "clearOnHold": "Clear On Hold",
+    "add": "Add",
+    "caseNumber": "Case Number",
+    "customer": "Customer",
+    "description": "Description",
+    "details": "Details",
+    "overview": "Overview",
+    "summary": "Summary",
+    "taskTitle": "Task Title",
+    "dueDate": "Due Date",
+    "sessionDate": "Session Date",
+    "sessionType": "Session Type",
+    "location": "Location",
+    "filingDate": "Filing Date",
+    "filingType": "Filing Type",
+    "noteContent": "Note Content",
+    "commType": "Communication Type",
+    "direction": "Direction",
+    "inbound": "Inbound",
+    "outbound": "Outbound"
   },
   "document": {
     "title": "Documents",
@@ -154,7 +200,17 @@
       "Internal": "Internal",
       "Confidential": "Confidential",
       "HighlyConfidential": "Highly Confidential"
-    }
+    },
+    "name": "Name",
+    "type": "Type",
+    "size": "Size",
+    "download": "Download",
+    "metadata": "Metadata",
+    "lockStatus": "Lock Status",
+    "available": "Available",
+    "checkedOut": "Checked Out",
+    "selectFile": "Select File",
+    "restore": "Restore"
   },
   "accounting": {
     "title": "Accounting",
@@ -186,7 +242,19 @@
       "Paid": "Paid",
       "PartiallyPaid": "Partially Paid",
       "Voided": "Voided"
-    }
+    },
+    "baseSalary": "Base Salary",
+    "bonus": "Bonus",
+    "category": "Category",
+    "createWage": "New Wage Entry",
+    "deductions": "Deductions",
+    "description": "Description",
+    "employeeName": "Employee Name",
+    "lineItems": "Line Items",
+    "netPay": "Net Pay",
+    "period": "Period",
+    "quantity": "Quantity",
+    "unitPrice": "Unit Price"
   },
   "reports": {
     "title": "Reports",

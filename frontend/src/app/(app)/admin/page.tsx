@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Box, Tab, Tabs, Typography } from '@mui/material';
+import ProtectedRoute from '@/components/ProtectedRoute';
 import UsersTab from './UsersTab';
 import MasterDataTab from './MasterDataTab';
 import CaseTypesTab from './CaseTypesTab';
@@ -13,6 +14,7 @@ export default function AdminPage() {
   const [tab, setTab] = useState(0);
 
   return (
+    <ProtectedRoute requiredRoles={['TenantAdmin', 'SystemAdmin']}>
     <Box>
       <Typography variant="h5" fontWeight={600} mb={2}>
         {t('admin.title')}
@@ -28,5 +30,6 @@ export default function AdminPage() {
       {tab === 2 && <CaseTypesTab />}
       {tab === 3 && <SettingsTab />}
     </Box>
+    </ProtectedRoute>
   );
 }

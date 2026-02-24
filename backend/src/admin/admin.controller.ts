@@ -13,75 +13,129 @@ import {
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles('TenantAdmin', 'SystemAdmin')
 export class AdminController {
-  constructor(private readonly adminService: AdminService) {}
+	constructor(private readonly adminService: AdminService) {}
 
-  // --- Users ---
-  @Post('users')
-  createUser(@CurrentUser() user: any, @Body() dto: CreateUserDto) {
-    return this.adminService.createUser(user.tenantSlug, dto, user.sub);
-  }
+	// --- Users ---
+	@Post('users')
+	@Roles('SystemAdmin', 'TenantAdmin') // Only SystemAdmin can list all users
+	createUser(@CurrentUser() user: any, @Body() dto: CreateUserDto) {
+		return this.adminService.createUser(user.tenantSlug, dto, user.sub)
+	}
 
-  @Get('users')
-  listUsers(@CurrentUser() user: any) {
-    return this.adminService.listUsers(user.tenantSlug);
-  }
+	@Get('users')
+	@Roles('SystemAdmin', 'TenantAdmin') // Only SystemAdmin can list all users
+	listUsers(@CurrentUser() user: any) {
+		return this.adminService.listUsers(user.tenantSlug)
+	}
 
-  @Patch('users/:userId')
-  updateUser(@CurrentUser() user: any, @Param('userId') userId: string, @Body() dto: UpdateUserDto) {
-    return this.adminService.updateUser(user.tenantSlug, userId, dto, user.sub);
-  }
+	@Patch('users/:userId')
+	@Roles('SystemAdmin', 'TenantAdmin') // Only SystemAdmin can list all users
+	updateUser(
+		@CurrentUser() user: any,
+		@Param('userId') userId: string,
+		@Body() dto: UpdateUserDto,
+	) {
+		return this.adminService.updateUser(user.tenantSlug, userId, dto, user.sub)
+	}
 
-  // --- Master Data ---
-  @Get('master-data/:category')
-  listMasterData(@CurrentUser() user: any, @Param('category') category: string) {
-    return this.adminService.listMasterData(user.tenantSlug, category);
-  }
+	// --- Master Data ---
+	@Get('master-data/:category')
+	@Roles('SystemAdmin', 'TenantAdmin') // Only SystemAdmin can list all users
+	listMasterData(
+		@CurrentUser() user: any,
+		@Param('category') category: string,
+	) {
+		return this.adminService.listMasterData(user.tenantSlug, category)
+	}
 
-  @Post('master-data/:category')
-  createMasterData(@CurrentUser() user: any, @Param('category') category: string, @Body() dto: CreateMasterDataDto) {
-    return this.adminService.createMasterData(user.tenantSlug, category, dto, user.sub);
-  }
+	@Post('master-data/:category')
+	@Roles('SystemAdmin', 'TenantAdmin') // Only SystemAdmin can list all users
+	createMasterData(
+		@CurrentUser() user: any,
+		@Param('category') category: string,
+		@Body() dto: CreateMasterDataDto,
+	) {
+		return this.adminService.createMasterData(
+			user.tenantSlug,
+			category,
+			dto,
+			user.sub,
+		)
+	}
 
-  @Patch('master-data/:category/:id')
-  updateMasterData(@CurrentUser() user: any, @Param('category') category: string, @Param('id') id: string, @Body() dto: UpdateMasterDataDto) {
-    return this.adminService.updateMasterData(user.tenantSlug, category, id, dto, user.sub);
-  }
+	@Patch('master-data/:category/:id')
+	@Roles('SystemAdmin', 'TenantAdmin') // Only SystemAdmin can list all users
+	updateMasterData(
+		@CurrentUser() user: any,
+		@Param('category') category: string,
+		@Param('id') id: string,
+		@Body() dto: UpdateMasterDataDto,
+	) {
+		return this.adminService.updateMasterData(
+			user.tenantSlug,
+			category,
+			id,
+			dto,
+			user.sub,
+		)
+	}
 
-  // --- Case Types ---
-  @Get('case-types')
-  listCaseTypes(@CurrentUser() user: any) {
-    return this.adminService.listCaseTypes(user.tenantSlug);
-  }
+	// --- Case Types ---
+	@Get('case-types')
+	@Roles('SystemAdmin', 'TenantAdmin') // Only SystemAdmin can list all users
+	listCaseTypes(@CurrentUser() user: any) {
+		return this.adminService.listCaseTypes(user.tenantSlug)
+	}
 
-  @Post('case-types')
-  createCaseType(@CurrentUser() user: any, @Body() body: any) {
-    return this.adminService.createCaseType(user.tenantSlug, body, user.sub);
-  }
+	@Post('case-types')
+	@Roles('SystemAdmin', 'TenantAdmin') // Only SystemAdmin can list all users
+	createCaseType(@CurrentUser() user: any, @Body() body: any) {
+		return this.adminService.createCaseType(user.tenantSlug, body, user.sub)
+	}
 
-  @Patch('case-types/:id')
-  updateCaseType(@CurrentUser() user: any, @Param('id') id: string, @Body() body: any) {
-    return this.adminService.updateCaseType(user.tenantSlug, id, body, user.sub);
-  }
+	@Patch('case-types/:id')
+	@Roles('SystemAdmin', 'TenantAdmin') // Only SystemAdmin can list all users
+	updateCaseType(
+		@CurrentUser() user: any,
+		@Param('id') id: string,
+		@Body() body: any,
+	) {
+		return this.adminService.updateCaseType(user.tenantSlug, id, body, user.sub)
+	}
 
-  // --- Expense Approval Workflow ---
-  @Get('expense-approval-workflow')
-  getExpenseWorkflow(@CurrentUser() user: any) {
-    return this.adminService.getExpenseWorkflow(user.tenantSlug);
-  }
+	// --- Expense Approval Workflow ---
+	@Get('expense-approval-workflow')
+	@Roles('SystemAdmin', 'TenantAdmin') // Only SystemAdmin can list all users
+	getExpenseWorkflow(@CurrentUser() user: any) {
+		return this.adminService.getExpenseWorkflow(user.tenantSlug)
+	}
 
-  @Post('expense-approval-workflow')
-  saveExpenseWorkflow(@CurrentUser() user: any, @Body() dto: SaveExpenseWorkflowDto) {
-    return this.adminService.saveExpenseWorkflow(user.tenantSlug, dto, user.sub);
-  }
+	@Post('expense-approval-workflow')
+	@Roles('SystemAdmin', 'TenantAdmin') // Only SystemAdmin can list all users
+	saveExpenseWorkflow(
+		@CurrentUser() user: any,
+		@Body() dto: SaveExpenseWorkflowDto,
+	) {
+		return this.adminService.saveExpenseWorkflow(user.tenantSlug, dto, user.sub)
+	}
 
-  // --- Tenant Settings ---
-  @Get('settings')
-  getTenantSettings(@CurrentUser() user: any) {
-    return this.adminService.getTenantSettings(user.tenantSlug);
-  }
+	// --- Tenant Settings ---
+	@Get('settings')
+	@Roles('SystemAdmin', 'TenantAdmin') // Only SystemAdmin can list all users
+	getTenantSettings(@CurrentUser() user: any) {
+		return this.adminService.getTenantSettings(user.tenantSlug)
+	}
 
-  @Patch('settings')
-  updateTenantSettings(@CurrentUser() user: any, @Body() dto: UpdateTenantSettingsDto) {
-    return this.adminService.updateTenantSettings(user.tenantSlug, dto, user.sub);
-  }
+	@Patch('settings')
+	@Roles('SystemAdmin', 'TenantAdmin') // Only SystemAdmin can list all users
+	updateTenantSettings(
+		@CurrentUser() user: any,
+		@Body() dto: UpdateTenantSettingsDto,
+	) {
+		return this.adminService.updateTenantSettings(
+			user.tenantSlug,
+			dto,
+			user.sub,
+		)
+	}
 }

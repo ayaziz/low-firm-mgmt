@@ -1,7 +1,8 @@
 {
   "app": {
     "title": "إدارة مكتب المحاماة",
-    "shortTitle": "لوما"
+    "shortTitle": "لوما",
+    "name": "لوما"
   },
   "nav": {
     "dashboard": "لوحة التحكم",
@@ -21,7 +22,10 @@
     "password": "كلمة المرور",
     "signIn": "دخول",
     "stepUp": "تأكيد الهوية",
-    "stepUpRequired": "مطلوب مصادقة إضافية"
+    "stepUpRequired": "مطلوب مصادقة إضافية",
+    "loginTitle": "تسجيل الدخول إلى لوما",
+    "loginError": "بيانات اعتماد غير صالحة. يرجى المحاولة مرة أخرى.",
+    "devAccounts": "حسابات التطوير"
   },
   "common": {
     "save": "حفظ",
@@ -54,7 +58,11 @@
     "download": "تنزيل",
     "upload": "رفع",
     "loadMore": "تحميل المزيد",
-    "saved": "تم الحفظ بنجاح"
+    "saved": "تم الحفظ بنجاح",
+    "add": "إضافة",
+    "createdAt": "تاريخ الإنشاء",
+    "noData": "لا توجد بيانات",
+    "refresh": "تحديث"
   },
   "dashboard": {
     "title": "لوحة التحكم",
@@ -66,7 +74,12 @@
     "receivablesSummary": "ملخص المستحقات",
     "recentPayments": "المدفوعات الأخيرة",
     "pendingApprovals": "موافقات المصروفات المعلقة",
-    "pendingInvoices": "فواتير بانتظار الاعتماد"
+    "pendingInvoices": "فواتير بانتظار الاعتماد",
+    "welcome": "مرحباً",
+    "activeCases": "القضايا النشطة",
+    "notifications": "الإشعارات",
+    "overdueInvoices": "فواتير متأخرة",
+    "recentInvoices": "فواتير حديثة"
   },
   "customer": {
     "title": "العملاء",
@@ -91,7 +104,21 @@
     "audit": "التدقيق",
     "financialSummary": "الملخص المالي",
     "completeness": "الاكتمال",
-    "identityExists": "{{field}} موجود بالفعل في هذا المستأجر."
+    "identityExists": "{{field}} موجود بالفعل في هذا المستأجر.",
+    "add": "إضافة عميل",
+    "name": "الاسم",
+    "type": "النوع",
+    "status": "الحالة",
+    "email": "البريد الإلكتروني",
+    "phone": "الهاتف",
+    "details": "التفاصيل",
+    "notes": "الملاحظات",
+    "city": "المدينة",
+    "country": "الدولة",
+    "addressLabel": "عنوان العنوان",
+    "addressLine1": "سطر العنوان 1",
+    "addressLine2": "سطر العنوان 2",
+    "contactRole": "دور جهة الاتصال"
   },
   "case": {
     "title": "القضايا",
@@ -126,7 +153,26 @@
     },
     "transition": "تغيير الحالة",
     "setOnHold": "إيقاف",
-    "clearOnHold": "إلغاء الإيقاف"
+    "clearOnHold": "إلغاء الإيقاف",
+    "add": "إضافة قضية",
+    "caseNumber": "رقم القضية",
+    "customer": "العميل",
+    "description": "الوصف",
+    "details": "التفاصيل",
+    "overview": "نظرة عامة",
+    "summary": "ملخص",
+    "taskTitle": "عنوان المهمة",
+    "dueDate": "تاريخ الاستحقاق",
+    "sessionDate": "تاريخ الجلسة",
+    "sessionType": "نوع الجلسة",
+    "location": "الموقع",
+    "filingDate": "تاريخ المرافعة",
+    "filingType": "نوع المرافعة",
+    "noteContent": "محتوى الملاحظة",
+    "commType": "نوع المراسلة",
+    "direction": "الاتجاه",
+    "inbound": "وارد",
+    "outbound": "صادر"
   },
   "document": {
     "title": "المستندات",
@@ -154,7 +200,17 @@
       "Internal": "داخلي",
       "Confidential": "سري",
       "HighlyConfidential": "سري للغاية"
-    }
+    },
+    "name": "الاسم",
+    "type": "النوع",
+    "size": "الحجم",
+    "download": "تنزيل",
+    "metadata": "البيانات الوصفية",
+    "lockStatus": "حالة القفل",
+    "available": "متاح",
+    "checkedOut": "مسحوب",
+    "selectFile": "اختر ملف",
+    "restore": "استعادة"
   },
   "accounting": {
     "title": "المحاسبة",
@@ -186,7 +242,19 @@
       "Paid": "مدفوع",
       "PartiallyPaid": "مدفوع جزئياً",
       "Voided": "ملغي"
-    }
+    },
+    "baseSalary": "الراتب الأساسي",
+    "bonus": "مكافأة",
+    "category": "الفئة",
+    "createWage": "إدخال راتب جديد",
+    "deductions": "الخصومات",
+    "description": "الوصف",
+    "employeeName": "اسم الموظف",
+    "lineItems": "البنود",
+    "netPay": "صافي الراتب",
+    "period": "الفترة",
+    "quantity": "الكمية",
+    "unitPrice": "سعر الوحدة"
   },
   "reports": {
     "title": "التقارير",

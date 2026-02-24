@@ -38,7 +38,7 @@ export class AccountingController {
   }
 
   @Post('invoices/:id/finalize')
-  @Roles('Lawyer', 'Accountant', 'TenantAdmin', 'SystemAdmin')
+  @Roles('Accountant', 'TenantAdmin', 'SystemAdmin')
   finalizeInvoice(@CurrentUser() user: any, @Param('id') id: string) {
     return this.accountingService.finalizeInvoice(user.tenantSlug, id, user.sub);
   }
@@ -86,13 +86,13 @@ export class AccountingController {
   }
 
   @Post('expenses/:id/approve')
-  @Roles('TenantAdmin', 'SystemAdmin')
+  @Roles('Accountant', 'TenantAdmin', 'SystemAdmin')
   approveExpense(@CurrentUser() user: any, @Param('id') id: string, @Body() dto: ApproveExpenseDto) {
     return this.accountingService.approveExpense(user.tenantSlug, id, dto, user.sub);
   }
 
   @Post('expenses/:id/reject')
-  @Roles('TenantAdmin', 'SystemAdmin')
+  @Roles('Accountant', 'TenantAdmin', 'SystemAdmin')
   rejectExpense(@CurrentUser() user: any, @Param('id') id: string, @Body() dto: RejectExpenseDto) {
     return this.accountingService.rejectExpense(user.tenantSlug, id, dto, user.sub);
   }

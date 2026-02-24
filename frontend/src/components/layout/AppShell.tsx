@@ -63,9 +63,9 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const navItems: NavItem[] = useMemo(
     () => [
       { key: 'dashboard', icon: <DashboardIcon />, path: '/' },
-      { key: 'customers', icon: <PeopleIcon />, path: '/customers', roles: ['Lawyer', 'TenantAdmin'] },
-      { key: 'cases', icon: <GavelIcon />, path: '/cases', roles: ['Lawyer', 'TenantAdmin'] },
-      { key: 'documents', icon: <DescriptionIcon />, path: '/documents', roles: ['Lawyer', 'TenantAdmin'] },
+      { key: 'customers', icon: <PeopleIcon />, path: '/customers', roles: ['Lawyer', 'Accountant', 'TenantAdmin', 'SystemAdmin'] },
+      { key: 'cases', icon: <GavelIcon />, path: '/cases', roles: ['Lawyer', 'Accountant', 'TenantAdmin', 'SystemAdmin'] },
+      { key: 'documents', icon: <DescriptionIcon />, path: '/documents', roles: ['Lawyer', 'Accountant', 'TenantAdmin', 'SystemAdmin'] },
       { key: 'accounting', icon: <AccountIcon />, path: '/accounting' },
       { key: 'reports', icon: <ReportIcon />, path: '/reports' },
       { key: 'admin', icon: <AdminIcon />, path: '/admin', roles: ['TenantAdmin', 'SystemAdmin'] },

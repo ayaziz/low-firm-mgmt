@@ -1,7 +1,8 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication, ValidationPipe } from '@nestjs/common';
-import * as request from 'supertest';
+import  {Request} from 'supertest';
 import { AppModule } from '../src/app.module';
+import { request } from 'express';
 
 /**
  * Integration test: Case lifecycle — create, transition through states, RBAC.
@@ -30,18 +31,18 @@ describe('Cases (e2e)', () => {
       await app.init();
 
       // Get tokens
-      const lawyerRes = await request(app.getHttpServer())
-        .post('/api/v1/auth/dev/login')
-        .send({ email: 'lawyer@demo.com' });
+      const lawyerRes = await Request.call(app.getHttpServer())
+				.post('/api/v1/auth/dev/login')
+				.send({ email: 'lawyer@demo.com' })
       lawyerToken = lawyerRes.body.accessToken;
 
-      const accountantRes = await request(app.getHttpServer())
+      const accountantRes = await Request.call(app.getHttpServer())
         .post('/api/v1/auth/dev/login')
         .send({ email: 'accountant@demo.com' });
       accountantToken = accountantRes.body.accessToken;
 
       // Create a customer for case association
-      const custRes = await request(app.getHttpServer())
+      const custRes = await Request.call(app.getHttpServer())
         .post('/api/v1/customers')
         .set('Authorization', `Bearer ${lawyerToken}`)
         .send({
@@ -67,13 +68,13 @@ describe('Cases (e2e)', () => {
       if (!app || !customerId) return;
 
       // Get a case type from seed data
-      const typesRes = await request(app.getHttpServer())
+      const typesRes = await Request.call(app.getHttpServer())
         .get('/api/v1/admin/case-types')
         .set('Authorization', `Bearer ${lawyerToken}`);
       const caseTypeId = typesRes.body?.data?.[0]?.id;
       if (!caseTypeId) return; // No seed data available
 
-      const res = await request(app.getHttpServer())
+      const res = await Request.call(app.getHttpServer())
         .post('/api/v1/cases')
         .set('Authorization', `Bearer ${lawyerToken}`)
         .send({
@@ -91,7 +92,7 @@ describe('Cases (e2e)', () => {
 
     it('should list cases', async () => {
       if (!app) return;
-      const res = await request(app.getHttpServer())
+      const res = await Request.call(app.getHttpServer())
         .get('/api/v1/cases')
         .set('Authorization', `Bearer ${lawyerToken}`)
         .expect(200);
@@ -101,7 +102,7 @@ describe('Cases (e2e)', () => {
 
     it('should get case detail', async () => {
       if (!app || !caseId) return;
-      const res = await request(app.getHttpServer())
+      const res = await Request.call(app.getHttpServer())
         .get(`/api/v1/cases/${caseId}`)
         .set('Authorization', `Bearer ${lawyerToken}`)
         .expect(200);
@@ -111,7 +112,7 @@ describe('Cases (e2e)', () => {
 
     it('should deny Accountant from creating cases', async () => {
       if (!app) return;
-      await request(app.getHttpServer())
+      await Request.call(app.getHttpServer())
         .post('/api/v1/cases')
         .set('Authorization', `Bearer ${accountantToken}`)
         .send({
@@ -130,14 +131,14 @@ describe('Cases (e2e)', () => {
       if (!app || !customerId) return;
 
       // Get case type
-      const typesRes = await request(app.getHttpServer())
+      const typesRes = await Request.call(app.getHttpServer())
         .get('/api/v1/admin/case-types')
         .set('Authorization', `Bearer ${lawyerToken}`);
       const caseTypeId = typesRes.body?.data?.[0]?.id;
       if (!caseTypeId) return;
 
       // Create a fresh case
-      const res = await request(app.getHttpServer())
+      const res = await Request.call(app.getHttpServer())
         .post('/api/v1/cases')
         .set('Authorization', `Bearer ${lawyerToken}`)
         .send({
@@ -150,7 +151,7 @@ describe('Cases (e2e)', () => {
 
     it('should transition Intake → Open', async () => {
       if (!app || !caseId) return;
-      const res = await request(app.getHttpServer())
+      const res = await Request.call(app.getHttpServer())
         .post(`/api/v1/cases/${caseId}/transition`)
         .set('Authorization', `Bearer ${lawyerToken}`)
         .send({ toState: 'Open' })
@@ -161,7 +162,7 @@ describe('Cases (e2e)', () => {
 
     it('should transition Open → Active', async () => {
       if (!app || !caseId) return;
-      const res = await request(app.getHttpServer())
+      const res = await Request.call(app.getHttpServer())
         .post(`/api/v1/cases/${caseId}/transition`)
         .set('Authorization', `Bearer ${lawyerToken}`)
         .send({ toState: 'Active' })
@@ -172,7 +173,7 @@ describe('Cases (e2e)', () => {
 
     it('should reject invalid transition Active → Intake', async () => {
       if (!app || !caseId) return;
-      await request(app.getHttpServer())
+      await Request.call(app.getHttpServer())
         .post(`/api/v1/cases/${caseId}/transition`)
         .set('Authorization', `Bearer ${lawyerToken}`)
         .send({ toState: 'Intake' })
@@ -181,7 +182,7 @@ describe('Cases (e2e)', () => {
 
     it('should transition Active → Closed', async () => {
       if (!app || !caseId) return;
-      const res = await request(app.getHttpServer())
+      const res = await Request.call(app.getHttpServer())
         .post(`/api/v1/cases/${caseId}/transition`)
         .set('Authorization', `Bearer ${lawyerToken}`)
         .send({ toState: 'Closed' })
@@ -192,7 +193,7 @@ describe('Cases (e2e)', () => {
 
     it('should transition Closed → Archived', async () => {
       if (!app || !caseId) return;
-      const res = await request(app.getHttpServer())
+      const res = await Request.call(app.getHttpServer())
         .post(`/api/v1/cases/${caseId}/transition`)
         .set('Authorization', `Bearer ${lawyerToken}`)
         .send({ toState: 'Archived' })
@@ -203,7 +204,7 @@ describe('Cases (e2e)', () => {
 
     it('should reject transition from Archived', async () => {
       if (!app || !caseId) return;
-      await request(app.getHttpServer())
+      await Request.call(app.getHttpServer())
         .post(`/api/v1/cases/${caseId}/transition`)
         .set('Authorization', `Bearer ${lawyerToken}`)
         .send({ toState: 'Active' })
