@@ -12,6 +12,7 @@ export class DocumentController {
   constructor(private readonly documentService: DocumentService) {}
 
   @Post()
+  @Post()
   @Roles('Lawyer', 'TenantAdmin', 'SystemAdmin')
   create(@CurrentUser() user: any, @Body() dto: CreateDocumentDto) {
     return this.documentService.create(user.tenantSlug, user.tenantId, dto, user.sub);

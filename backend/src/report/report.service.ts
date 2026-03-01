@@ -107,9 +107,9 @@ export class ReportService {
     const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
     const rows = await this.prisma.queryTenant(tenantSlug,
       `SELECT i.customer_id, COUNT(i.id)::int AS invoice_count,
-              SUM(i.total)::numeric AS total_amount,
-              SUM(i.amount_paid)::numeric AS paid_amount,
-              SUM(i.total - i.amount_paid)::numeric AS outstanding_amount
+              SUM(i.total_amount)::numeric AS total_amount,
+              SUM(i.paid_amount)::numeric AS paid_amount,
+              SUM(i.total_amount - i.paid_amount)::numeric AS outstanding_amount
        FROM invoices i ${where}
        GROUP BY i.customer_id`, params);
 
@@ -127,13 +127,13 @@ export class ReportService {
     const conditions: string[] = [];
     const params: any[] = [];
     let idx = 1;
-    if (startMonth) { conditions.push(`TO_CHAR(p.paid_at, 'YYYY-MM') >= $${idx++}`); params.push(startMonth); }
-    if (endMonth) { conditions.push(`TO_CHAR(p.paid_at, 'YYYY-MM') <= $${idx++}`); params.push(endMonth); }
+    if (startMonth) { conditions.push(`TO_CHAR(p.payment_date, 'YYYY-MM') >= $${idx++}`); params.push(startMonth); }
+    if (endMonth) { conditions.push(`TO_CHAR(p.payment_date, 'YYYY-MM') <= $${idx++}`); params.push(endMonth); }
 
     const paymentWhere = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
 
     const paymentRows = await this.prisma.queryTenant(tenantSlug,
-      `SELECT TO_CHAR(p.paid_at, 'YYYY-MM') AS period,
+      `SELECT TO_CHAR(p.payment_date, 'YYYY-MM') AS period,
               SUM(p.amount)::numeric AS received
        FROM payments p ${paymentWhere}
        GROUP BY period ORDER BY period`, params);
@@ -164,10 +164,10 @@ export class ReportService {
     const params = filters.status ? [filters.status] : [];
 
     const rows = await this.prisma.queryTenant(tenantSlug,
-      `SELECT e.category AS category, COUNT(e.id)::int AS count, SUM(e.amount)::numeric AS total_amount
+      `SELECT e.category_id AS category, COUNT(e.id)::int AS count, SUM(e.amount)::numeric AS total_amount
        FROM expenses e
        WHERE 1=1 ${condition}
-       GROUP BY e.category ORDER BY total_amount DESC`, params);
+       GROUP BY e.category_id ORDER BY total_amount DESC`, params);
 
     const total = rows.reduce((acc: number, r: any) => acc + parseFloat(r.total_amount || 0), 0);
     return { categories: rows, total };

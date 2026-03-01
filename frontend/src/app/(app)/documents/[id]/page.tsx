@@ -92,8 +92,7 @@ export default function DocumentDetailPage() {
       if (!file) return;
       await documentApi.checkin(id, {
         fileName: file.name,
-        mimeType: file.type || 'application/octet-stream',
-        fileSize: file.size,
+        mimeType: file.type || 'application/octet-stream'
       });
       load();
     };

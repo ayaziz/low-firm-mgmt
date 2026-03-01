@@ -205,17 +205,17 @@ export class AdminService {
 
   async listCaseTypes(tenantSlug: string) {
     return this.prisma.queryTenant(tenantSlug,
-      `SELECT id, name, description, is_active, required_docs_template, default_task_template,
+      `SELECT id, code, label_en, label_ar, is_active, required_docs_template, default_task_template,
               session_placeholders, participant_placeholders
-       FROM case_types ORDER BY name`);
+       FROM case_types ORDER BY label_en`);
   }
 
   async createCaseType(tenantSlug: string, data: any, actorId: string) {
     const id = uuidv4();
     await this.prisma.executeTenant(tenantSlug,
-      `INSERT INTO case_types (id, name, description, is_active, required_docs_template, default_task_template, session_placeholders, participant_placeholders)
-       VALUES ($1, $2, $3, true, $4, $5, $6, $7)`,
-      [id, data.name, data.description || null,
+      `INSERT INTO case_types (id, code, label_en, label_ar, is_active, required_docs_template, default_task_template, session_placeholders, participant_placeholders)
+       VALUES ($1, $2, $3, $4, true, $5, $6, $7, $8)`,
+      [id, data.code, data.label_en || data.code, data.label_ar || null,
         data.requiredDocsTemplate ? JSON.stringify(data.requiredDocsTemplate) : null,
         data.defaultTaskTemplate ? JSON.stringify(data.defaultTaskTemplate) : null,
         data.sessionPlaceholders ? JSON.stringify(data.sessionPlaceholders) : null,
@@ -240,8 +240,9 @@ export class AdminService {
     const params: any[] = [];
     let idx = 1;
 
-    if (data.name !== undefined) { sets.push(`name = $${idx++}`); params.push(data.name); }
-    if (data.description !== undefined) { sets.push(`description = $${idx++}`); params.push(data.description); }
+    if (data.code !== undefined) { sets.push(`code = $${idx++}`); params.push(data.code); }
+    if (data.label_en !== undefined) { sets.push(`label_en = $${idx++}`); params.push(data.label_en); }
+    if (data.label_ar !== undefined) { sets.push(`label_ar = $${idx++}`); params.push(data.label_ar); }
     if (data.isActive !== undefined) { sets.push(`is_active = $${idx++}`); params.push(data.isActive); }
     if (data.requiredDocsTemplate !== undefined) { sets.push(`required_docs_template = $${idx++}`); params.push(JSON.stringify(data.requiredDocsTemplate)); }
     if (data.defaultTaskTemplate !== undefined) { sets.push(`default_task_template = $${idx++}`); params.push(JSON.stringify(data.defaultTaskTemplate)); }

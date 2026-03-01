@@ -88,7 +88,6 @@ export default function DocumentListPage() {
         customerId: '',
         fileName: selectedFile.name,
         mimeType: selectedFile.type || 'application/octet-stream',
-        fileSize: selectedFile.size,
         docTypeId: 'General',
         confidentialityLevel: form.confidentiality,
       });

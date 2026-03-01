@@ -48,9 +48,9 @@ export class CaseService {
 
     await this.prisma.executeTenant(
       tenantSlug,
-      `INSERT INTO cases (id, system_case_ref, court_case_number, title, case_type_id, state, is_on_hold, assigned_lawyer_user_id, row_version, created_at, updated_at)
-       VALUES ($1, $2, $3, $4, $5, 'Intake', false, $6, $7, NOW(), NOW())`,
-      [caseId, systemCaseRef, dto.courtCaseNumber || null, dto.title, dto.caseTypeId, assignedLawyer, rowVersion],
+      `INSERT INTO cases (id, system_case_ref, court_case_number, title, description, case_type_id, state, is_on_hold, assigned_lawyer_user_id, row_version, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, 'Intake', false, $7, $8, NOW(), NOW())`,
+      [caseId, systemCaseRef, dto.courtCaseNumber || null, dto.title, dto.description || null, dto.caseTypeId, assignedLawyer, rowVersion],
     );
 
     // Link customers
@@ -261,7 +261,7 @@ export class CaseService {
       `INSERT INTO tasks (id, case_id, customer_id, title, description, assignee_user_id, reviewer_user_id, priority, status, due_date, start_date, tags, created_at, updated_at)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'Open', $9, $10, $11, NOW(), NOW())`,
       [taskId, caseId, dto.customerId || null, dto.title, dto.description || null, dto.assigneeUserId, dto.reviewerUserId || null,
-       dto.priority || 'Medium', dto.dueDate || null, dto.startDate || null, JSON.stringify(dto.tags || [])],
+       dto.priority || 'Medium', dto.dueDate || null, dto.startDate || null, dto.tags || []],
     );
     await this.audit.log({ tenantSlug, eventType: 'TASK_CREATED', actorUserId: userId, entityType: 'Task', entityId: taskId, payload: { caseId, title: dto.title } });
 
@@ -430,7 +430,7 @@ export class CaseService {
       tenantSlug,
       `INSERT INTO notes (id, case_id, title, body, tags, visibility_scope, referenced_note_id, created_by, created_at)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())`,
-      [noteId, caseId, dto.title || null, dto.body, JSON.stringify(dto.tags || []),
+      [noteId, caseId, dto.title || null, dto.body, dto.tags || [],
        dto.visibilityScope || 'LegalOnly', dto.referencedNoteId || null, userId],
     );
     await this.audit.log({ tenantSlug, eventType: 'NOTE_CREATED', actorUserId: userId, entityType: 'Note', entityId: noteId, payload: { caseId } });

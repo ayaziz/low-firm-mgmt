@@ -29,24 +29,25 @@ import {
   CircularProgress,
 } from '@mui/material';
 import { Add as AddIcon, Edit as EditIcon, Delete as DeleteIcon, Download as DownloadIcon } from '@mui/icons-material';
-import { caseApi, documentApi, auditApi, accountingApi } from '@/api';
-import type { Case, Task, Session, Filing, Note, Communication, CompletenessResult, Document as Doc, AuditEvent, Invoice } from '@/types';
+import { caseApi, documentApi, auditApi, accountingApi, adminApi } from '@/api';
+import type { Case, Task, Session, Filing, Note, Communication, CompletenessResult, Document as Doc, AuditEvent, Invoice, MasterDataItem } from '@/types';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import { CAPABILITIES } from '@/auth/capabilities';
+import { useAuth } from '@/context/AuthContext';
 
 function TabPanel({ children, value, index }: { children: React.ReactNode; value: number; index: number }) {
   return value === index ? <Box py={2}>{children}</Box> : null;
 }
 
 const STATE_COLORS: Record<string, 'default' | 'info' | 'primary' | 'warning' | 'success' | 'error'> = {
-  Draft: 'default', Open: 'info', InProgress: 'primary', OnHold: 'warning', Closed: 'success', Archived: 'default',
+  Intake: 'default', Open: 'info', Active: 'primary', Pending: 'warning', Closed: 'success', Archived: 'default',
 };
 
 const TRANSITIONS: Record<string, string[]> = {
-  Draft: ['Open'],
-  Open: ['InProgress', 'OnHold', 'Closed'],
-  InProgress: ['OnHold', 'Closed'],
-  OnHold: ['InProgress'],
+  Intake: ['Open'],
+  Open: ['Active'],
+  Active: ['Pending', 'Closed'],
+  Pending: ['Active', 'Closed'],
   Closed: ['Archived'],
 };
 
@@ -54,6 +55,7 @@ export default function CaseDetailPage() {
   const { t } = useTranslation();
   const params = useParams();
   const id = params.id as string;
+  const { user } = useAuth();
 
   const [cs, setCs] = useState<Case | null>(null);
   const [loading, setLoading] = useState(true);
@@ -81,11 +83,16 @@ export default function CaseDetailPage() {
   const [saving, setSaving] = useState(false);
 
   // Forms
-  const [taskForm, setTaskForm] = useState({ title: '', description: '', due_date: '' });
-  const [sessionForm, setSessionForm] = useState({ session_date: '', session_type: '', location: '', notes: '' });
-  const [filingForm, setFilingForm] = useState({ title: '', filing_type: '', filed_date: '' });
+  const [taskForm, setTaskForm] = useState({ title: '', description: '', dueDate: '' });
+  const [sessionForm, setSessionForm] = useState({ title: '', typeId: '', startDateTime: '', endDateTime: '', location: '' });
+  const [filingForm, setFilingForm] = useState({ typeId: '', filedDate: '', notes: '' });
   const [noteForm, setNoteForm] = useState({ content: '' });
-  const [commForm, setCommForm] = useState({ direction: 'Inbound' as 'Inbound' | 'Outbound', comm_type: 'Email', summary: '' });
+  const [commForm, setCommForm] = useState({ direction: 'Inbound' as 'Inbound' | 'Outbound', typeId: '', dateTime: '', summary: '' });
+
+  // Master data for dropdowns
+  const [sessionTypes, setSessionTypes] = useState<MasterDataItem[]>([]);
+  const [filingTypes, setFilingTypes] = useState<MasterDataItem[]>([]);
+  const [commTypes, setCommTypes] = useState<MasterDataItem[]>([]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -106,22 +113,36 @@ export default function CaseDetailPage() {
       ]);
       setCs(caseData);
       setCompleteness(comp);
-      setTasks(taskRes.data);
-      setSessions(sessRes.data);
-      setFilings(filRes.data);
-      setNotes(noteRes.data);
-      setComms(commRes.data);
+      // Sub-entity list endpoints return raw arrays, not { data: [] }
+      setTasks(Array.isArray(taskRes) ? taskRes : taskRes.data ?? []);
+      setSessions(Array.isArray(sessRes) ? sessRes : sessRes.data ?? []);
+      setFilings(Array.isArray(filRes) ? filRes : filRes.data ?? []);
+      setNotes(Array.isArray(noteRes) ? noteRes : noteRes.data ?? []);
+      setComms(Array.isArray(commRes) ? commRes : commRes.data ?? []);
       setMemberships(Array.isArray(memberRes) ? memberRes : []);
       setParties(Array.isArray(partyRes) ? partyRes : []);
-      setDocuments(docRes.data);
-      setInvoices(invRes.data);
-      setAuditEvents(auditRes.data);
+      setDocuments(Array.isArray(docRes) ? docRes : docRes.data ?? []);
+      setInvoices(Array.isArray(invRes) ? invRes : invRes.data ?? []);
+      setAuditEvents(Array.isArray(auditRes) ? auditRes : auditRes.data ?? []);
     } finally {
       setLoading(false);
     }
   }, [id]);
 
   useEffect(() => { load(); }, [load]);
+
+  // Load master data for dropdowns
+  useEffect(() => {
+    Promise.all([
+      adminApi.listMasterData('sessionType').catch(() => []),
+      adminApi.listMasterData('filingType').catch(() => []),
+      adminApi.listMasterData('communicationType').catch(() => []),
+    ]).then(([st, ft, ct]) => {
+      setSessionTypes(st.filter(i => i.is_active));
+      setFilingTypes(ft.filter(i => i.is_active));
+      setCommTypes(ct.filter(i => i.is_active));
+    });
+  }, []);
 
   const handleTransition = async (newState: string) => {
     if (!cs) return;
@@ -132,9 +153,14 @@ export default function CaseDetailPage() {
   const handleCreateTask = async () => {
     setSaving(true);
     try {
-      await caseApi.createTask(id, taskForm);
+      await caseApi.createTask(id, {
+        title: taskForm.title,
+        description: taskForm.description || undefined,
+        assigneeUserId: user?.id,
+        dueDate: taskForm.dueDate || undefined,
+      } as any);
       setTaskOpen(false);
-      setTaskForm({ title: '', description: '', due_date: '' });
+      setTaskForm({ title: '', description: '', dueDate: '' });
       const res = await caseApi.listTasks(id);
       setTasks(res.data);
     } finally { setSaving(false); }
@@ -143,9 +169,15 @@ export default function CaseDetailPage() {
   const handleCreateSession = async () => {
     setSaving(true);
     try {
-      await caseApi.createSession(id, sessionForm);
+      await caseApi.createSession(id, {
+        title: sessionForm.title,
+        typeId: sessionForm.typeId,
+        startDateTime: sessionForm.startDateTime ? new Date(sessionForm.startDateTime).toISOString() : undefined,
+        endDateTime: sessionForm.endDateTime ? new Date(sessionForm.endDateTime).toISOString() : undefined,
+        location: sessionForm.location || undefined,
+      } as any);
       setSessionOpen(false);
-      setSessionForm({ session_date: '', session_type: '', location: '', notes: '' });
+      setSessionForm({ title: '', typeId: '', startDateTime: '', endDateTime: '', location: '' });
       const res = await caseApi.listSessions(id);
       setSessions(res.data);
     } finally { setSaving(false); }
@@ -154,9 +186,13 @@ export default function CaseDetailPage() {
   const handleCreateFiling = async () => {
     setSaving(true);
     try {
-      await caseApi.createFiling(id, filingForm);
+      await caseApi.createFiling(id, {
+        typeId: filingForm.typeId,
+        filedDate: filingForm.filedDate || undefined,
+        notes: filingForm.notes || undefined,
+      } as any);
       setFilingOpen(false);
-      setFilingForm({ title: '', filing_type: '', filed_date: '' });
+      setFilingForm({ typeId: '', filedDate: '', notes: '' });
       const res = await caseApi.listFilings(id);
       setFilings(res.data);
     } finally { setSaving(false); }
@@ -176,9 +212,14 @@ export default function CaseDetailPage() {
   const handleCreateComm = async () => {
     setSaving(true);
     try {
-      await caseApi.createCommunication(id, commForm);
+      await caseApi.createCommunication(id, {
+        typeId: commForm.typeId,
+        direction: commForm.direction,
+        dateTime: commForm.dateTime ? new Date(commForm.dateTime).toISOString() : new Date().toISOString(),
+        summary: commForm.summary || undefined,
+      } as any);
       setCommOpen(false);
-      setCommForm({ direction: 'Inbound' as 'Inbound' | 'Outbound', comm_type: 'Email', summary: '' });
+      setCommForm({ direction: 'Inbound' as 'Inbound' | 'Outbound', typeId: '', dateTime: '', summary: '' });
       const res = await caseApi.listCommunications(id);
       setComms(res.data);
     } finally { setSaving(false); }
@@ -527,7 +568,7 @@ export default function CaseDetailPage() {
           <Stack spacing={2} mt={1}>
             <TextField label={t('case.taskTitle')} fullWidth required value={taskForm.title} onChange={e => setTaskForm(f => ({ ...f, title: e.target.value }))} />
             <TextField label={t('case.description')} fullWidth multiline rows={2} value={taskForm.description} onChange={e => setTaskForm(f => ({ ...f, description: e.target.value }))} />
-            <TextField label={t('case.dueDate')} type="date" fullWidth InputLabelProps={{ shrink: true }} value={taskForm.due_date} onChange={e => setTaskForm(f => ({ ...f, due_date: e.target.value }))} />
+            <TextField label={t('case.dueDate')} type="date" fullWidth InputLabelProps={{ shrink: true }} value={taskForm.dueDate} onChange={e => setTaskForm(f => ({ ...f, dueDate: e.target.value }))} />
           </Stack>
         </DialogContent>
         <DialogActions>
@@ -541,15 +582,18 @@ export default function CaseDetailPage() {
         <DialogTitle>{t('common.add')} {t('case.sessions')}</DialogTitle>
         <DialogContent>
           <Stack spacing={2} mt={1}>
-            <TextField label={t('case.sessionDate')} type="datetime-local" fullWidth required InputLabelProps={{ shrink: true }} value={sessionForm.session_date} onChange={e => setSessionForm(f => ({ ...f, session_date: e.target.value }))} />
-            <TextField label={t('case.sessionType')} fullWidth required value={sessionForm.session_type} onChange={e => setSessionForm(f => ({ ...f, session_type: e.target.value }))} />
+            <TextField label={t('case.sessionTitle')} fullWidth required value={sessionForm.title} onChange={e => setSessionForm(f => ({ ...f, title: e.target.value }))} />
+            <TextField label={t('case.sessionType')} select fullWidth required value={sessionForm.typeId} onChange={e => setSessionForm(f => ({ ...f, typeId: e.target.value }))}>
+              {sessionTypes.map(st => (<MenuItem key={st.id} value={st.id}>{st.label_en}</MenuItem>))}
+            </TextField>
+            <TextField label={t('case.startDateTime')} type="datetime-local" fullWidth required InputLabelProps={{ shrink: true }} value={sessionForm.startDateTime} onChange={e => setSessionForm(f => ({ ...f, startDateTime: e.target.value }))} />
+            <TextField label={t('case.endDateTime')} type="datetime-local" fullWidth required InputLabelProps={{ shrink: true }} value={sessionForm.endDateTime} onChange={e => setSessionForm(f => ({ ...f, endDateTime: e.target.value }))} />
             <TextField label={t('case.location')} fullWidth value={sessionForm.location} onChange={e => setSessionForm(f => ({ ...f, location: e.target.value }))} />
-            <TextField label={t('case.notes')} fullWidth multiline rows={2} value={sessionForm.notes} onChange={e => setSessionForm(f => ({ ...f, notes: e.target.value }))} />
           </Stack>
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setSessionOpen(false)}>{t('common.cancel')}</Button>
-          <Button variant="contained" onClick={handleCreateSession} disabled={saving || !sessionForm.session_date || !sessionForm.session_type}>{t('common.save')}</Button>
+          <Button variant="contained" onClick={handleCreateSession} disabled={saving || !sessionForm.title || !sessionForm.typeId || !sessionForm.startDateTime || !sessionForm.endDateTime}>{t('common.save')}</Button>
         </DialogActions>
       </Dialog>
 
@@ -558,14 +602,16 @@ export default function CaseDetailPage() {
         <DialogTitle>{t('common.add')} {t('case.filings')}</DialogTitle>
         <DialogContent>
           <Stack spacing={2} mt={1}>
-            <TextField label={t('case.title')} fullWidth required value={filingForm.title} onChange={e => setFilingForm(f => ({ ...f, title: e.target.value }))} />
-            <TextField label={t('case.filingType')} fullWidth value={filingForm.filing_type} onChange={e => setFilingForm(f => ({ ...f, filing_type: e.target.value }))} />
-            <TextField label={t('case.filingDate')} type="date" fullWidth InputLabelProps={{ shrink: true }} value={filingForm.filed_date} onChange={e => setFilingForm(f => ({ ...f, filed_date: e.target.value }))} />
+            <TextField label={t('case.filingType')} select fullWidth required value={filingForm.typeId} onChange={e => setFilingForm(f => ({ ...f, typeId: e.target.value }))}>
+              {filingTypes.map(ft => (<MenuItem key={ft.id} value={ft.id}>{ft.label_en}</MenuItem>))}
+            </TextField>
+            <TextField label={t('case.filingDate')} type="date" fullWidth InputLabelProps={{ shrink: true }} value={filingForm.filedDate} onChange={e => setFilingForm(f => ({ ...f, filedDate: e.target.value }))} />
+            <TextField label={t('case.notes')} fullWidth multiline rows={2} value={filingForm.notes} onChange={e => setFilingForm(f => ({ ...f, notes: e.target.value }))} />
           </Stack>
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setFilingOpen(false)}>{t('common.cancel')}</Button>
-          <Button variant="contained" onClick={handleCreateFiling} disabled={saving || !filingForm.filing_type}>{t('common.save')}</Button>
+          <Button variant="contained" onClick={handleCreateFiling} disabled={saving || !filingForm.typeId}>{t('common.save')}</Button>
         </DialogActions>
       </Dialog>
 
@@ -586,22 +632,20 @@ export default function CaseDetailPage() {
         <DialogTitle>{t('common.add')} {t('case.communications')}</DialogTitle>
         <DialogContent>
           <Stack spacing={2} mt={1}>
-            <TextField label={t('case.direction')} select fullWidth value={commForm.direction} onChange={e => setCommForm(f => ({ ...f, direction: e.target.value as 'Inbound' | 'Outbound' }))}>
+            <TextField label={t('case.direction')} select fullWidth required value={commForm.direction} onChange={e => setCommForm(f => ({ ...f, direction: e.target.value as 'Inbound' | 'Outbound' }))}>
               <MenuItem value="Inbound">{t('case.inbound')}</MenuItem>
               <MenuItem value="Outbound">{t('case.outbound')}</MenuItem>
             </TextField>
-            <TextField label={t('case.commType')} select fullWidth value={commForm.comm_type} onChange={e => setCommForm(f => ({ ...f, comm_type: e.target.value }))}>
-              <MenuItem value="Email">Email</MenuItem>
-              <MenuItem value="Phone">Phone</MenuItem>
-              <MenuItem value="Meeting">Meeting</MenuItem>
-              <MenuItem value="Letter">Letter</MenuItem>
+            <TextField label={t('case.commType')} select fullWidth required value={commForm.typeId} onChange={e => setCommForm(f => ({ ...f, typeId: e.target.value }))}>
+              {commTypes.map(ct => (<MenuItem key={ct.id} value={ct.id}>{ct.label_en}</MenuItem>))}
             </TextField>
+            <TextField label={t('case.dateTime')} type="datetime-local" fullWidth required InputLabelProps={{ shrink: true }} value={commForm.dateTime} onChange={e => setCommForm(f => ({ ...f, dateTime: e.target.value }))} />
             <TextField label={t('case.summary')} fullWidth multiline rows={3} value={commForm.summary} onChange={e => setCommForm(f => ({ ...f, summary: e.target.value }))} />
           </Stack>
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setCommOpen(false)}>{t('common.cancel')}</Button>
-          <Button variant="contained" onClick={handleCreateComm} disabled={saving || !commForm.summary}>{t('common.save')}</Button>
+          <Button variant="contained" onClick={handleCreateComm} disabled={saving || !commForm.typeId || !commForm.dateTime}>{t('common.save')}</Button>
         </DialogActions>
       </Dialog>
     </Box>

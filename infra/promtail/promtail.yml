@@ -13,15 +13,19 @@ scrape_configs:
     docker_sd_configs:
       - host: unix:///var/run/docker.sock
         refresh_interval: 5s
+        filters:
+          - name: status
+            values: ["running"]
+          - name: name
+            values: ["backend", "frontend", "nginx"]
     relabel_configs:
-      # Keep only backend + frontend + nginx containers
-      - source_labels: ['__meta_docker_container_name']
-        regex: '.*(backend|frontend|nginx).*'
-        action: keep
       # Use container name as label
       - source_labels: ['__meta_docker_container_name']
         regex: '/(.*)'
         target_label: container
+      # Ensure job label is always present
+      - replacement: loma
+        target_label: job
     pipeline_stages:
       # Try to parse JSON logs from the backend (winston output)
       - json:

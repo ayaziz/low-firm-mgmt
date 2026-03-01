@@ -18,11 +18,13 @@ export const caseApi = {
   },
 
   transition(id: string, newState: string, rowVersion: string): Promise<Case> {
-    return post<Case>(`/cases/${id}/transition`, { newState, rowVersion });
+    void rowVersion;
+    return post<Case>(`/cases/${id}/transition`, { toState: newState });
   },
 
   setOnHold(id: string, reason: string, rowVersion: string): Promise<Case> {
-    return post<Case>(`/cases/${id}/on-hold`, { reason, rowVersion });
+    void rowVersion;
+    return post<Case>(`/cases/${id}/on-hold`, { reason });
   },
 
   clearOnHold(id: string, rowVersion: string): Promise<Case> {
@@ -79,7 +81,7 @@ export const caseApi = {
   },
 
   createNote(caseId: string, content: string): Promise<Note> {
-    return post<Note>(`/cases/${caseId}/notes`, { content });
+    return post<Note>(`/cases/${caseId}/notes`, { body: content });
   },
 
   // Communications

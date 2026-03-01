@@ -66,13 +66,13 @@ export class DocumentService {
       `INSERT INTO documents (id, title, doc_type_id, customer_id, case_id, confidentiality_level, current_version_id, is_checked_out, is_deleted, has_legal_hold, row_version, created_by, created_at, updated_at)
        VALUES ($1, $2, $3, $4, $5, $6, $7, false, false, false, $8, $9, NOW(), NOW())`,
       [docId, dto.title, dto.docTypeId, dto.customerId || null, dto.caseId || null,
-       dto.confidentialityLevel || 'Standard', versionId, rowVersion, userId],
+       dto.confidentialityLevel || 'Normal', versionId, rowVersion, userId],
     );
 
     // Create pending version
     await this.prisma.executeTenant(
       tenantSlug,
-      `INSERT INTO document_versions (id, document_id, version_number, file_name, mime_type, storage_key, scan_status, uploaded_by, created_at)
+      `INSERT INTO document_versions (id, document_id, version_number, original_filename, content_type, provider_object_key, scan_status, created_by, created_at)
        VALUES ($1, $2, 1, $3, $4, $5, 'Pending', $6, NOW())`,
       [versionId, docId, dto.fileName, dto.mimeType, storageKey, userId],
     );
@@ -89,12 +89,12 @@ export class DocumentService {
   }
 
   async getById(tenantSlug: string, docId: string, userId: string, hasStepUp = false) {
-    const rows: any[] = await this.prisma.queryTenant(tenantSlug, `SELECT * FROM documents WHERE id = $1 AND deleted_at IS NULL`, [docId]);
+    const rows: any[] = await this.prisma.queryTenant(tenantSlug, `SELECT * FROM documents WHERE id = $1 AND is_deleted = FALSE`, [docId]);
     if (!rows?.length) throw new NotFoundException('Document not found');
     const doc = rows[0];
 
     // Check access for HighlyConfidential docs
-    if (doc.confidentiality === 'HighlyConfidential') {
+    if (doc.confidentiality_level === 'HighlyConfidential') {
       // Require step-up authentication for HC docs
       if (!hasStepUp) {
         throw new ForbiddenException('Step-up authentication required for highly confidential documents');
@@ -123,8 +123,8 @@ export class DocumentService {
       throw new UnprocessableEntityException('Document has not passed scan. Current status: ' + version.scan_status);
     }
 
-    const downloadUrl = await this.storage.getDownloadUrl(version.storage_key);
-    return { downloadUrl, fileName: version.file_name, mimeType: version.mime_type };
+    const downloadUrl = await this.storage.getDownloadUrl(version.provider_object_key);
+    return { downloadUrl, fileName: version.original_filename, mimeType: version.content_type };
   }
 
   async checkout(tenantSlug: string, docId: string, userId: string) {
@@ -170,9 +170,9 @@ export class DocumentService {
     // Create new version
     await this.prisma.executeTenant(
       tenantSlug,
-      `INSERT INTO document_versions (id, document_id, version_number, file_name, mime_type, storage_key, scan_status, change_note, uploaded_by, created_at)
-       VALUES ($1, $2, $3, $4, $5, $6, 'Pending', $7, $8, NOW())`,
-      [versionId, docId, nextVer, dto.fileName, dto.mimeType, storageKey, dto.changeNote || null, userId],
+      `INSERT INTO document_versions (id, document_id, version_number, original_filename, content_type, provider_object_key, scan_status, created_by, created_at)
+       VALUES ($1, $2, $3, $4, $5, $6, 'Pending', $7, NOW())`,
+      [versionId, docId, nextVer, dto.fileName, dto.mimeType, storageKey, userId],
     );
 
     // Update document
@@ -209,8 +209,8 @@ export class DocumentService {
     const aclId = uuidv4();
     await this.prisma.executeTenant(
       tenantSlug,
-      `INSERT INTO document_acl (id, document_id, user_id, permission, granted_by, expires_at, created_at) VALUES ($1, $2, $3, $4, $5, $6, NOW())`,
-      [aclId, docId, dto.userId, dto.permission || 'Read', userId, dto.expiresAt || null],
+      `INSERT INTO document_acl (id, document_id, principal_type, principal_id, permission, created_by, expires_at, created_at) VALUES ($1, $2, 'User', $3, $4, $5, $6, NOW())`,
+      [aclId, docId, dto.userId, dto.permission || 'View', userId, dto.expiresAt || null],
     );
     await this.audit.log({ tenantSlug, eventType: 'DOC_SHARED', actorUserId: userId, entityType: 'Document', entityId: docId, payload: { sharedWith: dto.userId, expiresAt: dto.expiresAt || null } });
     return { id: aclId };
@@ -224,7 +224,7 @@ export class DocumentService {
     );
     await this.prisma.executeTenant(
       tenantSlug,
-      `INSERT INTO legal_holds (id, document_id, placed_by, placed_at, is_active) VALUES ($1, $2, $3, NOW(), true)`,
+      `INSERT INTO legal_holds (id, document_id, reason, placed_by, placed_at, is_active) VALUES ($1, $2, 'Legal hold placed', $3, NOW(), true)`,
       [uuidv4(), docId, userId],
     );
     await this.audit.log({ tenantSlug, eventType: 'LEGAL_HOLD_PLACED', actorUserId: userId, entityType: 'Document', entityId: docId });
@@ -273,7 +273,7 @@ export class DocumentService {
     // Insert legal_holds record at case level
     await this.prisma.executeTenant(
       tenantSlug,
-      `INSERT INTO legal_holds (id, case_id, placed_by, placed_at, is_active) VALUES ($1, $2, $3, NOW(), true)`,
+      `INSERT INTO legal_holds (id, case_id, reason, placed_by, placed_at, is_active) VALUES ($1, $2, 'Case legal hold', $3, NOW(), true)`,
       [uuidv4(), caseId, userId],
     );
     await this.audit.log({ tenantSlug, eventType: 'CASE_LEGAL_HOLD_PLACED', actorUserId: userId, entityType: 'Case', entityId: caseId });
@@ -298,7 +298,7 @@ export class DocumentService {
   async list(tenantSlug: string, caseId?: string, customerId?: string, docTypeId?: string, cursor?: string, limit = 20) {
     let sql = `SELECT d.*, COALESCE(dv.original_filename, '') AS file_name, dv.scan_status FROM documents d
                LEFT JOIN document_versions dv ON d.current_version_id = dv.id
-           WHERE d.deleted_at IS NULL`;
+           WHERE d.is_deleted = FALSE`;
     const params: any[] = [];
     let idx = 1;
 

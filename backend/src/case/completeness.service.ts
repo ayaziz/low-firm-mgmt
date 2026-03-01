@@ -50,7 +50,7 @@ export class CompletenessService {
     const docReqs: any[] = await this.prisma.queryTenant(
       tenantSlug,
       `SELECT cdr.*, dt.label_en as doc_type_label FROM case_doc_requirements cdr
-       LEFT JOIN master_data dt ON cdr.doc_type_id = dt.id
+       LEFT JOIN master_data dt ON cdr.doc_type_code = dt.code AND dt.category = 'docType'
        WHERE cdr.case_id = $1`,
       [caseId],
     );
@@ -58,10 +58,10 @@ export class CompletenessService {
     const totalDocReqs = docReqs?.length || 0;
     if (totalDocReqs > 0) {
       for (const dr of docReqs) {
-        if (dr.is_satisfied) {
+        if (dr.status === 'Provided') {
           docFilled++;
         } else {
-          missingItems.push(`Missing document: ${dr.doc_type_label || dr.doc_type_id}`);
+          missingItems.push(`Missing document: ${dr.doc_type_label || dr.doc_type_code}`);
         }
       }
     }

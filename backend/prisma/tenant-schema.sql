@@ -162,11 +162,12 @@ CREATE TABLE IF NOT EXISTS cases (
   title VARCHAR(500) NOT NULL,
   description TEXT,
   state VARCHAR(20) NOT NULL DEFAULT 'Intake' CHECK (state IN ('Intake', 'Open', 'Active', 'Pending', 'Closed', 'Archived')),
-  on_hold BOOLEAN DEFAULT FALSE,
+  is_on_hold BOOLEAN DEFAULT FALSE,
   on_hold_reason TEXT,
-  on_hold_start TIMESTAMPTZ,
-  on_hold_end TIMESTAMPTZ,
+  on_hold_started_at TIMESTAMPTZ,
+  on_hold_ended_at TIMESTAMPTZ,
   assigned_lawyer_user_id UUID,
+  row_version UUID,
   completeness_pct DECIMAL(5,2) DEFAULT 0,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -177,13 +178,13 @@ CREATE TABLE IF NOT EXISTS cases (
 -- Case Sequence Counter
 CREATE TABLE IF NOT EXISTS case_sequences (
   year INT PRIMARY KEY,
-  last_value INT NOT NULL DEFAULT 0
+  last_seq INT NOT NULL DEFAULT 0
 );
 
 -- Invoice Sequence Counter
 CREATE TABLE IF NOT EXISTS invoice_sequences (
   year INT PRIMARY KEY,
-  last_value INT NOT NULL DEFAULT 0
+  last_seq INT NOT NULL DEFAULT 0
 );
 
 -- Case ↔ Customer join
@@ -236,7 +237,7 @@ CREATE TABLE IF NOT EXISTS courts (
 CREATE TABLE IF NOT EXISTS sessions (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   case_id UUID NOT NULL REFERENCES cases(id),
-  session_type_id UUID,
+  type_id UUID,
   title VARCHAR(500) NOT NULL,
   start_date_time TIMESTAMPTZ NOT NULL,
   end_date_time TIMESTAMPTZ,
@@ -291,7 +292,7 @@ CREATE TABLE IF NOT EXISTS notes (
   tags TEXT[] DEFAULT '{}',
   visibility_scope VARCHAR(30) DEFAULT 'LegalOnly',
   linked_document_ids UUID[] DEFAULT '{}',
-  references_note_id UUID REFERENCES notes(id),
+  referenced_note_id UUID REFERENCES notes(id),
   created_by UUID NOT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -300,7 +301,7 @@ CREATE TABLE IF NOT EXISTS notes (
 CREATE TABLE IF NOT EXISTS filings (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   case_id UUID NOT NULL REFERENCES cases(id),
-  filing_type_id UUID NOT NULL,
+  type_id UUID NOT NULL,
   status VARCHAR(20) NOT NULL DEFAULT 'Draft' CHECK (status IN ('Draft', 'Filed', 'Accepted', 'Rejected', 'Withdrawn')),
   filed_date DATE,
   court_case_number VARCHAR(200),
@@ -317,7 +318,7 @@ CREATE TABLE IF NOT EXISTS communications (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   case_id UUID REFERENCES cases(id),
   customer_id UUID REFERENCES customers(id),
-  comm_type_id UUID NOT NULL,
+  type_id UUID NOT NULL,
   date_time TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   direction VARCHAR(10) NOT NULL DEFAULT 'Outbound' CHECK (direction IN ('Inbound', 'Outbound')),
   participants TEXT,
@@ -351,11 +352,14 @@ CREATE TABLE IF NOT EXISTS documents (
   title VARCHAR(500) NOT NULL,
   description TEXT,
   tags TEXT[] DEFAULT '{}',
-  confidentiality VARCHAR(30) NOT NULL DEFAULT 'Normal' CHECK (confidentiality IN ('Normal', 'Confidential', 'HighlyConfidential')),
+  confidentiality_level VARCHAR(30) NOT NULL DEFAULT 'Normal' CHECK (confidentiality_level IN ('Normal', 'Confidential', 'HighlyConfidential')),
   current_version_id UUID,
-  locked_by_user_id UUID,
-  lock_expires_at TIMESTAMPTZ,
-  deleted_at TIMESTAMPTZ,
+  is_checked_out BOOLEAN DEFAULT FALSE,
+  checked_out_by UUID,
+  checked_out_at TIMESTAMPTZ,
+  is_deleted BOOLEAN DEFAULT FALSE,
+  has_legal_hold BOOLEAN DEFAULT FALSE,
+  row_version UUID,
   created_by UUID NOT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -405,10 +409,10 @@ CREATE TABLE IF NOT EXISTS legal_holds (
   document_id UUID REFERENCES documents(id),
   case_id UUID REFERENCES cases(id),
   reason TEXT NOT NULL,
-  applied_by UUID NOT NULL,
-  applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  released_by UUID,
-  released_at TIMESTAMPTZ,
+  placed_by UUID NOT NULL,
+  placed_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  lifted_by UUID,
+  lifted_at TIMESTAMPTZ,
   is_active BOOLEAN DEFAULT TRUE
 );
 
@@ -418,17 +422,21 @@ CREATE TABLE IF NOT EXISTS invoices (
   invoice_number VARCHAR(50) NOT NULL UNIQUE,
   customer_id UUID NOT NULL REFERENCES customers(id),
   case_id UUID REFERENCES cases(id),
-  status VARCHAR(20) NOT NULL DEFAULT 'Draft' CHECK (status IN ('Draft', 'Final', 'Sent', 'Paid', 'Voided')),
+  status VARCHAR(20) NOT NULL DEFAULT 'Draft' CHECK (status IN ('Draft', 'Finalized', 'Sent', 'Paid', 'Void')),
+  currency VARCHAR(10) DEFAULT 'SAR',
   subtotal DECIMAL(15,2) NOT NULL DEFAULT 0,
   discount_rate_pct DECIMAL(5,2) DEFAULT 0,
   discount_amount DECIMAL(15,2) DEFAULT 0,
   taxable_amount DECIMAL(15,2) DEFAULT 0,
   tax_rate_pct DECIMAL(5,2) DEFAULT 0,
   tax_amount DECIMAL(15,2) DEFAULT 0,
-  total DECIMAL(15,2) NOT NULL DEFAULT 0,
-  amount_paid DECIMAL(15,2) DEFAULT 0,
+  total_amount DECIMAL(15,2) NOT NULL DEFAULT 0,
+  paid_amount DECIMAL(15,2) DEFAULT 0,
   due_date DATE,
+  notes TEXT,
+  sent_at TIMESTAMPTZ,
   void_reason TEXT,
+  row_version UUID,
   created_by UUID NOT NULL,
   finalized_by UUID,
   finalized_at TIMESTAMPTZ,
@@ -446,7 +454,8 @@ CREATE TABLE IF NOT EXISTS invoice_line_items (
   quantity DECIMAL(10,2) NOT NULL DEFAULT 1,
   unit_price DECIMAL(15,2) NOT NULL DEFAULT 0,
   line_total DECIMAL(15,2) NOT NULL DEFAULT 0,
-  sort_order INT DEFAULT 0,
+  tax_rate DECIMAL(5,2) DEFAULT 0,
+  line_number INT DEFAULT 0,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
@@ -456,8 +465,9 @@ CREATE TABLE IF NOT EXISTS payments (
   invoice_id UUID NOT NULL REFERENCES invoices(id),
   amount DECIMAL(15,2) NOT NULL,
   method VARCHAR(30) NOT NULL DEFAULT 'Cash' CHECK (method IN ('Cash', 'BankTransfer', 'Cheque', 'Card', 'Other')),
-  paid_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  payment_date TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   reference VARCHAR(300),
+  notes TEXT,
   idempotency_key VARCHAR(200),
   created_by UUID NOT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -469,12 +479,14 @@ CREATE TABLE IF NOT EXISTS expenses (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   case_id UUID REFERENCES cases(id),
   customer_id UUID REFERENCES customers(id),
-  category VARCHAR(30) NOT NULL DEFAULT 'Other' CHECK (category IN ('Travel', 'FilingFees', 'Courier', 'Office', 'Other')),
+  category_id UUID,
   amount DECIMAL(15,2) NOT NULL,
   description TEXT,
-  submitted_by_user_id UUID NOT NULL,
+  expense_date DATE,
+  receipt_doc_id UUID,
+  submitted_by UUID NOT NULL,
   beneficiary_user_id UUID,
-  status VARCHAR(30) NOT NULL DEFAULT 'Draft' CHECK (status IN ('Draft', 'Submitted', 'PendingApproval', 'Approved', 'Rejected')),
+  status VARCHAR(30) NOT NULL DEFAULT 'Pending' CHECK (status IN ('Pending', 'Draft', 'Submitted', 'PendingApproval', 'Approved', 'Rejected')),
   linked_document_ids UUID[] DEFAULT '{}',
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -506,14 +518,16 @@ CREATE TABLE IF NOT EXISTS expense_approval_workflows (
 -- Wages
 CREATE TABLE IF NOT EXISTS wages (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  employee_user_id UUID,
+  user_id UUID,
   staff_name VARCHAR(300),
   period VARCHAR(7) NOT NULL, -- YYYY-MM
-  gross_amount DECIMAL(15,2) NOT NULL,
+  amount DECIMAL(15,2) NOT NULL,
   deductions DECIMAL(15,2) DEFAULT 0,
-  net_amount DECIMAL(15,2) NOT NULL,
+  gross_amount DECIMAL(15,2),
+  net_amount DECIMAL(15,2),
   payment_status VARCHAR(20) NOT NULL DEFAULT 'Planned' CHECK (payment_status IN ('Planned', 'Paid')),
   notes TEXT,
+  created_by UUID,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );

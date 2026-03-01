@@ -7,17 +7,18 @@ import {
   HttpCode,
   HttpStatus,
 } from '@nestjs/common';
+import { IsString, IsOptional, IsObject } from 'class-validator';
 import { WINSTON_MODULE_PROVIDER } from 'nest-winston';
 import { Logger } from 'winston';
 import { Request } from 'express';
 
 class UiErrorDto {
-  message: string;
-  stack?: string;
-  componentStack?: string;
-  url?: string;
-  userAgent?: string;
-  extra?: Record<string, any>;
+  @IsString() message: string;
+  @IsOptional() @IsString() stack?: string;
+  @IsOptional() @IsString() componentStack?: string;
+  @IsOptional() @IsString() url?: string;
+  @IsOptional() @IsString() userAgent?: string;
+  @IsOptional() @IsObject() extra?: Record<string, any>;
 }
 
 /**
@@ -37,7 +38,7 @@ export class TelemetryController {
     const correlationId = (req as any).correlationId || '-';
     const user = (req as any).user;
 
-    this.logger.error('UI error reported by client', {
+    this.logger.warn('UI error reported by client', {
       correlationId,
       source: 'frontend',
       userId: user?.sub || 'anonymous',

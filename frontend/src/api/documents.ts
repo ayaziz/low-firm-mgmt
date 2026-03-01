@@ -16,7 +16,6 @@ export const documentApi = {
     title: string;
     fileName: string;
     mimeType: string;
-    fileSize: number;
     docTypeId: string;
     confidentialityLevel: string;
     tags?: string[];
@@ -35,7 +34,6 @@ export const documentApi = {
   checkin(id: string, data: {
     fileName: string;
     mimeType: string;
-    fileSize: number;
   }): Promise<{ version: DocumentVersion; uploadUrl: string }> {
     return post(`/documents/${id}/checkin`, data);
   },

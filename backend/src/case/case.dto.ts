@@ -4,6 +4,10 @@ export class CreateCaseDto {
   @IsString()
   title: string;
 
+  @IsOptional()
+  @IsString()
+  description?: string;
+
   @IsString()
   caseTypeId: string;
 

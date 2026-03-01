@@ -260,7 +260,7 @@ export class CustomerService {
     const addressId = uuidv4();
     await this.prisma.executeTenant(
       tenantSlug,
-      `INSERT INTO addresses (id, customer_id, type, is_primary, lines, city, state, postal_code, country, created_at, updated_at)
+      `INSERT INTO addresses (id, customer_id, address_type, is_primary, line1, city, state, postal_code, country, created_at, updated_at)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW(), NOW())`,
       [addressId, customerId, dto.type || 'Other', dto.isPrimary || false,
        dto.lines || null, dto.city || null, dto.state || null, dto.postalCode || null, dto.country || null],
@@ -283,9 +283,9 @@ export class CustomerService {
     const params: any[] = [];
     let paramIdx = 1;
 
-    if (dto.type !== undefined) { setClauses.push(`type = $${paramIdx++}`); params.push(dto.type); }
+    if (dto.type !== undefined) { setClauses.push(`address_type = $${paramIdx++}`); params.push(dto.type); }
     if (dto.isPrimary !== undefined) { setClauses.push(`is_primary = $${paramIdx++}`); params.push(dto.isPrimary); }
-    if (dto.lines !== undefined) { setClauses.push(`lines = $${paramIdx++}`); params.push(dto.lines); }
+    if (dto.lines !== undefined) { setClauses.push(`line1 = $${paramIdx++}`); params.push(dto.lines); }
     if (dto.city !== undefined) { setClauses.push(`city = $${paramIdx++}`); params.push(dto.city); }
     if (dto.state !== undefined) { setClauses.push(`state = $${paramIdx++}`); params.push(dto.state); }
     if (dto.postalCode !== undefined) { setClauses.push(`postal_code = $${paramIdx++}`); params.push(dto.postalCode); }
@@ -334,10 +334,10 @@ export class CustomerService {
     const result: any[] = await this.prisma.queryTenant(
       tenantSlug,
       `SELECT
-         COALESCE(SUM(CASE WHEN i.status IN ('Final','Sent') THEN i.total ELSE 0 END), 0) AS outstanding,
-         COALESCE(SUM(CASE WHEN i.status = 'Paid' THEN i.total ELSE 0 END), 0) AS paid,
-         COALESCE(SUM(CASE WHEN i.status IN ('Final','Sent') AND i.due_date < NOW() THEN i.total ELSE 0 END), 0) AS overdue,
-         MAX(p.paid_at) AS last_payment_date
+         COALESCE(SUM(CASE WHEN i.status IN ('Finalized','Sent') THEN i.total_amount ELSE 0 END), 0) AS outstanding,
+         COALESCE(SUM(CASE WHEN i.status = 'Paid' THEN i.total_amount ELSE 0 END), 0) AS paid,
+         COALESCE(SUM(CASE WHEN i.status IN ('Finalized','Sent') AND i.due_date < NOW() THEN i.total_amount ELSE 0 END), 0) AS overdue,
+         MAX(p.payment_date) AS last_payment_date
        FROM invoices i
        LEFT JOIN payments p ON p.invoice_id = i.id
        WHERE i.customer_id = $1`,
@@ -350,7 +350,7 @@ export class CustomerService {
   async getComplianceChecklist(tenantSlug: string, customerId: string) {
     const docReqs: any[] = await this.prisma.queryTenant(
       tenantSlug,
-      `SELECT * FROM customer_doc_requirements WHERE customer_id = $1 ORDER BY sort_order`,
+      `SELECT * FROM customer_doc_requirements WHERE customer_id = $1 ORDER BY created_at`,
       [customerId],
     );
 

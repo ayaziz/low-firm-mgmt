@@ -171,4 +171,10 @@ Each tenant gets its own PostgreSQL schema. The tenant slug is extracted from th
 
 ## License
 
+## Copilot Enforcement
+
+All code generation must comply with:
+.github/copilot-instructions.md
+
 Private – All rights reserved.
+

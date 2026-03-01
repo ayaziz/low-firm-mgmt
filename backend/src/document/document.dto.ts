@@ -7,7 +7,7 @@ export class CreateDocumentDto {
   @IsString() mimeType: string;
   @IsOptional() @IsString() customerId?: string;
   @IsOptional() @IsString() caseId?: string;
-  @IsOptional() @IsEnum(['Standard', 'Confidential', 'HighlyConfidential'])
+  @IsOptional() @IsEnum(['Normal', 'Confidential', 'HighlyConfidential'])
   confidentialityLevel?: string;
 }
 
@@ -19,6 +19,6 @@ export class CheckinDocumentDto {
 
 export class ShareDocumentDto {
   @IsString() userId: string;
-  @IsOptional() @IsEnum(['Read', 'ReadWrite']) permission?: string;
+  @IsOptional() @IsEnum(['View', 'Download', 'UploadNewVersion', 'Share', 'Admin']) permission?: string;
   @IsOptional() @IsDateString() expiresAt?: string;
 }

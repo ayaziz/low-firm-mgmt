@@ -26,16 +26,16 @@ import {
   Typography,
 } from '@mui/material';
 import { Add as AddIcon, Refresh as RefreshIcon, Visibility as ViewIcon } from '@mui/icons-material';
-import { caseApi, customerApi } from '@/api';
-import type { Case, Customer } from '@/types';
+import { caseApi, customerApi, adminApi } from '@/api';
+import type { Case, Customer, CaseType } from '@/types';
 import { useAuth } from '@/context/AuthContext';
 import { CAPABILITIES } from '@/auth/capabilities';
 
 const STATE_COLORS: Record<string, 'default' | 'info' | 'primary' | 'warning' | 'success' | 'error'> = {
-  Draft: 'default',
+  Intake: 'default',
   Open: 'info',
-  InProgress: 'primary',
-  OnHold: 'warning',
+  Active: 'primary',
+  Pending: 'warning',
   Closed: 'success',
   Archived: 'default',
 };
@@ -50,6 +50,7 @@ export default function CaseListPage() {
   const [hasMore, setHasMore] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [customers, setCustomers] = useState<Customer[]>([]);
+  const [caseTypes, setCaseTypes] = useState<CaseType[]>([]);
   const [form, setForm] = useState({
     title: '',
     customerId: '',
@@ -78,14 +79,23 @@ export default function CaseListPage() {
 
   const openCreateDialog = async () => {
     setDialogOpen(true);
-    const res = await customerApi.list({ limit: 100 }).catch(() => ({ data: [], cursor: null }));
-    setCustomers(res.data);
+    const [custRes, ctRes] = await Promise.all([
+      customerApi.list({ limit: 100 }).catch(() => ({ data: [] as Customer[], cursor: null })),
+      adminApi.listCaseTypes().catch(() => [] as CaseType[]),
+    ]);
+    setCustomers(custRes.data);
+    setCaseTypes(ctRes.filter(ct => ct.is_active));
   };
 
   const handleCreate = async () => {
     setSaving(true);
     try {
-      const created = await caseApi.create(form);
+      const created = await caseApi.create({
+        title: form.title,
+        description: form.description || undefined,
+        caseTypeId: form.caseTypeId,
+        customerIds: [form.customerId],
+      } as any);
       setDialogOpen(false);
       setForm({ title: '', customerId: '', caseTypeId: '', description: '' });
       router.push(`/cases/${created.id}`);
@@ -197,6 +207,20 @@ export default function CaseListPage() {
               ))}
             </TextField>
             <TextField
+              label={t('case.caseType')}
+              select
+              fullWidth
+              required
+              value={form.caseTypeId}
+              onChange={e => setForm(f => ({ ...f, caseTypeId: e.target.value }))}
+            >
+              {caseTypes.map(ct => (
+                <MenuItem key={ct.id} value={ct.id}>
+                  {ct.label_en}
+                </MenuItem>
+              ))}
+            </TextField>
+            <TextField
               label={t('case.description')}
               fullWidth
               multiline
@@ -211,7 +235,7 @@ export default function CaseListPage() {
           <Button
             variant="contained"
             onClick={handleCreate}
-            disabled={saving || !form.title || !form.customerId}
+            disabled={saving || !form.title || !form.customerId || !form.caseTypeId}
           >
             {t('common.save')}
           </Button>
