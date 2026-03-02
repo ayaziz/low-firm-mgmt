@@ -58,7 +58,7 @@ export const caseApi = {
     return post<Session>(`/cases/${caseId}/sessions`, data);
   },
 
-  rescheduleSession(caseId: string, sessionId: string, data: { newDate: string; reason: string }): Promise<Session> {
+  rescheduleSession(caseId: string, sessionId: string, data: { newDateTime: string; reason: string }): Promise<Session> {
     return post<Session>(`/cases/${caseId}/sessions/${sessionId}/reschedule`, data);
   },
 

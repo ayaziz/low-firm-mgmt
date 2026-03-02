@@ -20,14 +20,14 @@ export const courtApi = {
 
   // Judges
   listJudges(courtId: string, params?: Record<string, string | number | boolean | undefined>): Promise<PaginatedResult<Judge>> {
-    return get<PaginatedResult<Judge>>(`/courts/${courtId}/judges`, params);
+    return get<PaginatedResult<Judge>>(`/courts/judges`, { ...params, courtId });
   },
 
   createJudge(courtId: string, data: Partial<Judge>): Promise<Judge> {
-    return post<Judge>(`/courts/${courtId}/judges`, data);
+    return post<Judge>(`/courts/judges`, { ...data, courtId });
   },
 
   updateJudge(courtId: string, judgeId: string, data: Partial<Judge>): Promise<Judge> {
-    return patch<Judge>(`/courts/${courtId}/judges/${judgeId}`, data);
+    return patch<Judge>(`/courts/judges/${judgeId}`, data);
   },
 };
