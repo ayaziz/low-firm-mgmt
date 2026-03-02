@@ -1,9 +1,9 @@
 # Software Requirements Specification (SRS)
 ## Law Office Management Web Application (LOMA)
 
-**Version:** 1.0  
-**Date:** 2026-02-23  
-**Scope:** Wave 1 MVP requirements (functional + non-functional)
+**Version:** 2.0  
+**Date:** 2026-02-25  
+**Scope:** Wave 1 MVP + Phase 2 requirements (functional + non-functional)
 
 ---
 
@@ -128,6 +128,19 @@ graph LR
 - FR-DOC-12: System SHALL support legal hold at case and document level.
 - FR-DOC-13: Deletion SHALL be soft delete + restore; purge via retention job only.
 
+#### Phase 2 Additions
+- FR-DOC-14: System SHALL support folder hierarchy with parent/child relationships.
+- FR-DOC-15: System SHALL auto-create default folders from case type templates on case creation.
+- FR-DOC-16: Folder permissions SHALL inherit from parent; explicit ACL overrides supported.
+- FR-DOC-17: System SHALL support document templates with Handlebars merge fields.
+- FR-DOC-18: Template generation SHALL produce PDF or DOCX output and auto-upload to DMS.
+- FR-DOC-19: System SHALL process uploaded documents through OCR (Tesseract ara+eng) after scan passes.
+- FR-DOC-20: System SHALL maintain full-text search index (tsvector + GIN) over document content and metadata.
+- FR-DOC-21: System SHALL support external sharing links with time-bound expiry, optional password, and download quota.
+- FR-DOC-22: HighlyConfidential documents SHALL NOT be shareable externally.
+- FR-DOC-23: System SHALL support configurable document numbering schemes per docType.
+- FR-DOC-24: System SHALL support multi-file upload (batch of 10, 3 concurrent).
+
 ### 2.9 Storage Providers (FR-STO)
 - FR-STO-01: System SHALL provide a storage abstraction interface with Azure Blob and S3-compatible implementations.
 - FR-STO-02: Tenant SHALL be configurable to use shared or dedicated storage.
@@ -149,11 +162,74 @@ graph LR
 - FR-ACC-13: Wages records SHALL be supported with CSV export.
 - FR-ACC-14: Reports SHALL be available as CSV exports, audited.
 
+#### Phase 2 Additions
+- FR-ACC-15: System SHALL support time entries with duration, billable flag, rate, and case/task linkage.
+- FR-ACC-16: Time entry workflow SHALL follow: Draft → Submitted → Approved → Billed / WriteOff.
+- FR-ACC-17: Only CaseOwner or Accountant SHALL approve time entries.
+- FR-ACC-18: System SHALL support invoice auto-population from approved time entries.
+- FR-ACC-19: WriteOff SHALL require Accountant or TenantAdmin approval.
+- FR-ACC-20: System SHALL provide weekly utilization summary per user.
+
 ### 2.11 Search (FR-SEARCH)
 - FR-SEARCH-01: Global search SHALL cover Customers, Cases, Documents (metadata), Invoices.
 - FR-SEARCH-02: Search SHALL support Arabic via normalized fields/collation.
 - FR-SEARCH-03: Search results SHALL be permission filtered.
 - FR-SEARCH-04: Filters SHALL be provided per entity as approved.
+
+#### Phase 2 Additions
+- FR-SEARCH-05: System SHALL provide full-text document content search using PostgreSQL tsvector + GIN.
+- FR-SEARCH-06: System SHALL provide a global unified search bar covering cases, customers, documents, and calendar events.
+
+### 2.12 Calendar (FR-CAL) — Phase 2
+- FR-CAL-01: System SHALL provide a unified calendar with Day, Week, Month, and Agenda views.
+- FR-CAL-02: System SHALL support event types: Hearing, Session, TaskDeadline, Custom, Reminder.
+- FR-CAL-03: Hearing/Session/TaskDeadline events SHALL be auto-created from their source entities.
+- FR-CAL-04: System SHALL support recurring events using simplified iCalendar RRULE (FREQ, INTERVAL, BYDAY, COUNT, UNTIL).
+- FR-CAL-05: System SHALL detect scheduling conflicts and warn users before save.
+- FR-CAL-06: System SHALL support in-app and email reminders via background scheduler.
+- FR-CAL-07: Default reminders SHALL be configurable per event type.
+- FR-CAL-08: System SHALL support case-filtered calendar view.
+- FR-CAL-09: Calendar SHALL support drag-to-create and drag-to-reschedule interactions.
+- FR-CAL-10: Calendar SHALL support full RTL layout for Arabic.
+
+### 2.13 Hearing Management (FR-HEAR) — Phase 2
+- FR-HEAR-01: System SHALL support hearing CRUD linked to case, court, and judge.
+- FR-HEAR-02: Hearing states SHALL follow: Scheduled → Adjourned | Postponed | Completed | Cancelled.
+- FR-HEAR-03: Creating a hearing SHALL auto-create a CalendarEvent; rescheduling SHALL update both.
+- FR-HEAR-04: System SHALL maintain reschedule history with reason and timestamp.
+- FR-HEAR-05: Hearing completion SHALL require outcome notes.
+- FR-HEAR-06: System SHALL support adjournment with next hearing date.
+
+### 2.14 Folder Management (FR-FOLD) — Phase 2
+- FR-FOLD-01: System SHALL support folder CRUD with parent/child hierarchy.
+- FR-FOLD-02: System SHALL auto-create default folders from case type folder templates.
+- FR-FOLD-03: Folder permissions SHALL inherit from parent; explicit overrides supported.
+- FR-FOLD-04: Folders SHALL support archival (no hard delete).
+- FR-FOLD-05: Archived folders SHALL be read-only; contained documents inherit 365-day retention floor.
+- FR-FOLD-06: System SHALL support moving documents between folders.
+
+### 2.15 Document Templates (FR-TMPL) — Phase 2
+- FR-TMPL-01: TenantAdmin SHALL CRUD document templates with Handlebars body.
+- FR-TMPL-02: Templates SHALL reference merge fields from case, customer, and court entities.
+- FR-TMPL-03: System SHALL support template preview with sample data.
+- FR-TMPL-04: System SHALL generate documents from templates in PDF or DOCX format.
+- FR-TMPL-05: Generated documents SHALL be auto-uploaded to the target entity's folder.
+
+### 2.16 Time Tracking (FR-TIME) — Phase 2
+- FR-TIME-01: System SHALL support time entry CRUD with description, duration, billable flag, and rate.
+- FR-TIME-02: Time entries SHALL be linked to a case and optionally to a task.
+- FR-TIME-03: Time entry workflow SHALL follow: Draft → Submitted → Approved → Billed / WriteOff.
+- FR-TIME-04: CaseOwner or Accountant SHALL approve time entries.
+- FR-TIME-05: System SHALL support timer mode (start/stop) and manual entry mode.
+- FR-TIME-06: System SHALL provide weekly timesheet view with daily breakdown.
+- FR-TIME-07: System SHALL support bulk approval/rejection of time entries.
+- FR-TIME-08: System SHALL support invoice generation from selected approved time entries.
+
+### 2.17 Court & Judge (FR-COURT) — Phase 2
+- FR-COURT-01: System SHALL support court CRUD with name, jurisdiction, type, branch, contact, and address.
+- FR-COURT-02: System SHALL support judge CRUD with name, title, specializations, court assignment.
+- FR-COURT-03: Judge SHALL be assigned to exactly one active court; assignment history tracked.
+- FR-COURT-04: Court deactivation SHALL prevent new hearing assignments.
 
 ---
 
@@ -192,6 +268,26 @@ graph LR
 - NFR-GLOB-02: Tenant default timezone; timestamps stored UTC.
 - NFR-GLOB-03: Locale formatting for dates/numbers.
 - NFR-GLOB-04: Single currency per tenant.
+
+### 3.7 Responsiveness (NFR-RESP) — Phase 2
+- NFR-RESP-01: All screens SHALL support 4 breakpoints: mobile (< 640 px), tablet (640–1023 px), desktop (1024–1439 px), wide (≥ 1440 px).
+- NFR-RESP-02: Calendar SHALL default to Agenda view on mobile.
+- NFR-RESP-03: Navigation SHALL collapse to bottom tab bar on mobile.
+
+### 3.8 Notification SLA (NFR-NOTIF) — Phase 2
+- NFR-NOTIF-01: In-app notifications SHALL be delivered within 2 s of trigger event.
+- NFR-NOTIF-02: Email reminders SHALL be sent within 60 s of scheduled time.
+- NFR-NOTIF-03: System SHALL support user notification preferences (in-app, email, or both).
+
+### 3.9 Calendar & Search Performance (NFR-CALPERF) — Phase 2
+- NFR-CALPERF-01: Month-view query (≤ 200 events) p95 ≤ 300 ms.
+- NFR-CALPERF-02: Conflict detection query p95 ≤ 200 ms.
+- NFR-CALPERF-03: Full-text document search p95 ≤ 500 ms.
+- NFR-CALPERF-04: OCR extraction (single page ara+eng) p95 ≤ 30 s.
+
+### 3.10 Storage (NFR-STORAGE) — Phase 2
+- NFR-STORAGE-01: Per-tenant storage quota monitoring; alert at 80 % utilization.
+- NFR-STORAGE-02: Multi-file upload batch (10 × 50 MB) SHALL complete within 120 s on 100 Mbps.
 
 ---
 

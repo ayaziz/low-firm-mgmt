@@ -2,23 +2,23 @@ import { IsString, IsOptional, IsEnum, IsArray, IsDateString, ValidateNested } f
 import { Type } from 'class-transformer';
 
 export class CreateContactDto {
-  @IsString()
-  name: string;
+	@IsString()
+	name: string
 
-  @IsOptional()
-  @IsString()
-  email?: string;
+	@IsOptional()
+	@IsString()
+	email?: string
 
-  @IsOptional()
-  @IsString()
-  phone?: string;
+	@IsOptional()
+	@IsString()
+	phone?: string
 
-  @IsOptional()
-  @IsString()
-  roleId?: string;
+	@IsOptional()
+	@IsString()
+	role_id?: string
 
-  @IsOptional()
-  isPrimary?: boolean;
+	@IsOptional()
+	isPrimary?: boolean
 }
 
 export class CreateAddressDto {
@@ -51,47 +51,47 @@ export class CreateAddressDto {
 }
 
 export class CreateCustomerDto {
-  @IsString()
-  name: string;
+	@IsString()
+	name: string
 
-  @IsEnum(['Individual', 'Organization'])
-  customerType: 'Individual' | 'Organization';
+	@IsEnum(['Individual', 'Organization'])
+	customer_type: 'Individual' | 'Organization'
 
-  @IsOptional()
-  @IsEnum(['Active', 'Inactive', 'Prospect'])
-  status?: string;
+	@IsOptional()
+	@IsEnum(['Active', 'Inactive', 'Prospect'])
+	status?: string
 
-  @IsOptional()
-  @IsString()
-  notes?: string;
+	@IsOptional()
+	@IsString()
+	notes?: string
 
-  @IsOptional()
-  @IsString()
-  nationalId?: string;
+	@IsOptional()
+	@IsString()
+	national_id?: string
 
-  @IsOptional()
-  @IsString()
-  passportNumber?: string;
+	@IsOptional()
+	@IsString()
+	passport_number?: string
 
-  @IsOptional()
-  @IsString()
-  registrationId?: string;
+	@IsOptional()
+	@IsString()
+	registration_id?: string
 
-  @IsOptional()
-  @IsString()
-  taxId?: string;
+	@IsOptional()
+	@IsString()
+	tax_id?: string
 
-  @IsOptional()
-  @IsArray()
-  @ValidateNested({ each: true })
-  @Type(() => CreateContactDto)
-  contacts?: CreateContactDto[];
+	@IsOptional()
+	@IsArray()
+	@ValidateNested({ each: true })
+	@Type(() => CreateContactDto)
+	contacts?: CreateContactDto[]
 
-  @IsOptional()
-  @IsArray()
-  @ValidateNested({ each: true })
-  @Type(() => CreateAddressDto)
-  addresses?: CreateAddressDto[];
+	@IsOptional()
+	@IsArray()
+	@ValidateNested({ each: true })
+	@Type(() => CreateAddressDto)
+	addresses?: CreateAddressDto[]
 }
 
 export class UpdateCustomerDto {

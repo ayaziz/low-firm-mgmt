@@ -13,7 +13,12 @@
     "reports": "Reports",
     "admin": "Admin",
     "search": "Search",
-    "notifications": "Notifications"
+    "notifications": "Notifications",
+    "hearings": "Hearings",
+    "courts": "Courts",
+    "calendar": "Calendar",
+    "timeEntries": "Time Entries",
+    "templates": "Templates"
   },
   "auth": {
     "login": "Login",
@@ -87,7 +92,7 @@
     "fullName": "Full Name",
     "customerType": "Customer Type",
     "individual": "Individual",
-    "corporate": "Corporate",
+    "organization": "Organization",
     "nationalId": "National ID",
     "registrationId": "Registration ID",
     "taxId": "Tax ID",
@@ -289,7 +294,12 @@
     "roles": "Roles",
     "governance": "Governance",
     "legalHolds": "Legal Holds",
-    "retentionPolicies": "Retention Policies"
+    "retentionPolicies": "Retention Policies",
+    "createCaseType": "Create Case Type",
+    "status": "Status",
+    "displayName": "Display Name",
+    "editUser": "Edit User"
+
   },
   "notifications": {
     "title": "Notifications",

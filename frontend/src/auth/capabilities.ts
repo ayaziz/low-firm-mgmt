@@ -5,6 +5,12 @@ export const CAPABILITIES = {
   canCreateCustomer: ['Lawyer', 'TenantAdmin', 'SystemAdmin'] as Role[],
   canAccessCaseDetails: ['Lawyer', 'TenantAdmin', 'SystemAdmin'] as Role[],
   canAccessAdmin: ['TenantAdmin', 'SystemAdmin'] as Role[],
+  canManageCourts: ['TenantAdmin', 'SystemAdmin'] as Role[],
+  canManageHearings: ['Lawyer', 'TenantAdmin', 'SystemAdmin'] as Role[],
+  canManageCalendar: ['Lawyer', 'Accountant', 'TenantAdmin', 'SystemAdmin'] as Role[],
+  canManageTemplates: ['Lawyer', 'TenantAdmin', 'SystemAdmin'] as Role[],
+  canManageTimeEntries: ['Lawyer', 'TenantAdmin', 'SystemAdmin'] as Role[],
+  canApproveTimeEntries: ['TenantAdmin', 'SystemAdmin', 'Accountant'] as Role[],
 };
 
 export function hasAnyRole(userRoles: Role[] | undefined, requiredRoles: Role[]): boolean {

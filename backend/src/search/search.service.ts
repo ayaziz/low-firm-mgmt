@@ -136,4 +136,63 @@ export class SearchService {
 
     return { results, cursor: nextCursor, totalEstimate: results.length };
   }
+
+  /**
+   * Full-text search across document content using PostgreSQL tsvector/tsquery.
+   * Leverages the full_text_tsvector column populated by the Phase 2 trigger.
+   */
+  async documentFulltextSearch(
+    tenantSlug: string,
+    query: string,
+    opts: { caseId?: string; cursor?: string; limit?: number; hasStepUp?: boolean } = {},
+  ) {
+    if (!query || query.length < 2) return { data: [], hasMore: false, nextCursor: null };
+
+    const limit = Math.min(opts.limit || 20, 50);
+    const conditions: string[] = [`d.is_deleted = FALSE`];
+    const params: any[] = [];
+    let idx = 1;
+
+    // Build tsquery — use plainto_tsquery for safe user input (handles Arabic too)
+    conditions.push(`d.full_text_tsvector @@ plainto_tsquery('simple', $${idx})`);
+    params.push(query);
+    idx++;
+
+    if (opts.caseId) {
+      conditions.push(`d.case_id = $${idx++}`);
+      params.push(opts.caseId);
+    }
+
+    if (!opts.hasStepUp) {
+      conditions.push(`COALESCE(d.confidentiality_level, 'Normal') != 'HighlyConfidential'`);
+    }
+
+    if (opts.cursor) {
+      conditions.push(`d.id > $${idx++}`);
+      params.push(opts.cursor);
+    }
+
+    const where = conditions.join(' AND ');
+
+    const rows: any[] = await this.prisma.queryTenant(
+      tenantSlug,
+      `SELECT d.id, d.title, d.case_id, d.ocr_status,
+              ts_headline('simple', COALESCE(d.full_text_content, ''), plainto_tsquery('simple', $1),
+                'MaxWords=35, MinWords=15, StartSel=<b>, StopSel=</b>') AS snippet,
+              ts_rank(d.full_text_tsvector, plainto_tsquery('simple', $1)) AS rank
+       FROM documents d
+       WHERE ${where}
+       ORDER BY rank DESC, d.id
+       LIMIT $${idx}`,
+      [...params, limit + 1],
+    );
+
+    const hasMore = rows.length > limit;
+    const data = hasMore ? rows.slice(0, limit) : rows;
+    return {
+      data,
+      hasMore,
+      nextCursor: hasMore ? data[data.length - 1].id : null,
+    };
+  }
 }

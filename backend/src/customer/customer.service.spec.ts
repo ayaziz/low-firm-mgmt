@@ -25,7 +25,7 @@ describe('CustomerService', () => {
 
     const mockCustomer = {
       id: customerId,
-      full_name: 'Test Customer',
+      name: 'Test Customer',
       customer_type: 'Individual',
       is_deleted: false,
     };

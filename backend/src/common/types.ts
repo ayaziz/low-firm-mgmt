@@ -45,6 +45,37 @@ export type SessionStatus = 'Planned' | 'Completed' | 'Postponed' | 'Cancelled';
 export type VisibilityScope = 'LegalOnly' | 'FinanceAllowed';
 export type CasePartyRoleType = 'Customer' | 'Opposing' | 'ExternalCounsel' | 'Other';
 
+// ── Phase 2 Types ──────────────────────────────────────────────
+
+export type JurisdictionLevel = 'District' | 'Appeal' | 'Supreme' | 'Specialized';
+export type HearingType = 'Initial' | 'Continuation' | 'Ruling' | 'Appeal' | 'Procedural';
+export type HearingStatus = 'Scheduled' | 'Completed' | 'Postponed' | 'Cancelled';
+export type CalendarEventType = 'Hearing' | 'Session' | 'TaskDeadline' | 'Custom' | 'Reminder';
+export type CalendarEventStatus = 'Active' | 'Completed' | 'Cancelled';
+export type CalendarRecurrence = 'None' | 'Daily' | 'Weekly' | 'Monthly';
+export type RsvpStatus = 'Pending' | 'Accepted' | 'Declined' | 'Tentative';
+export type ReminderChannel = 'InApp' | 'Email';
+export type FolderScope = 'Customer' | 'Case' | 'Tenant';
+export type OcrStatus = 'Pending' | 'Processing' | 'Completed' | 'Failed' | 'Skipped';
+export type DocumentTemplateCategory = 'Contract' | 'Letter' | 'Petition' | 'Motion' | 'Filing' | 'Other';
+export type TimeEntryStatus = 'Draft' | 'Submitted' | 'Approved' | 'Billed' | 'WriteOff';
+export type NotificationChannel = 'InApp' | 'Email' | 'Both';
+
+export const VALID_HEARING_TRANSITIONS: Record<HearingStatus, HearingStatus[]> = {
+  Scheduled: ['Completed', 'Postponed', 'Cancelled'],
+  Postponed: ['Scheduled', 'Cancelled'],
+  Completed: [],
+  Cancelled: [],
+};
+
+export const VALID_TIME_ENTRY_TRANSITIONS: Record<TimeEntryStatus, TimeEntryStatus[]> = {
+  Draft: ['Submitted'],
+  Submitted: ['Approved', 'Draft'],
+  Approved: ['Billed', 'WriteOff'],
+  Billed: [],
+  WriteOff: [],
+};
+
 export const VALID_STATE_TRANSITIONS: Record<CaseState, CaseState[]> = {
   Intake: ['Open'],
   Open: ['Active'],

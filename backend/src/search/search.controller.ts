@@ -22,4 +22,23 @@ export class SearchController {
       !!user.stepUp,
     );
   }
+
+  /** Full-text search across document content (Phase 2) */
+  @Get('documents/fulltext')
+  fulltextSearch(
+    @CurrentUser() user: any,
+    @Query('q') q: string,
+    @Query('caseId') caseId?: string,
+    @Query('cursor') cursor?: string,
+    @Query('limit') limit?: string,
+  ) {
+    return this.searchService.documentFulltextSearch(
+      user.tenantSlug, q, {
+        caseId,
+        cursor,
+        limit: limit ? parseInt(limit, 10) : undefined,
+        hasStepUp: !!user.stepUp,
+      },
+    );
+  }
 }

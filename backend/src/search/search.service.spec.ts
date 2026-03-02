@@ -110,7 +110,7 @@ describe('SearchService', () => {
 
       expect(mockPrisma.queryTenant).toHaveBeenCalledWith(
         'test-firm',
-        expect.stringContaining("!= 'HC'"),
+        expect.stringContaining("!= 'HighlyConfidential'"),
         expect.any(Array),
       );
     });
@@ -120,7 +120,7 @@ describe('SearchService', () => {
 
       expect(mockPrisma.queryTenant).toHaveBeenCalledWith(
         'test-firm',
-        expect.not.stringContaining("!= 'HC'"),
+        expect.not.stringContaining("!= 'HighlyConfidential'"),
         expect.any(Array),
       );
     });
@@ -136,7 +136,7 @@ describe('SearchService', () => {
 
       expect(mockPrisma.queryTenant).toHaveBeenCalledWith(
         'test-firm',
-        expect.stringContaining("!= 'HC'"),
+        expect.stringContaining("!= 'HighlyConfidential'"),
         expect.any(Array),
       );
     });

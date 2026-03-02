@@ -1,9 +1,9 @@
 # Product Requirements Document (PRD)
 ## Law Office Management Web Application (LOMA)
 
-**Version:** 1.0  
-**Date:** 2026-02-23  
-**Target Release:** Wave 1 MVP  
+**Version:** 2.0  
+**Date:** 2026-02-25  
+**Target Release:** Wave 1 MVP + Phase 2  
 **Portals:** Single web application with role-based navigation (Lawyer, Accountant, Tenant Admin)
 
 ---
@@ -199,16 +199,83 @@ A secure, auditable, bilingual (EN/AR) law office management web application tha
 - Master data management (all approved lists/templates/workflows)
 - Plan tier configuration flags (Standard/Enterprise)
 
-### 4.2 Explicit Deferrals
-- Integrations (email/calendar/messaging) Phase 2
-- OCR/full-text search Phase 2
-- External sharing Phase 2
-- Configurable numbering Phase 2
-- Editable notes Phase 2
-- Retention editing + advanced lifecycle + multi-region replication Phase 2+
-- Dedicated DB (Enterprise) later
-- Migration/import Wave 3/4
-- Custom fields Phase 2+
+### 4.2 Explicit Deferrals (MVP → Phase 2)
+> Items below were deferred from MVP. Items promoted to Phase 2 scope are listed in §4.3.
+
+- Retention editing + advanced document lifecycle + multi-region replication Phase 2+
+- Dedicated DB per tenant (Enterprise tier) — later
+- Migration/import tooling — Wave 3/4
+- Generic custom fields — Phase 2+
+
+### 4.3 Phase 2 Features
+
+> Traced from PRD §4.2 deferrals, BRD gaps, and Phase 1 baseline audit. See `docs/phase2/PHASE2_VISION_AND_METRICS.md` for drivers.
+
+#### 4.3.1 Calendar & Scheduling Module
+- Unified calendar with Day / Week / Month / Agenda views.
+- Event types: Hearing, Session, TaskDeadline, Custom, Reminder.
+- Recurring events (simplified iCalendar RRULE subset).
+- Conflict detection across event types.
+- In-app + email reminders via background scheduler.
+- Case-filtered calendar view.
+- Full RTL / bilingual support.
+- **Ref:** `docs/phase2/CALENDAR_SPEC.md`
+
+#### 4.3.2 Court, Judge & Hearing Management
+- Court entity: name, jurisdiction, address, branch, contact info.
+- Judge entity: name, title, specializations, contact, court assignment.
+- Hearing lifecycle: Scheduled → Postponed / Adjourned / Completed / Cancelled.
+- Hearing auto-creates CalendarEvent; reschedule propagates.
+- Judge–Case assignment history.
+- **Ref:** `docs/phase2/PHASE2_DOMAIN_MODEL_AND_WORKFLOWS.md` §1–§3
+
+#### 4.3.3 Document Management v2
+- Folder / library hierarchy with per-case default templates.
+- Document templates (Handlebars engine; PDF / DOCX output).
+- OCR pipeline (Tesseract ara+eng, BullMQ `ocr-extraction` queue).
+- Full-text search (PostgreSQL `tsvector` + GIN index).
+- Multi-file upload (batch of 10, 3 concurrent, progress bars).
+- External sharing links (time-bound, optional password, download quotas).
+- Azure Blob Storage provider + hierarchical path strategy.
+- Configurable document numbering schemes.
+- **Ref:** `docs/phase2/DOC_MGMT_V2_SPEC.md`
+
+#### 4.3.4 Time Tracking & Billing Integration
+- TimeEntry: description, duration (hours + minutes), billable flag, rate, case/task linkage.
+- Workflow: Draft → Submitted → Approved → Billed / WriteOff.
+- Approval by case owner or Accountant.
+- Auto-populate invoice line items from approved time entries.
+- Weekly summary with utilization metrics.
+
+#### 4.3.5 Dashboard v2
+- Role-specific dashboards (Lawyer, Accountant, TenantAdmin).
+- Widgets: Upcoming Schedule, Task Board, Billable Hours, Revenue Summary, Storage Usage, Audit Log.
+- **Ref:** `docs/phase2/UIUX_PHASE2_PROPOSAL.md` §3
+
+#### 4.3.6 UI / UX Redesign
+- Grouped sidebar navigation with collapsible sections.
+- Responsive breakpoints: mobile (< 640 px), tablet (640–1023 px), desktop (1024–1439 px), wide (≥ 1440 px).
+- Notification center (bell icon, dropdown, WebSocket real-time).
+- Global search bar (case / customer / document).
+- Editable notes (rich text, Markdown support).
+- **Ref:** `docs/phase2/UIUX_PHASE2_PROPOSAL.md`
+
+#### 4.3.7 Authentication Upgrade
+- OIDC / PKCE authentication (replacing dev-mode JWT login).
+- Tenant-specific IdP configuration.
+- Token refresh and session management.
+
+### 4.4 Phase 2 Deferrals
+> Items explicitly out of scope for Phase 2 — targeted for Phase 3+.
+
+- Mobile native application (iOS / Android)
+- Advanced analytics and BI dashboards
+- Client / customer self-service portal
+- Third-party integrations (email ingestion, SMS / WhatsApp, external calendar sync)
+- SLA management
+- Multi-region storage replication
+- Dedicated database per tenant (Enterprise)
+- Generic custom fields engine
 
 ## 5. Acceptance Criteria (MVP)
 - Role-based navigation and access match permission matrix.
@@ -222,4 +289,17 @@ A secure, auditable, bilingual (EN/AR) law office management web application tha
 
 ## 6. Non-Functional Requirements (MVP summary)
 - Security, performance, availability, observability, scalability, globalization as per SRS.
+
+## 7. Non-Functional Requirements — Phase 2 Additions
+| Category | Requirement | Target |
+|---|---|---|
+| Responsiveness | Mobile-first layouts for all new screens | 4 breakpoints (< 640, 640–1023, 1024–1439, ≥ 1440 px) |
+| Notification SLA | In-app notification delivery | ≤ 2 s from trigger event |
+| Notification SLA | Email reminder delivery | ≤ 60 s from scheduled time |
+| Calendar performance | Month-view query (≤ 200 events) | p95 ≤ 300 ms |
+| Calendar performance | Conflict detection query | p95 ≤ 200 ms |
+| OCR latency | Single-page Arabic+English extraction | p95 ≤ 30 s |
+| Full-text search | Document content search | p95 ≤ 500 ms |
+| Upload throughput | Multi-file batch (10 files × 50 MB) | ≤ 120 s on 100 Mbps link |
+| Storage quota | Per-tenant storage monitoring | Alert at 80 % utilization |
 

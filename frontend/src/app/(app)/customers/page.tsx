@@ -40,7 +40,7 @@ export default function CustomerListPage() {
   const [cursor, setCursor] = useState<string | null>(null);
   const [hasMore, setHasMore] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [form, setForm] = useState({ full_name: '', customer_type: 'Individual' as CustomerType, national_id: '' });
+  const [form, setForm] = useState({ name: '', customer_type: 'Individual' as CustomerType, national_id: '' });
   const [saving, setSaving] = useState(false);
 
   const load = useCallback(async (cur?: string | null) => {
@@ -66,7 +66,7 @@ export default function CustomerListPage() {
     try {
       const created = await customerApi.create(form);
       setDialogOpen(false);
-      setForm({ full_name: '', customer_type: 'Individual' as CustomerType, national_id: '' });
+      setForm({ name: '', customer_type: 'Individual' as CustomerType, national_id: '' });
       router.push(`/customers/${created.id}`);
     } finally {
       setSaving(false);
@@ -113,7 +113,7 @@ export default function CustomerListPage() {
                   sx={{ cursor: 'pointer' }}
                   onClick={() => router.push(`/customers/${c.id}`)}
                 >
-                  <TableCell>{c.full_name}</TableCell>
+                  <TableCell>{c.name}</TableCell>
                   <TableCell>
                     <Chip label={c.customer_type} size="small" variant="outlined" />
                   </TableCell>
@@ -158,8 +158,8 @@ export default function CustomerListPage() {
               label={t('customer.name')}
               fullWidth
               required
-              value={form.full_name}
-              onChange={e => setForm(f => ({ ...f, full_name: e.target.value }))}
+              value={form.name}
+              onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
             />
             <TextField
               label={t('customer.type')}
@@ -169,7 +169,7 @@ export default function CustomerListPage() {
               onChange={e => setForm(f => ({ ...f, customer_type: e.target.value as CustomerType }))}
             >
               <MenuItem value="Individual">{t('customer.individual')}</MenuItem>
-              <MenuItem value="Corporate">{t('customer.corporate')}</MenuItem>
+              <MenuItem value="Organization">{t('customer.organization')}</MenuItem>
             </TextField>
             <TextField
               label={t('customer.nationalId')}
@@ -181,7 +181,7 @@ export default function CustomerListPage() {
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setDialogOpen(false)}>{t('common.cancel')}</Button>
-          <Button variant="contained" onClick={handleCreate} disabled={saving || !form.full_name}>
+          <Button variant="contained" onClick={handleCreate} disabled={saving || !form.name}>
             {t('common.save')}
           </Button>
         </DialogActions>

@@ -36,6 +36,10 @@ import {
   Translate as LangIcon,
   AccountCircle,
   Logout as LogoutIcon,
+  Event as CalendarIcon,
+  Balance as CourtIcon,
+  Article as TemplateIcon,
+  Timer as TimeIcon,
 } from '@mui/icons-material';
 import { useAuth } from '@/context/AuthContext';
 import ProtectedRoute from '@/components/ProtectedRoute';
@@ -66,6 +70,11 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       { key: 'customers', icon: <PeopleIcon />, path: '/customers', roles: ['Lawyer', 'Accountant', 'TenantAdmin', 'SystemAdmin'] },
       { key: 'cases', icon: <GavelIcon />, path: '/cases', roles: ['Lawyer', 'Accountant', 'TenantAdmin', 'SystemAdmin'] },
       { key: 'documents', icon: <DescriptionIcon />, path: '/documents', roles: ['Lawyer', 'Accountant', 'TenantAdmin', 'SystemAdmin'] },
+      { key: 'hearings', icon: <GavelIcon />, path: '/hearings', roles: ['Lawyer', 'TenantAdmin', 'SystemAdmin'] },
+      { key: 'courts', icon: <CourtIcon />, path: '/courts', roles: ['Lawyer', 'TenantAdmin', 'SystemAdmin'] },
+      { key: 'calendar', icon: <CalendarIcon />, path: '/calendar', roles: ['Lawyer', 'Accountant', 'TenantAdmin', 'SystemAdmin'] },
+      { key: 'timeEntries', icon: <TimeIcon />, path: '/time-entries', roles: ['Lawyer', 'Accountant', 'TenantAdmin', 'SystemAdmin'] },
+      { key: 'templates', icon: <TemplateIcon />, path: '/templates', roles: ['Lawyer', 'TenantAdmin', 'SystemAdmin'] },
       { key: 'accounting', icon: <AccountIcon />, path: '/accounting' },
       { key: 'reports', icon: <ReportIcon />, path: '/reports' },
       { key: 'admin', icon: <AdminIcon />, path: '/admin', roles: ['TenantAdmin', 'SystemAdmin'] },

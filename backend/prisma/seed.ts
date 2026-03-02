@@ -59,6 +59,7 @@ async function main() {
   };
 
   const tenantSql = fs.readFileSync(path.join(__dirname, 'tenant-schema.sql'), 'utf-8');
+  const phase2Sql = fs.readFileSync(path.join(__dirname, 'phase2-migration.sql'), 'utf-8');
 
   const client = await pgPool.connect();
   try {
@@ -71,6 +72,21 @@ async function main() {
     throw e;
   } finally {
     client.release();
+  }
+
+  // Apply Phase 2 migration
+  const client2 = await pgPool.connect();
+  try {
+    await client2.query('BEGIN');
+    await client2.query(`SET LOCAL search_path TO "${schemaName}", public`);
+    await client2.query(phase2Sql);
+    await client2.query('COMMIT');
+    console.log('Phase 2 migration applied successfully');
+  } catch (e) {
+    await client2.query('ROLLBACK');
+    throw e;
+  } finally {
+    client2.release();
   }
 
   // Seed master data
@@ -191,6 +207,98 @@ async function main() {
     );
   }
 
+  // ─── Phase 2 Seed Data ─────────────────────────────────────────
+
+  // Seed courts
+  const courtIds = {
+    civil: 'c1000000-0000-4000-a000-000000000001',
+    criminal: 'c1000000-0000-4000-a000-000000000002',
+    family: 'c1000000-0000-4000-a000-000000000003',
+    appeal: 'c1000000-0000-4000-a000-000000000004',
+  };
+
+  const courts = [
+    { id: courtIds.civil, name: 'Riyadh Civil Court - 1st Circuit', department: 'Civil Division', circuit: '1st', jurisdiction_level: 'District', city: 'Riyadh', phone: '+966-11-1234567', address_text: 'Riyadh, King Fahd Road' },
+    { id: courtIds.criminal, name: 'Riyadh Criminal Court', department: 'Criminal Division', circuit: '1st', jurisdiction_level: 'District', city: 'Riyadh', phone: '+966-11-2345678', address_text: 'Riyadh, Olaya Street' },
+    { id: courtIds.family, name: 'Jeddah Family Court', department: 'Family Division', circuit: '2nd', jurisdiction_level: 'District', city: 'Jeddah', phone: '+966-12-3456789', address_text: 'Jeddah, Al Madinah Road' },
+    { id: courtIds.appeal, name: 'Riyadh Court of Appeal', department: 'Appeals Division', circuit: '1st', jurisdiction_level: 'Appeal', city: 'Riyadh', phone: '+966-11-4567890', address_text: 'Riyadh, Justice Palace' },
+  ];
+
+  for (const c of courts) {
+    await execTenant(
+      `INSERT INTO courts (id, name, department, circuit, jurisdiction_level, city, phone, address_text, is_active)
+       VALUES ($1::uuid, $2, $3, $4, $5, $6, $7, $8, true) ON CONFLICT (id) DO UPDATE SET name = $2, department = $3, circuit = $4, jurisdiction_level = $5, city = $6, phone = $7, address_text = $8`,
+      c.id, c.name, c.department, c.circuit, c.jurisdiction_level, c.city, c.phone, c.address_text
+    );
+  }
+
+  // Seed judges
+  const judgeIds = {
+    judge1: 'a1000000-0000-4000-b000-000000000001',
+    judge2: 'a1000000-0000-4000-b000-000000000002',
+    judge3: 'a1000000-0000-4000-b000-000000000003',
+  };
+
+  const judges = [
+    { id: judgeIds.judge1, court_id: courtIds.civil, full_name: 'Judge Abdullah Al-Rashidi', title: 'Senior Judge', specialization: 'Civil Law', phone: '+966-50-1111111', email: 'judge.abdullah@court.sa' },
+    { id: judgeIds.judge2, court_id: courtIds.criminal, full_name: 'Judge Nasser Al-Otaibi', title: 'Judge', specialization: 'Criminal Law', phone: '+966-50-2222222', email: 'judge.nasser@court.sa' },
+    { id: judgeIds.judge3, court_id: courtIds.family, full_name: 'Judge Maha Al-Ghamdi', title: 'Judge', specialization: 'Family Law', phone: '+966-50-3333333', email: 'judge.maha@court.sa' },
+  ];
+
+  for (const j of judges) {
+    await execTenant(
+      `INSERT INTO judges (id, court_id, full_name, title, specialization, phone, email, is_active)
+       VALUES ($1::uuid, $2::uuid, $3, $4, $5, $6, $7, true) ON CONFLICT (id) DO UPDATE SET court_id = $2::uuid, full_name = $3, title = $4, specialization = $5, phone = $6, email = $7`,
+      j.id, j.court_id, j.full_name, j.title, j.specialization, j.phone, j.email
+    );
+  }
+
+  // Seed document templates
+  const templates = [
+    {
+      name: 'Client Engagement Letter',
+      description: 'Standard engagement letter for new clients',
+      category: 'Letter',
+      template_body: `Dear {{clientName}},\n\nWe are pleased to confirm that {{firmName}} will represent you in the matter of {{caseName}}.\n\nOur agreed-upon fee structure is as follows:\n- Hourly Rate: {{hourlyRate}} {{currency}}/hr\n- Retainer: {{retainerAmount}} {{currency}}\n\nPlease sign below to confirm your agreement.\n\nSincerely,\n{{lawyerName}}\n{{firmName}}`,
+      variable_schema: JSON.stringify({ clientName: 'string', firmName: 'string', caseName: 'string', hourlyRate: 'number', currency: 'string', retainerAmount: 'number', lawyerName: 'string' }),
+    },
+    {
+      name: 'Motion to Dismiss',
+      description: 'Standard motion to dismiss template',
+      category: 'Motion',
+      template_body: `IN THE {{courtName}}\n\nCase No. {{caseNumber}}\n\n{{plaintiffName}} v. {{defendantName}}\n\nMOTION TO DISMISS\n\nComes now the {{movingParty}}, by and through undersigned counsel, and hereby moves this Honorable Court to dismiss the above-captioned action for the following reasons:\n\n{{reasons}}\n\nWHEREFORE, the {{movingParty}} respectfully requests that this Court grant this Motion and dismiss the case.\n\nRespectfully submitted,\n{{lawyerName}}\nCounsel for {{movingParty}}`,
+      variable_schema: JSON.stringify({ courtName: 'string', caseNumber: 'string', plaintiffName: 'string', defendantName: 'string', movingParty: 'string', reasons: 'string', lawyerName: 'string' }),
+    },
+    {
+      name: 'Power of Attorney',
+      description: 'General power of attorney template',
+      category: 'Contract',
+      template_body: `POWER OF ATTORNEY\n\nI, {{grantor}}, hereby appoint {{attorney}} as my true and lawful attorney-in-fact with full power to act on my behalf in all matters relating to {{caseDescription}}.\n\nThis power of attorney shall remain in effect until {{expiryDate}} unless revoked earlier in writing.\n\nDate: {{date}}\n\nSignature: ___________________\n{{grantor}}`,
+      variable_schema: JSON.stringify({ grantor: 'string', attorney: 'string', caseDescription: 'string', expiryDate: 'string', date: 'string' }),
+    },
+  ];
+
+  for (const t of templates) {
+    await execTenant(
+      `INSERT INTO document_templates (id, name, description, category, template_body, variable_schema, is_active, created_by)
+       VALUES (gen_random_uuid(), $1, $2, $3, $4, $5::jsonb, true, $6::uuid) ON CONFLICT DO NOTHING`,
+      t.name, t.description, t.category, t.template_body, t.variable_schema, users[3].id // TenantAdmin
+    );
+  }
+
+  // Seed notification subscriptions for demo users
+  const eventTypes = ['HEARING_SCHEDULED', 'HEARING_POSTPONED', 'TASK_ASSIGNED', 'CASE_STATE_CHANGED', 'DOCUMENT_UPLOADED'];
+  for (const u of users.slice(0, 4)) {
+    for (const et of eventTypes) {
+      await execTenant(
+        `INSERT INTO notification_subscriptions (id, user_id, event_type, channel, enabled)
+         VALUES (gen_random_uuid(), $1::uuid, $2, 'InApp', true) ON CONFLICT (user_id, event_type) DO NOTHING`,
+        u.id, et
+      );
+    }
+  }
+
+  console.log('Phase 2 seed data completed');
   console.log('Seed completed successfully');
 }
 

@@ -13,11 +13,11 @@ export class CustomerService {
 
   async create(tenantSlug: string, dto: CreateCustomerDto, userId: string) {
     // Validate identity requirements
-    if (dto.customerType === 'Organization') {
-      if (!dto.registrationId) throw new BadRequestException('registrationId is required for Organization');
-      if (!dto.taxId) throw new BadRequestException('taxId is required for Organization');
+    if (dto.customer_type === 'Organization') {
+      if (!dto.registration_id) throw new BadRequestException('registrationId is required for Organization');
+      if (!dto.tax_id) throw new BadRequestException('taxId is required for Organization');
     } else {
-      if (!dto.nationalId && !dto.passportNumber) {
+      if (!dto.national_id && !dto.passport_number) {
         throw new BadRequestException('At least one of nationalId or passportNumber is required for Individual');
       }
     }
@@ -31,8 +31,8 @@ export class CustomerService {
       tenantSlug,
       `INSERT INTO customers (id, customer_type, name, status, notes, national_id, passport_number, registration_id, tax_id, created_at, updated_at)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW(), NOW())`,
-      [customerId, dto.customerType, dto.name, dto.status || 'Active', dto.notes || null,
-       dto.nationalId || null, dto.passportNumber || null, dto.registrationId || null, dto.taxId || null],
+      [customerId, dto.customer_type, dto.name, dto.status || 'Active', dto.notes || null,
+       dto.national_id || null, dto.passport_number || null, dto.registration_id || null, dto.tax_id || null],
     );
 
     // Create contacts if provided
@@ -58,7 +58,7 @@ export class CustomerService {
       actorUserId: userId,
       entityType: 'Customer',
       entityId: customerId,
-      payload: { customerType: dto.customerType, name: dto.name },
+      payload: { customerType: dto.customer_type, name: dto.name },
     });
 
     return this.getById(tenantSlug, customerId);
@@ -188,11 +188,19 @@ export class CustomerService {
   async addContact(tenantSlug: string, customerId: string, dto: CreateContactDto, userId: string) {
     const contactId = uuidv4();
     await this.prisma.executeTenant(
-      tenantSlug,
-      `INSERT INTO contacts (id, customer_id, name, email, phone, role_id, is_primary, created_at, updated_at)
+			tenantSlug,
+			`INSERT INTO contacts (id, customer_id, name, email, phone, role_id, is_primary, created_at, updated_at)
        VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), NOW())`,
-      [contactId, customerId, dto.name, dto.email || null, dto.phone || null, dto.roleId || null, dto.isPrimary || false],
-    );
+			[
+				contactId,
+				customerId,
+				dto.name,
+				dto.email || null,
+				dto.phone || null,
+				dto.role_id || null,
+				dto.isPrimary || false,
+			],
+		)
 
     await this.audit.log({
       tenantSlug,
@@ -214,7 +222,7 @@ export class CustomerService {
     if (dto.name !== undefined) { setClauses.push(`name = $${paramIdx++}`); params.push(dto.name); }
     if (dto.email !== undefined) { setClauses.push(`email = $${paramIdx++}`); params.push(dto.email); }
     if (dto.phone !== undefined) { setClauses.push(`phone = $${paramIdx++}`); params.push(dto.phone); }
-    if (dto.roleId !== undefined) { setClauses.push(`role_id = $${paramIdx++}`); params.push(dto.roleId); }
+    if (dto.role_id !== undefined) { setClauses.push(`role_id = $${paramIdx++}`); params.push(dto.role_id); }
     if (dto.isPrimary !== undefined) { setClauses.push(`is_primary = $${paramIdx++}`); params.push(dto.isPrimary); }
 
     if (setClauses.length === 0) return;

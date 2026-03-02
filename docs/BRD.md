@@ -1,10 +1,10 @@
 # Business Requirements Document (BRD)
 ## Law Office Management Web Application (LOMA)
 
-**Version:** 1.0  
-**Date:** 2026-02-23  
+**Version:** 2.0  
+**Date:** 2026-02-25  
 **Owner:** Product / Business  
-**Scope:** Wave 1 (MVP) + explicit deferrals  
+**Scope:** Wave 1 (MVP) + Phase 2 + explicit deferrals  
 **Terminology (canonical):** Customer/Client, Case/Matter, Document, Invoice, Payment, Expense, User, Role
 
 ---
@@ -58,6 +58,13 @@ Provide a secure, auditable, bilingual (English + Arabic) web application that:
 - **Security quality:** 0 critical authorization vulnerabilities pre go-live.
 - **Billing efficiency:** reduce invoice draft-to-final time by ≥ 30%.
 - **Availability:** meet MVP availability target in SRS.
+
+### 2.3 Phase 2 KPIs
+- **Time-to-billing cycle:** reduce from manual tracking to ≤ 48 h from service delivery to invoice draft.
+- **Document retrieval time:** p95 ≤ 3 s for full-text search results.
+- **Calendar adoption:** ≥ 90 % of hearings and sessions entered via calendar (vs ad-hoc notes).
+- **OCR coverage:** ≥ 95 % of uploaded Arabic+English docs processed within SLA (30 s p95).
+- **Dashboard engagement:** ≥ 70 % of daily active users interact with role-specific dashboard.
 
 ---
 
@@ -185,16 +192,27 @@ Provide a secure, auditable, bilingual (English + Arabic) web application that:
 - Plan tiers: Standard / Enterprise as feature flags (no billing automation in MVP).
 
 ### 3.2 Out of Scope / Deferred
+
+#### 3.2.1 Promoted to Phase 2
+- Calendar & scheduling module (unified events, recurrence, reminders).
+- Court / judge entity management; hearing lifecycle.
+- Document Management v2 (folders, templates, OCR, full-text search, external sharing, configurable numbering).
+- Time tracking with approval workflow and billing integration.
+- Role-specific dashboards with widgets.
+- UI / UX redesign (grouped nav, responsive breakpoints, notification center).
+- Editable rich-text notes.
+- OIDC / PKCE authentication.
+
+#### 3.2.2 Deferred Beyond Phase 2
 - SLA management (explicitly excluded from MVP).
 - Data migration/import tooling (Wave 3/4).
-- Integrations (Phase 2): email ingestion, invoice emailing, external calendar sync, SMS/WhatsApp.
-- OCR/text extraction and full-text search (Phase 2).
-- External document sharing links (Phase 2).
-- Configurable numbering schemes (Phase 2).
-- Editable notes (Phase 2).
-- Retention editing + advanced document lifecycle + multi-region replication (Phase 2+).
-- Dedicated DB per tenant (later; Enterprise).
-- Generic custom fields (Phase 2+).
+- Third-party integrations: email ingestion, invoice emailing, external calendar sync, SMS/WhatsApp.
+- Mobile native application (iOS / Android).
+- Advanced analytics and BI dashboards.
+- Client / customer self-service portal.
+- Retention editing + advanced document lifecycle + multi-region replication.
+- Dedicated DB per tenant (Enterprise tier).
+- Generic custom fields engine.
 
 ---
 
@@ -217,6 +235,24 @@ Provide a secure, auditable, bilingual (English + Arabic) web application that:
 ### 4.4 Case Archiving
 - Archived cases are read-only; no new tasks/sessions/filings/notes.
 
+### 4.5 Time Entry Approval Chain (Phase 2)
+- Time entries must be submitted by the owning user.
+- Approval by CaseOwner or Accountant (configurable per tenant).
+- Only Approved time entries may be linked to invoice line items.
+- Write-off requires Accountant or TenantAdmin approval.
+
+### 4.6 External Document Sharing Constraints (Phase 2)
+- Share links are time-bound (max 30 days, configurable).
+- Optional password protection; password not stored in plaintext.
+- Download quota per link (default: 5 downloads).
+- All share link access is audited.
+- HighlyConfidential documents cannot be shared externally.
+
+### 4.7 Court Hierarchy Integrity (Phase 2)
+- A Judge must be associated with exactly one Court at a time.
+- Hearings reference both Court and Judge; changing Court on a case propagates validation.
+- Court deactivation prevents new hearing assignments.
+
 ---
 
 ## 5. Assumptions
@@ -233,3 +269,34 @@ Provide a secure, auditable, bilingual (English + Arabic) web application that:
 - Architecture:
 - Security:
 - Delivery:
+
+---
+
+## 7. Phase 2 Business Addendum
+
+### 7.1 Phase 2 Drivers
+1. **Weak data model** — Court, Judge, Hearing, Folder, TimeEntry entities missing from Phase 1.
+2. **No calendar** — sessions/hearings managed ad-hoc; no unified scheduling.
+3. **Missing core entities** — no time tracking, no document templates, no OCR.
+4. **Poor UI** — no responsive design, no dashboards, no notification center.
+5. **Inadequate document management** — flat structure, no folders, no full-text search.
+
+### 7.2 Phase 2 Vision
+Transform LOMA from an MVP record-keeping tool into a fully operational law office platform with:
+- Unified calendar and scheduling across all event types.
+- Structured court / judge / hearing hierarchy.
+- Document management with folders, templates, OCR, and full-text search.
+- Time tracking with approval workflow integrated into billing.
+- Role-specific dashboards and responsive UI.
+- Production-grade OIDC authentication.
+
+### 7.3 Phase 2 Success Criteria
+See `docs/phase2/PHASE2_VISION_AND_METRICS.md` for full success criteria, KPIs, and measurement methodology.
+
+### 7.4 Phase 2 Scope References
+| Area | Specification Document |
+|---|---|
+| Calendar & Scheduling | `docs/phase2/CALENDAR_SPEC.md` |
+| Document Management v2 | `docs/phase2/DOC_MGMT_V2_SPEC.md` |
+| Domain Model & Workflows | `docs/phase2/PHASE2_DOMAIN_MODEL_AND_WORKFLOWS.md` |
+| UI / UX Redesign | `docs/phase2/UIUX_PHASE2_PROPOSAL.md` |

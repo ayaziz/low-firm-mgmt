@@ -1,5 +1,6 @@
 import { Processor, WorkerHost } from '@nestjs/bullmq';
-import { Job } from 'bullmq';
+import { InjectQueue } from '@nestjs/bullmq';
+import { Job, Queue } from 'bullmq';
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 
@@ -21,7 +22,10 @@ interface ScanJobData {
 export class ScanWorker extends WorkerHost {
   private readonly logger = new Logger(ScanWorker.name);
 
-  constructor(private readonly prisma: PrismaService) {
+  constructor(
+    private readonly prisma: PrismaService,
+    @InjectQueue('document-ocr') private readonly ocrQueue: Queue,
+  ) {
     super();
   }
 
@@ -54,6 +58,17 @@ export class ScanWorker extends WorkerHost {
       await this.prisma.executeTenant(data.tenantSlug,
         `UPDATE documents SET current_version_id = $1, updated_at = NOW() WHERE id = $2`,
         [data.versionId, data.documentId]);
+
+      // Queue OCR / text-extraction job
+      await this.ocrQueue.add('ocr', {
+        tenantSlug: data.tenantSlug,
+        documentId: data.documentId,
+        versionId: data.versionId,
+        providerObjectKey: data.providerObjectKey,
+        contentType: data.contentType,
+        fileName: data.fileName,
+        correlationId: data.correlationId,
+      }, { delay: 1000 });
     }
 
     // Create audit event

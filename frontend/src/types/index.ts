@@ -7,7 +7,7 @@ export type Role = 'Lawyer' | 'Accountant' | 'TenantAdmin' | 'SystemAdmin';
 
 export type CaseState = 'Intake' | 'Open' | 'Active' | 'Pending' | 'Closed' | 'Archived';
 
-export type CustomerType = 'Individual' | 'Corporate';
+export type CustomerType = 'Individual' | 'organization'
 export type CustomerStatus = 'Active' | 'Inactive' | 'Suspended';
 
 export type ConfidentialityLevel = 'Public' | 'Internal' | 'Confidential' | 'HighlyConfidential';
@@ -51,23 +51,23 @@ export interface UserInfo {
 
 // ── Customer ──
 export interface Customer {
-  id: string;
-  full_name: string;
-  customer_type: CustomerType;
-  status: CustomerStatus;
-  national_id?: string;
-  registration_id?: string;
-  tax_id?: string;
-  notes?: string;
-  created_at: string;
-  updated_at: string;
-  row_version: string;
+	id: string
+	name: string
+	customer_type: CustomerType
+	status: CustomerStatus
+	national_id?: string
+	registration_id?: string
+	tax_id?: string
+	notes?: string
+	created_at: string
+	updated_at: string
+	row_version: string
 }
 
 export interface Contact {
   id: string;
   customer_id: string;
-  contact_role: string;
+  role_id: string;
   name: string;
   phone?: string;
   email?: string;
@@ -349,6 +349,178 @@ export interface ReportResult {
     generatedAt: string;
     filters: Record<string, unknown>;
   };
+}
+
+// ── Phase 2: Courts & Judges ──
+export type CourtType = 'Civil' | 'Criminal' | 'Family' | 'Commercial' | 'Administrative' | 'Labor' | 'Constitutional' | 'Appeal' | 'Cassation' | 'Other';
+
+export interface Court {
+  id: string;
+  name: string;
+  court_type: CourtType;
+  jurisdiction?: string;
+  address?: string;
+  phone?: string;
+  email?: string;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Judge {
+  id: string;
+  court_id: string;
+  name: string;
+  title?: string;
+  chamber?: string;
+  phone?: string;
+  email?: string;
+  notes?: string;
+  is_active: boolean;
+  created_at: string;
+  court_name?: string;
+}
+
+// ── Phase 2: Hearings ──
+export type HearingStatus = 'Scheduled' | 'Confirmed' | 'InProgress' | 'Adjourned' | 'Completed' | 'Cancelled';
+
+export interface Hearing {
+  id: string;
+  case_id: string;
+  court_id: string;
+  judge_id?: string;
+  hearing_date: string;
+  hearing_type: string;
+  status: HearingStatus;
+  location?: string;
+  room_number?: string;
+  notes?: string;
+  outcome?: string;
+  next_hearing_date?: string;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+  case_title?: string;
+  court_name?: string;
+  judge_name?: string;
+}
+
+// ── Phase 2: Calendar ──
+export type CalendarEventType = 'Hearing' | 'Meeting' | 'Deadline' | 'Task' | 'Reminder' | 'Other';
+export type CalendarEventStatus = 'Scheduled' | 'Confirmed' | 'Cancelled' | 'Completed';
+export type RsvpStatus = 'Pending' | 'Accepted' | 'Declined' | 'Tentative';
+
+export interface CalendarEvent {
+  id: string;
+  case_id?: string;
+  hearing_id?: string;
+  title: string;
+  description?: string;
+  event_type: CalendarEventType;
+  status: CalendarEventStatus;
+  start_time: string;
+  end_time: string;
+  location?: string;
+  is_all_day: boolean;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+  case_title?: string;
+  attendees?: CalendarAttendee[];
+  reminders?: CalendarReminder[];
+}
+
+export interface CalendarAttendee {
+  id: string;
+  event_id: string;
+  user_id: string;
+  rsvp_status: RsvpStatus;
+  display_name?: string;
+}
+
+export interface CalendarReminder {
+  id: string;
+  event_id: string;
+  remind_at: string;
+  method: string;
+}
+
+// ── Phase 2: Folders ──
+export type FolderScope = 'Case' | 'Customer' | 'General';
+
+export interface Folder {
+  id: string;
+  case_id?: string;
+  parent_id?: string;
+  name: string;
+  scope: FolderScope;
+  path: string;
+  description?: string;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+  children?: Folder[];
+  document_count?: number;
+}
+
+// ── Phase 2: Document Templates ──
+export type DocumentTemplateCategory = 'Contract' | 'Motion' | 'Letter' | 'Filing' | 'Report' | 'Other';
+
+export interface DocumentTemplate {
+  id: string;
+  name: string;
+  description?: string;
+  category: DocumentTemplateCategory;
+  template_body: string;
+  variable_schema?: Record<string, unknown>;
+  is_active: boolean;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+}
+
+// ── Phase 2: Time Entries ──
+export type TimeEntryStatus = 'Draft' | 'Submitted' | 'Approved' | 'Rejected';
+
+export interface TimeEntry {
+  id: string;
+  case_id: string;
+  user_id: string;
+  entry_date: string;
+  duration_minutes: number;
+  hourly_rate: number;
+  total_amount: number;
+  description: string;
+  activity_type: string;
+  is_billable: boolean;
+  status: TimeEntryStatus;
+  approved_by?: string;
+  approved_at?: string;
+  created_at: string;
+  updated_at: string;
+  user_name?: string;
+  case_title?: string;
+}
+
+export interface TimeEntrySummary {
+  total_entries: number;
+  total_minutes: number;
+  total_amount: number;
+  billable_minutes: number;
+  billable_amount: number;
+  by_status: Record<string, number>;
+}
+
+// ── Phase 2: OCR/Full-text ──
+export type OcrStatus = 'Pending' | 'Processing' | 'Completed' | 'Failed' | 'Skipped';
+
+export interface FulltextSearchResult {
+  id: string;
+  title: string;
+  file_name: string;
+  case_id: string;
+  snippet: string;
+  rank: number;
 }
 
 // ── Completeness ──

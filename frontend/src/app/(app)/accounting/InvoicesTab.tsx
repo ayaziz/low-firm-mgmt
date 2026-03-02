@@ -212,7 +212,7 @@ export default function InvoicesTab() {
               onChange={e => setForm(f => ({ ...f, customerId: e.target.value }))}
             >
               {customers.map(c => (
-                <MenuItem key={c.id} value={c.id}>{c.full_name}</MenuItem>
+                <MenuItem key={c.id} value={c.id}>{c.name}</MenuItem>
               ))}
             </TextField>
             <TextField

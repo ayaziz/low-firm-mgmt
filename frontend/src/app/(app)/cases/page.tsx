@@ -202,7 +202,7 @@ export default function CaseListPage() {
             >
               {customers.map(c => (
                 <MenuItem key={c.id} value={c.id}>
-                  {c.full_name}
+                  {c.name}
                 </MenuItem>
               ))}
             </TextField>

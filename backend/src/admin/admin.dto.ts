@@ -15,14 +15,14 @@ export class UpdateUserDto {
 }
 
 export class CreateMasterDataDto {
+  @IsString() category: string;
   @IsString() code: string;
   @IsString() labelEn: string;
   @IsOptional() @IsString() labelAr?: string;
-  @IsOptional() @IsInt() @Min(0) sortOrder?: number;
-  @IsOptional() @IsObject() config?: Record<string, any>;
 }
 
 export class UpdateMasterDataDto {
+  @IsOptional() @IsString() category?: string;
   @IsOptional() @IsString() labelEn?: string;
   @IsOptional() @IsString() labelAr?: string;
   @IsOptional() @IsBoolean() isActive?: boolean;

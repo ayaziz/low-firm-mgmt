@@ -22,6 +22,13 @@ import { TenantGuard } from './auth/tenant.guard';
 import { LoggingModule } from './common/logging.module';
 import { LoggingInterceptor } from './common/logging.interceptor';
 import { CorrelationMiddleware } from './common/correlation.middleware';
+// ── Phase 2 modules ──
+import { CourtModule } from './court/court.module';
+import { HearingModule } from './hearing/hearing.module';
+import { CalendarModule } from './calendar/calendar.module';
+import { FolderModule } from './folder/folder.module';
+import { TimeEntryModule } from './time-entry/time-entry.module';
+import { TemplateModule } from './template/template.module';
 
 const isTestRuntime = !!process.env.JEST_WORKER_ID;
 
@@ -63,6 +70,13 @@ const isTestRuntime = !!process.env.JEST_WORKER_ID;
     HealthModule,
     ...(isTestRuntime ? [] : [WorkerModule]),
     TelemetryModule,
+    // ── Phase 2 modules ──
+    CourtModule,
+    HearingModule,
+    CalendarModule,
+    FolderModule,
+    TimeEntryModule,
+    TemplateModule,
   ],
   providers: [
     // TenantGuard enforces ABAC tenant boundary on every authenticated request.

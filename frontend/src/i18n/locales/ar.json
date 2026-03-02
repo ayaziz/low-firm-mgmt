@@ -13,7 +13,12 @@
     "reports": "التقارير",
     "admin": "الإدارة",
     "search": "البحث",
-    "notifications": "الإشعارات"
+    "notifications": "الإشعارات",
+    "hearings": "الجلسات",
+    "courts": "المحاكم",
+    "calendar": "التقويم",
+    "timeEntries": "سجلات الوقت",
+    "templates": "القوالب"
   },
   "auth": {
     "login": "تسجيل الدخول",
@@ -87,7 +92,7 @@
     "fullName": "الاسم الكامل",
     "customerType": "نوع العميل",
     "individual": "فرد",
-    "corporate": "شركة",
+    "organization": "شركة",
     "nationalId": "رقم الهوية",
     "registrationId": "رقم السجل التجاري",
     "taxId": "الرقم الضريبي",
@@ -289,7 +294,12 @@
     "roles": "الأدوار",
     "governance": "الحوكمة",
     "legalHolds": "التجميد القانوني",
-    "retentionPolicies": "سياسات الاحتفاظ"
+    "retentionPolicies": "سياسات الاحتفاظ",
+    "createCaseType": "إنشاء نوع قضية",
+    "status": "الحالة",
+    "displayName": "الاسم المعروض",
+    "editUser": "تعديل المستخدم"
+
   },
   "notifications": {
     "title": "الإشعارات",

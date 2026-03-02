@@ -32,16 +32,18 @@ import { adminApi } from '@/api';
 import type { MasterDataItem } from '@/types';
 
 const CATEGORIES = [
-  'nationalities',
-  'courts',
-  'currencies',
-  'caseCategories',
-  'documentTypes',
-  'communicationChannels',
-  'filingTypes',
-  'taskPriorities',
-  'expenseCategories',
-];
+	'contactRole',
+	'participantRole',
+	'relationshipType',
+	'communicationType',
+	'filingType',
+	'sessionType',
+	'expenseCategory',
+	'paymentMethod',
+	'docType',
+	'nationalities',
+	'currencies',
+]
 
 export default function MasterDataTab() {
   const { t } = useTranslation();

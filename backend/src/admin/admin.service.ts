@@ -124,6 +124,8 @@ export class AdminService {
     'contactRole', 'participantRole', 'relationshipType',
     'communicationType', 'filingType', 'sessionType',
     'expenseCategory', 'paymentMethod', 'docType',
+    'nationalities',
+    'currencies'
   ];
 
   async listMasterData(tenantSlug: string, category: string) {
@@ -150,7 +152,7 @@ export class AdminService {
     await this.prisma.executeTenant(tenantSlug,
       `INSERT INTO master_data (id, category, code, label_en, label_ar, is_active, sort_order, config)
        VALUES ($1, $2, $3, $4, $5, true, $6, $7)`,
-      [id, category, dto.code, dto.labelEn, dto.labelAr || null, dto.sortOrder ?? 0, dto.config ? JSON.stringify(dto.config) : null]);
+      [id, category, dto.code, dto.labelEn, dto.labelAr || null,  0, null]);
 
     await this.audit.log({
       tenantSlug,
@@ -158,10 +160,10 @@ export class AdminService {
       actorUserId: actorId,
       entityType: 'MasterData',
       entityId: id,
-      payload: { category, ...dto },
+      payload: {  ...dto },
     });
 
-    return { id, category, ...dto, isActive: true };
+    return { id,  ...dto, isActive: true };
   }
 
   async updateMasterData(tenantSlug: string, category: string, id: string, dto: UpdateMasterDataDto, actorId: string) {
