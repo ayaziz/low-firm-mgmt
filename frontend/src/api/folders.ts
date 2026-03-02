@@ -31,7 +31,7 @@ export const folderApi = {
   },
 
   moveDocument(folderId: string, documentId: string): Promise<void> {
-    return post(`/folders/${folderId}/move-document`, { documentId });
+    return post(`/folders/move-document`, { documentId, folderId });
   },
 
   createDefaults(caseId: string): Promise<Folder[]> {

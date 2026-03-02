@@ -9,6 +9,25 @@ const API_BASE = typeof window === 'undefined'
   : ''; // Empty = relative URLs for browser (goes through nginx)
 const API_PREFIX = '/api/v1';
 
+
+function unwrapResponseEnvelope<T>(data: unknown): T {
+  if (!data || typeof data !== 'object' || Array.isArray(data)) {
+    return data as T;
+  }
+
+  const maybeEnvelope = data as Record<string, unknown>;
+  if (maybeEnvelope.success === true) {
+    if (Object.prototype.hasOwnProperty.call(maybeEnvelope, 'data')) {
+      return maybeEnvelope.data as T;
+    }
+
+    const { success: _success, ...rest } = maybeEnvelope;
+    return rest as T;
+  }
+
+  return data as T;
+}
+
 function getToken(): string | null {
   if (typeof window === 'undefined') return null;
   return localStorage.getItem('loma_token');
@@ -61,7 +80,7 @@ async function request<T>(
     );
   }
 
-  return data as T;
+  return unwrapResponseEnvelope<T>(data);
 }
 
 export class ApiError extends Error {
