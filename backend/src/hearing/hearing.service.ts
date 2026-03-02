@@ -28,7 +28,7 @@ export class HearingService {
     await this.prisma.executeTenant(
       tenantSlug,
       `INSERT INTO calendar_events (id, title, start_at, end_at, event_type, case_id, hearing_id, location, status, created_by, created_at, updated_at)
-       VALUES ($1, $2, $3, $3 + INTERVAL '1 hour', 'Hearing', $4, $5, $6, 'Active', $7, NOW(), NOW())`,
+       VALUES ($1, $2, $3, $3 + INTERVAL '1 hour', 'Hearing', $4, $5, $6, 'Scheduled', $7, NOW(), NOW())`,
       [calendarEventId, `Hearing: ${caseRows[0].title}`, dto.hearingDate, dto.caseId, hearingId, dto.location || null, userId],
     );
 
@@ -199,7 +199,7 @@ export class HearingService {
 
     // Sync calendar event status
     if (hearing.calendar_event_id) {
-      const calStatus = dto.toStatus === 'Completed' ? 'Completed' : dto.toStatus === 'Cancelled' ? 'Cancelled' : 'Active';
+      const calStatus = dto.toStatus === 'Completed' ? 'Completed' : dto.toStatus === 'Cancelled' ? 'Cancelled' : 'Scheduled';
       await this.prisma.executeTenant(
         tenantSlug,
         `UPDATE calendar_events SET status = $1, updated_at = NOW() WHERE id = $2`,

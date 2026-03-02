@@ -63,11 +63,11 @@ export default function TimeEntriesPage() {
   const [form, setForm] = useState({
     case_id: '',
     entry_date: new Date().toISOString().split('T')[0],
-    duration_minutes: 60,
-    hourly_rate: 0,
+    hours: 1,
+    rate_per_hour: 0,
     description: '',
     activity_type: 'Research',
-    is_billable: true,
+    billable: true,
   });
   const [saving, setSaving] = useState(false);
 
@@ -109,14 +109,14 @@ export default function TimeEntriesPage() {
       await timeEntryApi.create({
         case_id: form.case_id,
         entry_date: form.entry_date,
-        duration_minutes: form.duration_minutes,
-        hourly_rate: form.hourly_rate,
+        hours: form.hours,
+        rate_per_hour: form.rate_per_hour,
         description: form.description,
         activity_type: form.activity_type,
-        is_billable: form.is_billable,
+        billable: form.billable,
       });
       setDialogOpen(false);
-      setForm({ case_id: '', entry_date: new Date().toISOString().split('T')[0], duration_minutes: 60, hourly_rate: 0, description: '', activity_type: 'Research', is_billable: true });
+      setForm({ case_id: '', entry_date: new Date().toISOString().split('T')[0], hours: 1, rate_per_hour: 0, description: '', activity_type: 'Research', billable: true });
       load();
       loadSummary();
     } finally {
@@ -144,10 +144,11 @@ export default function TimeEntriesPage() {
     }
   };
 
-  const formatDuration = (mins: number) => {
-    const h = Math.floor(mins / 60);
-    const m = mins % 60;
-    return h > 0 ? `${h}h ${m}m` : `${m}m`;
+  const formatHours = (h: number) => {
+    if (!h) return '0h';
+    const hrs = Math.floor(h);
+    const mins = Math.round((h - hrs) * 60);
+    return mins > 0 ? `${hrs}h ${mins}m` : `${hrs}h`;
   };
 
   const canManage = hasAnyRole('Lawyer', 'TenantAdmin', 'SystemAdmin');
@@ -195,7 +196,7 @@ export default function TimeEntriesPage() {
             <CardContent sx={{ py: 1.5, '&:last-child': { pb: 1.5 } }}>
               <Typography variant="caption" color="text.secondary">Total Hours</Typography>
               <Typography variant="h6" fontWeight={600}>
-                {formatDuration(summary.total_minutes)}
+                {formatHours(summary.total_hours)}
               </Typography>
             </CardContent>
           </Card>
@@ -203,7 +204,7 @@ export default function TimeEntriesPage() {
             <CardContent sx={{ py: 1.5, '&:last-child': { pb: 1.5 } }}>
               <Typography variant="caption" color="text.secondary">Billable</Typography>
               <Typography variant="h6" fontWeight={600}>
-                {formatDuration(summary.billable_minutes)}
+                {formatHours(summary.billable_hours)}
               </Typography>
             </CardContent>
           </Card>
@@ -259,8 +260,8 @@ export default function TimeEntriesPage() {
                     </TableCell>
                     <TableCell>{entry.activity_type}</TableCell>
                     <TableCell>
-                      {formatDuration(entry.duration_minutes)}
-                      {entry.is_billable && <Chip label="$" size="small" sx={{ ml: 0.5 }} color="success" variant="outlined" />}
+                      {formatHours(entry.hours)}
+                      {entry.billable && <Chip label="$" size="small" sx={{ ml: 0.5 }} color="success" variant="outlined" />}
                     </TableCell>
                     <TableCell>${Number(entry.total_amount || 0).toFixed(2)}</TableCell>
                     <TableCell>
@@ -322,12 +323,12 @@ export default function TimeEntriesPage() {
           <Stack spacing={2} mt={1}>
             <TextField label="Case ID" fullWidth required value={form.case_id} onChange={e => setForm(f => ({ ...f, case_id: e.target.value }))} />
             <TextField label="Date" type="date" fullWidth required InputLabelProps={{ shrink: true }} value={form.entry_date} onChange={e => setForm(f => ({ ...f, entry_date: e.target.value }))} />
-            <TextField label="Duration (minutes)" type="number" fullWidth required value={form.duration_minutes} onChange={e => setForm(f => ({ ...f, duration_minutes: Number(e.target.value) }))} />
-            <TextField label="Hourly Rate" type="number" fullWidth value={form.hourly_rate} onChange={e => setForm(f => ({ ...f, hourly_rate: Number(e.target.value) }))} />
+            <TextField label="Duration (hours)" type="number" fullWidth required inputProps={{ step: 0.25, min: 0.25 }} value={form.hours} onChange={e => setForm(f => ({ ...f, hours: Number(e.target.value) }))} />
+            <TextField label="Hourly Rate" type="number" fullWidth value={form.rate_per_hour} onChange={e => setForm(f => ({ ...f, rate_per_hour: Number(e.target.value) }))} />
             <TextField label="Activity Type" fullWidth value={form.activity_type} onChange={e => setForm(f => ({ ...f, activity_type: e.target.value }))} />
             <TextField label="Description" fullWidth required multiline rows={3} value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} />
             <FormControlLabel
-              control={<Switch checked={form.is_billable} onChange={e => setForm(f => ({ ...f, is_billable: e.target.checked }))} />}
+              control={<Switch checked={form.billable} onChange={e => setForm(f => ({ ...f, billable: e.target.checked }))} />}
               label="Billable"
             />
           </Stack>

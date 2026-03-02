@@ -19,7 +19,14 @@ export const customerApi = {
 	},
 
 	update(id: string, data: Partial<Customer>): Promise<Customer> {
-		return patch<Customer>(`/customers/${id}`, data)
+		// Map snake_case Customer fields → camelCase UpdateCustomerDto
+		const { national_id, passport_number, registration_id, tax_id, ...rest } = data as any;
+		const payload: Record<string, unknown> = { ...rest };
+		if (national_id !== undefined) payload.nationalId = national_id;
+		if (passport_number !== undefined) payload.passportNumber = passport_number;
+		if (registration_id !== undefined) payload.registrationId = registration_id;
+		if (tax_id !== undefined) payload.taxId = tax_id;
+		return patch<Customer>(`/customers/${id}`, payload)
 	},
 
 	// Contacts

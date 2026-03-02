@@ -71,18 +71,19 @@ CREATE TABLE IF NOT EXISTS calendar_events (
   start_at TIMESTAMPTZ NOT NULL,
   end_at TIMESTAMPTZ,
   all_day BOOLEAN DEFAULT FALSE,
-  event_type VARCHAR(30) NOT NULL DEFAULT 'Custom'
-    CHECK (event_type IN ('Hearing', 'Session', 'TaskDeadline', 'Custom', 'Reminder')),
+  event_type VARCHAR(30) NOT NULL DEFAULT 'Other'
+    CHECK (event_type IN ('Hearing', 'Meeting', 'Deadline', 'Task', 'Reminder', 'Other')),
   recurrence VARCHAR(20) DEFAULT 'None'
-    CHECK (recurrence IN ('None', 'Daily', 'Weekly', 'Monthly')),
+    CHECK (recurrence IN ('None', 'Daily', 'Weekly', 'Monthly', 'Yearly')),
+  recurrence_end_date DATE,
   recurrence_rule TEXT,
   case_id UUID REFERENCES cases(id),
   hearing_id UUID REFERENCES hearings(id),
   session_id UUID REFERENCES sessions(id),
   task_id UUID REFERENCES tasks(id),
   location TEXT,
-  status VARCHAR(20) NOT NULL DEFAULT 'Active'
-    CHECK (status IN ('Active', 'Completed', 'Cancelled')),
+  status VARCHAR(20) NOT NULL DEFAULT 'Scheduled'
+    CHECK (status IN ('Scheduled', 'Confirmed', 'Completed', 'Cancelled')),
   created_by UUID,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -196,12 +197,15 @@ CREATE TABLE IF NOT EXISTS time_entries (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   case_id UUID NOT NULL REFERENCES cases(id),
   task_id UUID REFERENCES tasks(id),
+  hearing_id UUID REFERENCES hearings(id),
   user_id UUID NOT NULL,
   entry_date DATE NOT NULL,
   hours DECIMAL(6,2) NOT NULL,
   description TEXT,
+  activity_type VARCHAR(100) NOT NULL DEFAULT 'General',
   billable BOOLEAN DEFAULT TRUE,
-  hourly_rate DECIMAL(10,2),
+  rate_per_hour DECIMAL(10,2) NOT NULL DEFAULT 0,
+  total_amount DECIMAL(12,2) NOT NULL DEFAULT 0,
   status VARCHAR(20) NOT NULL DEFAULT 'Draft'
     CHECK (status IN ('Draft', 'Submitted', 'Approved', 'Billed', 'WriteOff')),
   invoice_line_id UUID,

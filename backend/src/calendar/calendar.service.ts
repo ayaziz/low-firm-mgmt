@@ -20,7 +20,7 @@ export class CalendarService {
     const conflicts: any[] = await this.prisma.queryTenant(
       tenantSlug,
       `SELECT id, title, start_at, end_at FROM calendar_events
-       WHERE status = 'Active'
+       WHERE status IN ('Scheduled', 'Confirmed')
        AND start_at < $2 AND end_at > $1
        AND id IN (SELECT calendar_event_id FROM calendar_event_attendees WHERE user_id = $3)`,
       [dto.startAt, dto.endAt, userId],
@@ -35,7 +35,7 @@ export class CalendarService {
     await this.prisma.executeTenant(
       tenantSlug,
       `INSERT INTO calendar_events (id, title, start_at, end_at, event_type, case_id, hearing_id, location, description, status, recurrence, recurrence_end_date, created_by, created_at, updated_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'Active', $10, $11, $12, NOW(), NOW())`,
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'Scheduled', $10, $11, $12, NOW(), NOW())`,
       [eventId, dto.title, dto.startAt, dto.endAt, dto.eventType,
        dto.caseId || null, dto.hearingId || null, dto.location || null,
        dto.description || null, dto.recurrence || 'None',
@@ -120,7 +120,7 @@ export class CalendarService {
     let sql = `SELECT ce.*, c.title AS case_title
                FROM calendar_events ce
                LEFT JOIN cases c ON ce.case_id = c.id
-               WHERE ce.status = 'Active'
+               WHERE ce.status IN ('Scheduled', 'Confirmed')
                AND ce.id IN (SELECT calendar_event_id FROM calendar_event_attendees WHERE user_id = $1)`;
     const params: any[] = [userId];
     let idx = 2;

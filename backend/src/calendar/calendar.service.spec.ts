@@ -38,7 +38,7 @@ describe('CalendarService', () => {
       mockPrisma.executeTenant.mockResolvedValue(undefined);
       // getById return
       mockPrisma.queryTenant.mockResolvedValueOnce([{
-        id: 'ev1', title: 'Team Meeting', status: 'Active',
+        id: 'ev1', title: 'Team Meeting', status: 'Scheduled',
         attendees: [{ userId: 'user-1', rsvp: 'Accepted' }],
         reminders: null,
       }]);

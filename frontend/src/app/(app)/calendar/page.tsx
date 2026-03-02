@@ -66,8 +66,8 @@ export default function CalendarPage() {
   const [form, setForm] = useState({
     title: '',
     event_type: 'Meeting' as CalendarEventType,
-    start_time: '',
-    end_time: '',
+    start_at: '',
+    end_at: '',
     location: '',
     description: '',
   });
@@ -98,13 +98,13 @@ export default function CalendarPage() {
       await calendarApi.create({
         title: form.title,
         event_type: form.event_type,
-        start_time: form.start_time,
-        end_time: form.end_time,
+        start_at: form.start_at,
+        end_at: form.end_at,
         location: form.location || undefined,
         description: form.description || undefined,
       });
       setDialogOpen(false);
-      setForm({ title: '', event_type: 'Meeting', start_time: '', end_time: '', location: '', description: '' });
+      setForm({ title: '', event_type: 'Meeting', start_at: '', end_at: '', location: '', description: '' });
       load();
     } finally {
       setSaving(false);
@@ -163,8 +163,8 @@ export default function CalendarPage() {
                   <TableCell>
                     <Chip label={ev.status} size="small" color={STATUS_COLORS[ev.status] || 'default'} />
                   </TableCell>
-                  <TableCell>{new Date(ev.start_time).toLocaleString()}</TableCell>
-                  <TableCell>{new Date(ev.end_time).toLocaleString()}</TableCell>
+                  <TableCell>{new Date(ev.start_at).toLocaleString()}</TableCell>
+                  <TableCell>{new Date(ev.end_at).toLocaleString()}</TableCell>
                   <TableCell>{ev.location || '—'}</TableCell>
                 </TableRow>
               ))}
@@ -218,8 +218,8 @@ export default function CalendarPage() {
               fullWidth
               required
               InputLabelProps={{ shrink: true }}
-              value={form.start_time}
-              onChange={e => setForm(f => ({ ...f, start_time: e.target.value }))}
+              value={form.start_at}
+              onChange={e => setForm(f => ({ ...f, start_at: e.target.value }))}
             />
             <TextField
               label={t('calendar.endTime', 'End')}
@@ -227,8 +227,8 @@ export default function CalendarPage() {
               fullWidth
               required
               InputLabelProps={{ shrink: true }}
-              value={form.end_time}
-              onChange={e => setForm(f => ({ ...f, end_time: e.target.value }))}
+              value={form.end_at}
+              onChange={e => setForm(f => ({ ...f, end_at: e.target.value }))}
             />
             <TextField
               label={t('calendar.location', 'Location')}
@@ -251,7 +251,7 @@ export default function CalendarPage() {
           <Button
             variant="contained"
             onClick={handleCreate}
-            disabled={saving || !form.title || !form.start_time || !form.end_time}
+            disabled={saving || !form.title || !form.start_at || !form.end_at}
           >
             {t('common.save', 'Save')}
           </Button>

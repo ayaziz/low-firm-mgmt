@@ -7,8 +7,8 @@ export type Role = 'Lawyer' | 'Accountant' | 'TenantAdmin' | 'SystemAdmin';
 
 export type CaseState = 'Intake' | 'Open' | 'Active' | 'Pending' | 'Closed' | 'Archived';
 
-export type CustomerType = 'Individual' | 'organization'
-export type CustomerStatus = 'Active' | 'Inactive' | 'Suspended';
+export type CustomerType = 'Individual' | 'Organization'
+export type CustomerStatus = 'Active' | 'Inactive' | 'Prospect';
 
 export type ConfidentialityLevel = 'Public' | 'Internal' | 'Confidential' | 'HighlyConfidential';
 export type ScanStatus = 'Pending' | 'Passed' | 'Failed';
@@ -382,7 +382,7 @@ export interface Judge {
 }
 
 // ── Phase 2: Hearings ──
-export type HearingStatus = 'Scheduled' | 'Confirmed' | 'InProgress' | 'Adjourned' | 'Completed' | 'Cancelled';
+export type HearingStatus = 'Scheduled' | 'Postponed' | 'Completed' | 'Cancelled';
 
 export interface Hearing {
   id: string;
@@ -418,10 +418,11 @@ export interface CalendarEvent {
   description?: string;
   event_type: CalendarEventType;
   status: CalendarEventStatus;
-  start_time: string;
-  end_time: string;
+  start_at: string;
+  end_at: string;
   location?: string;
   is_all_day: boolean;
+  recurrence?: string;
   created_by: string;
   created_at: string;
   updated_at: string;
@@ -486,29 +487,31 @@ export interface TimeEntry {
   id: string;
   case_id: string;
   user_id: string;
+  hearing_id?: string;
   entry_date: string;
-  duration_minutes: number;
-  hourly_rate: number;
+  hours: number;
+  rate_per_hour: number;
   total_amount: number;
   description: string;
   activity_type: string;
-  is_billable: boolean;
+  billable: boolean;
   status: TimeEntryStatus;
   approved_by?: string;
   approved_at?: string;
   created_at: string;
   updated_at: string;
   user_name?: string;
+  user_email?: string;
   case_title?: string;
 }
 
 export interface TimeEntrySummary {
   total_entries: number;
-  total_minutes: number;
+  total_hours: number;
   total_amount: number;
-  billable_minutes: number;
+  billable_hours: number;
   billable_amount: number;
-  by_status: Record<string, number>;
+  non_billable_hours: number;
 }
 
 // ── Phase 2: OCR/Full-text ──

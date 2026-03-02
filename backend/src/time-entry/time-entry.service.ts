@@ -47,7 +47,7 @@ export class TimeEntryService {
     let sql = `SELECT te.*, c.title AS case_title, u.email AS user_email, u.display_name AS user_name
                FROM time_entries te
                LEFT JOIN cases c ON te.case_id = c.id
-               LEFT JOIN public."User" u ON te.user_id = u.id::text
+               LEFT JOIN public.users u ON te.user_id::text = u.id
                WHERE 1=1`;
     const params: any[] = [];
     let idx = 1;

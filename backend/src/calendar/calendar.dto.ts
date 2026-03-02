@@ -57,7 +57,7 @@ export class UpdateCalendarEventDto {
   @IsOptional() @IsString()
   description?: string;
 
-  @IsOptional() @IsEnum(['Active', 'Completed', 'Cancelled'])
+  @IsOptional() @IsEnum(['Scheduled', 'Confirmed', 'Completed', 'Cancelled'])
   status?: string;
 
   @IsOptional() @IsEnum(['None', 'Daily', 'Weekly', 'Monthly', 'Yearly'])

@@ -4,6 +4,8 @@ import { ValidationPipe } from '@nestjs/common';
 import { WINSTON_MODULE_NEST_PROVIDER } from 'nest-winston';
 import helmet from 'helmet';
 import cookieParser from 'cookie-parser';
+import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger'
+
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, {
@@ -47,7 +49,25 @@ async function bootstrap() {
   );
 
   app.setGlobalPrefix('api/v1');
+ const swaggerConfig = new DocumentBuilder()
+		.setTitle('LOMA API')
+		.setDescription('LOMA Backend REST API (NestJS)')
+		.setVersion('1.0.0')
+		// If you use cookie auth (you do: cookieParser + credentials:true), document it:
+		.addCookieAuth('access_token', {
+			type: 'apiKey',
+			in: 'cookie',
+			name: 'access_token',
+		})
+		.build()
 
+ const document = SwaggerModule.createDocument(app, swaggerConfig)
+ // UI: http://localhost:4000/api/v1/docs
+ SwaggerModule.setup('api/v1/docs', app, document, {
+		swaggerOptions: {
+			withCredentials: true, // allows Swagger UI to send cookies
+		},
+ })
   const port = process.env.PORT || 4000;
   await app.listen(port);
   console.log(`LOMA Backend running on port ${port}`);
