@@ -2,8 +2,9 @@
 
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Box, Tab, Tabs, Typography } from '@mui/material';
+import { Box, Tab, Tabs } from '@mui/material';
 import ProtectedRoute from '@/components/ProtectedRoute';
+import PageHeader from '@/components/common/PageHeader';
 import UsersTab from './UsersTab';
 import MasterDataTab from './MasterDataTab';
 import CaseTypesTab from './CaseTypesTab';
@@ -16,9 +17,7 @@ export default function AdminPage() {
   return (
     <ProtectedRoute requiredRoles={['TenantAdmin', 'SystemAdmin']}>
     <Box>
-      <Typography variant="h5" fontWeight={600} mb={2}>
-        {t('admin.title')}
-      </Typography>
+      <PageHeader title={t('admin.title', 'Administration')} />
       <Tabs value={tab} onChange={(_, v) => setTab(v)} sx={{ mb: 3 }}>
         <Tab label={t('admin.users')} />
         <Tab label={t('admin.masterData')} />

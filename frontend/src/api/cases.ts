@@ -111,7 +111,7 @@ export const caseApi = {
     return get(`/cases/${caseId}/parties`);
   },
 
-  addParty(caseId: string, data: { partyId: string; roleInCase: string }): Promise<void> {
+  addParty(caseId: string, data: { partyId: string; partyRoleType: string }): Promise<void> {
     return post(`/cases/${caseId}/parties`, data);
   },
 };

@@ -1,147 +1,121 @@
 'use client';
 
-import React, { useEffect, useState, useCallback } from 'react';
-import { useSearchParams, useRouter } from 'next/navigation';
+import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useRouter, useSearchParams } from 'next/navigation';
 import {
-  Box,
-  Card,
-  CardContent,
-  Chip,
-  Divider,
-  List,
-  ListItemButton,
-  ListItemText,
-  Stack,
-  TextField,
-  ToggleButton,
-  ToggleButtonGroup,
-  Typography,
+  Box, Card, CardActionArea, CardContent, List, ListItemButton, ListItemIcon, ListItemText,
+  Stack, TextField, ToggleButton, ToggleButtonGroup, Typography,
 } from '@mui/material';
 import {
-  People as PeopleIcon,
-  Gavel as GavelIcon,
-  Description as DocIcon,
+  Search as SearchIcon, Person as PersonIcon, Gavel as CaseIcon, Description as DocIcon,
 } from '@mui/icons-material';
 import { searchApi } from '@/api';
-import type { SearchResult } from '@/types';
+import PageHeader from '@/components/common/PageHeader';
+import EmptyState from '@/components/common/EmptyState';
+import LoadingSkeleton from '@/components/common/LoadingSkeleton';
+
+interface SearchResult {
+  id: string;
+  entityType: string;
+  title: string;
+  subtitle?: string;
+  [key: string]: any;
+}
 
 const entityIcons: Record<string, React.ReactNode> = {
-  customer: <PeopleIcon fontSize="small" />,
-  case: <GavelIcon fontSize="small" />,
-  document: <DocIcon fontSize="small" />,
+  customer: <PersonIcon />,
+  case: <CaseIcon />,
+  document: <DocIcon />,
 };
 
 const entityPaths: Record<string, string> = {
-  customer: '/customers/',
-  case: '/cases/',
-  document: '/documents/',
+  customer: '/customers',
+  case: '/cases',
+  document: '/documents',
 };
 
 export default function SearchPage() {
   const { t } = useTranslation();
   const router = useRouter();
-  const params = useSearchParams();
-  const initialQ = params.get('q') || '';
+  const searchParams = useSearchParams();
+  const initialQ = searchParams.get('q') ?? '';
 
   const [query, setQuery] = useState(initialQ);
   const [results, setResults] = useState<SearchResult[]>([]);
-  const [loading, setLoading] = useState(false);
   const [filter, setFilter] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
 
-  const doSearch = useCallback(async (q: string) => {
+  const doSearch = async (q: string) => {
     if (!q.trim()) { setResults([]); return; }
     setLoading(true);
     try {
-      const res = await searchApi.search({ q, type: filter || undefined, limit: 50 });
-      setResults(res.data);
-    } finally {
-      setLoading(false);
-    }
-  }, [filter]);
+      const res = await searchApi.search({ q, type: filter ?? undefined, limit: 50 });
+      setResults(Array.isArray(res) ? res as any : (res as any).data ?? []);
+    } finally { setLoading(false); }
+  };
 
-  useEffect(() => { doSearch(initialQ); }, [initialQ, doSearch]);
+  useEffect(() => { if (initialQ) doSearch(initialQ); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') {
-      router.replace(`/search?q=${encodeURIComponent(query.trim())}`);
+      router.replace(`/search?q=${encodeURIComponent(query)}`);
+      doSearch(query);
     }
   };
 
-  // Group results by type
+  const handleFilterChange = (_: React.MouseEvent, val: string | null) => {
+    setFilter(val);
+    if (query.trim()) doSearch(query);
+  };
+
   const grouped = results.reduce<Record<string, SearchResult[]>>((acc, r) => {
-    (acc[r.entityType] ||= []).push(r);
+    const key = r.entityType ?? r.entity_type ?? 'other';
+    (acc[key] = acc[key] ?? []).push(r);
     return acc;
   }, {});
 
-  const filteredGroups = filter ? { [filter]: grouped[filter] || [] } : grouped;
-
   return (
     <Box>
-      <Typography variant="h5" fontWeight={700} gutterBottom>
-        {t('search.title')}
-      </Typography>
+      <PageHeader title={t('search.title', 'Search')} />
 
-      <Stack direction="row" spacing={2} alignItems="center" sx={{ mb: 3 }}>
+      <Stack spacing={2}>
         <TextField
-          fullWidth
-          size="small"
-          placeholder={t('search.placeholder')}
-          value={query}
-          onChange={e => setQuery(e.target.value)}
-          onKeyDown={handleKeyDown}
+          fullWidth placeholder={t('search.placeholder', 'Search customers, cases, documents…')}
+          value={query} onChange={e => setQuery(e.target.value)} onKeyDown={handleKeyDown}
+          InputProps={{ startAdornment: <SearchIcon sx={{ mr: 1, color: 'text.disabled' }} /> }}
+          autoFocus
         />
-        <ToggleButtonGroup
-          value={filter}
-          exclusive
-          onChange={(_, v) => setFilter(v)}
-          size="small"
-        >
-          <ToggleButton value="customer">{t('search.customers')}</ToggleButton>
-          <ToggleButton value="case">{t('search.cases')}</ToggleButton>
-          <ToggleButton value="document">{t('search.documents')}</ToggleButton>
+
+        <ToggleButtonGroup value={filter} exclusive onChange={handleFilterChange} size="small">
+          <ToggleButton value={null as any}>{t('search.all', 'All')}</ToggleButton>
+          <ToggleButton value="customer">{t('search.customers', 'Customers')}</ToggleButton>
+          <ToggleButton value="case">{t('search.cases', 'Cases')}</ToggleButton>
+          <ToggleButton value="document">{t('search.documents', 'Documents')}</ToggleButton>
         </ToggleButtonGroup>
+
+        {loading ? <LoadingSkeleton variant="table" /> : results.length > 0 ? (
+          <Stack spacing={2}>
+            {Object.entries(grouped).map(([type, items]) => (
+              <Card key={type} variant="outlined">
+                <CardContent sx={{ pb: '8px !important' }}>
+                  <Typography variant="subtitle2" color="text.secondary" textTransform="capitalize" mb={1}>{type}s ({items.length})</Typography>
+                  <List dense disablePadding>
+                    {items.map(item => (
+                      <ListItemButton key={item.id} onClick={() => router.push(`${entityPaths[type] ?? '/dashboard'}/${item.id}`)}>
+                        <ListItemIcon sx={{ minWidth: 36 }}>{entityIcons[type] ?? <SearchIcon />}</ListItemIcon>
+                        <ListItemText primary={item.title ?? item.name} secondary={item.subtitle ?? item.description ?? ''} />
+                      </ListItemButton>
+                    ))}
+                  </List>
+                </CardContent>
+              </Card>
+            ))}
+          </Stack>
+        ) : query.trim() && !loading ? (
+          <EmptyState icon={<SearchIcon />} title={t('search.noResults', 'No results')} message={t('search.noResultsMsg', 'Try different keywords or filters')} />
+        ) : null}
       </Stack>
-
-      {loading && <Typography color="text.secondary">{t('common.loading')}</Typography>}
-
-      {!loading && results.length === 0 && initialQ && (
-        <Typography color="text.secondary">{t('search.noResults')}</Typography>
-      )}
-
-      {Object.entries(filteredGroups).map(([type, items]) => (
-        <Card key={type} sx={{ mb: 2 }}>
-          <CardContent>
-            <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1 }}>
-              {entityIcons[type]}
-              <Typography variant="subtitle1" fontWeight={600} textTransform="capitalize">
-                {type}s
-              </Typography>
-              <Chip label={items.length} size="small" />
-            </Stack>
-            <Divider />
-            <List dense disablePadding>
-              {items.map(item => (
-                <ListItemButton
-                  key={item.entityId}
-                  onClick={() => router.push(`${entityPaths[type] || '/'}${item.entityId}`)}
-                >
-                  <ListItemText
-                    primary={item.title}
-                    secondary={item.subtitle}
-                  />
-                  <Chip
-                    label={item.matchField}
-                    size="small"
-                    variant="outlined"
-                    sx={{ ml: 1 }}
-                  />
-                </ListItemButton>
-              ))}
-            </List>
-          </CardContent>
-        </Card>
-      ))}
     </Box>
   );
 }

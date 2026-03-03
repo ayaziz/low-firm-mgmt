@@ -3,135 +3,65 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
-  Alert,
-  Box,
-  Button,
-  Card,
-  CardContent,
-  CardHeader,
-  Grid,
-  Stack,
-  Switch,
-  FormControlLabel,
-  TextField,
-  Typography,
+  Alert, Box, Button, Card, CardContent, CardHeader, Grid, Stack, Switch, TextField, FormControlLabel,
 } from '@mui/material';
 import { Save as SaveIcon } from '@mui/icons-material';
 import { adminApi } from '@/api';
-import type { TenantSettings } from '@/types';
+import LoadingSkeleton from '@/components/common/LoadingSkeleton';
 
 export default function SettingsTab() {
   const { t } = useTranslation();
-  const [settings, setSettings] = useState<TenantSettings | null>(null);
+  const [settings, setSettings] = useState<Record<string, any> | null>(null);
+  const [workflow, setWorkflow] = useState<Record<string, any> | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
-  const [workflow, setWorkflow] = useState<any>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [s, w] = await Promise.all([
-        adminApi.getTenantSettings(),
-        adminApi.getExpenseWorkflow().catch(() => null),
-      ]);
+      const [s, w] = await Promise.all([adminApi.getTenantSettings(), adminApi.getExpenseWorkflow()]);
       setSettings(s);
       setWorkflow(w);
-    } finally {
-      setLoading(false);
-    }
+    } finally { setLoading(false); }
   }, []);
 
   useEffect(() => { load(); }, [load]);
 
-  const handleSaveSettings = async () => {
-    if (!settings) return;
+  const handleSave = async () => {
+    if (!settings || !workflow) return;
     setSaving(true);
+    setSaved(false);
     try {
-      await adminApi.updateTenantSettings(settings);
+      await Promise.all([adminApi.updateTenantSettings(settings), adminApi.saveExpenseWorkflow(workflow as any)]);
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
-    } finally {
-      setSaving(false);
-    }
+    } finally { setSaving(false); }
   };
 
-  const handleSaveWorkflow = async () => {
-    if (!workflow) return;
-    setSaving(true);
-    try {
-      await adminApi.saveExpenseWorkflow(workflow);
-      setSaved(true);
-      setTimeout(() => setSaved(false), 3000);
-    } finally {
-      setSaving(false);
-    }
-  };
+  if (loading) return <LoadingSkeleton variant="detail" />;
+  if (!settings || !workflow) return null;
 
-  if (loading || !settings) {
-    return <Typography color="text.secondary">{t('common.loading')}</Typography>;
-  }
+  const updateSetting = (key: string, value: any) => setSettings((s: any) => ({ ...s, [key]: value }));
+  const updateWorkflow = (key: string, value: any) => setWorkflow((w: any) => ({ ...w, [key]: value }));
 
   return (
     <Box>
-      {saved && <Alert severity="success" sx={{ mb: 2 }}>{t('common.saved')}</Alert>}
+      {saved && <Alert severity="success" sx={{ mb: 2 }}>{t('admin.settingsSaved', 'Settings saved successfully')}</Alert>}
 
       <Grid container spacing={3}>
         {/* Tenant Settings */}
         <Grid item xs={12} md={6}>
           <Card>
-            <CardHeader title={t('admin.tenantSettings')} />
+            <CardHeader title={t('admin.tenantSettings', 'Tenant Settings')} />
             <CardContent>
-              <Stack spacing={2}>
-                <TextField
-                  label={t('admin.firmName')}
-                  fullWidth
-                  value={settings.firmName || ''}
-                  onChange={e => setSettings(s => s ? { ...s, firmName: e.target.value } : s)}
-                />
-                <TextField
-                  label={t('admin.timezone')}
-                  fullWidth
-                  value={settings.timezone || ''}
-                  onChange={e => setSettings(s => s ? { ...s, timezone: e.target.value } : s)}
-                />
-                <TextField
-                  label={t('admin.currency')}
-                  fullWidth
-                  value={settings.defaultCurrency || ''}
-                  onChange={e => setSettings(s => s ? { ...s, defaultCurrency: e.target.value } : s)}
-                />
-                <TextField
-                  label={t('admin.invoicePrefix')}
-                  fullWidth
-                  value={settings.invoicePrefix || ''}
-                  onChange={e => setSettings(s => s ? { ...s, invoicePrefix: e.target.value } : s)}
-                />
-                <TextField
-                  label="Invoice Footer"
-                  fullWidth
-                  multiline
-                  rows={2}
-                  value={settings.invoiceFooter || ''}
-                  onChange={e => setSettings(s => s ? { ...s, invoiceFooter: e.target.value } : s)}
-                />
-                <FormControlLabel
-                  control={
-                    <Switch
-                      checked={settings.autoScan ?? true}
-                      onChange={e => setSettings(s => s ? { ...s, autoScan: e.target.checked } : s)}
-                    />
-                  }
-                  label="Auto-scan uploaded documents"
-                />
-                <Button
-                  variant="contained"
-                  startIcon={<SaveIcon />}
-                  onClick={handleSaveSettings}
-                  disabled={saving}
-                >
-                  {t('common.save')}
-                </Button>
+              <Stack spacing={2.5}>
+                <TextField label={t('admin.firmName', 'Firm Name')} fullWidth value={settings.firmName ?? settings.firm_name ?? ''} onChange={e => updateSetting('firmName', e.target.value)} />
+                <TextField label={t('admin.timezone', 'Timezone')} fullWidth value={settings.timezone ?? ''} onChange={e => updateSetting('timezone', e.target.value)} />
+                <TextField label={t('admin.defaultCurrency', 'Default Currency')} fullWidth value={settings.defaultCurrency ?? settings.default_currency ?? ''} onChange={e => updateSetting('defaultCurrency', e.target.value)} />
+                <TextField label={t('admin.invoicePrefix', 'Invoice Prefix')} fullWidth value={settings.invoicePrefix ?? settings.invoice_prefix ?? ''} onChange={e => updateSetting('invoicePrefix', e.target.value)} />
+                <TextField label={t('admin.invoiceFooter', 'Invoice Footer')} fullWidth multiline rows={3} value={settings.invoiceFooter ?? settings.invoice_footer ?? ''} onChange={e => updateSetting('invoiceFooter', e.target.value)} />
+                <FormControlLabel control={<Switch checked={!!settings.autoScan} onChange={e => updateSetting('autoScan', e.target.checked)} />} label={t('admin.autoScan', 'Auto-Scan Documents')} />
               </Stack>
             </CardContent>
           </Card>
@@ -140,53 +70,23 @@ export default function SettingsTab() {
         {/* Expense Approval Workflow */}
         <Grid item xs={12} md={6}>
           <Card>
-            <CardHeader title={t('admin.expenseWorkflow')} />
+            <CardHeader title={t('admin.expenseWorkflow', 'Expense Approval Workflow')} />
             <CardContent>
-              {workflow ? (
-                <Stack spacing={2}>
-                  <FormControlLabel
-                    control={
-                      <Switch
-                        checked={workflow.requiresApproval ?? true}
-                        onChange={e => setWorkflow((w: any) => ({ ...w, requiresApproval: e.target.checked }))}
-                      />
-                    }
-                    label="Require approval"
-                  />
-                  <TextField
-                    label="Auto-approve threshold ($)"
-                    type="number"
-                    fullWidth
-                    value={workflow.autoApproveThreshold ?? 0}
-                    onChange={e => setWorkflow((w: any) => ({ ...w, autoApproveThreshold: Number(e.target.value) }))}
-                  />
-                  <TextField
-                    label="Approver Roles (comma-separated)"
-                    fullWidth
-                    value={workflow.approverRoles?.join(', ') || ''}
-                    onChange={e => setWorkflow((w: any) => ({
-                      ...w,
-                      approverRoles: e.target.value.split(',').map((s: string) => s.trim()).filter(Boolean),
-                    }))}
-                  />
-                  <Button
-                    variant="contained"
-                    startIcon={<SaveIcon />}
-                    onClick={handleSaveWorkflow}
-                    disabled={saving}
-                  >
-                    {t('common.save')}
-                  </Button>
-                </Stack>
-              ) : (
-                <Typography variant="body2" color="text.secondary">
-                  No workflow configuration found
-                </Typography>
-              )}
+              <Stack spacing={2.5}>
+                <FormControlLabel control={<Switch checked={!!workflow.requiresApproval} onChange={e => updateWorkflow('requiresApproval', e.target.checked)} />} label={t('admin.requiresApproval', 'Requires Approval')} />
+                <TextField label={t('admin.autoApproveThreshold', 'Auto-Approve Threshold')} type="number" fullWidth value={workflow.autoApproveThreshold ?? ''} onChange={e => updateWorkflow('autoApproveThreshold', Number(e.target.value))} />
+                <TextField label={t('admin.approverRoles', 'Approver Roles (comma-separated)')} fullWidth value={workflow.approverRoles ?? ''} onChange={e => updateWorkflow('approverRoles', e.target.value)} />
+              </Stack>
             </CardContent>
           </Card>
         </Grid>
       </Grid>
+
+      <Stack direction="row" justifyContent="flex-end" mt={3}>
+        <Button variant="contained" startIcon={<SaveIcon />} onClick={handleSave} disabled={saving}>
+          {saving ? t('common.saving', 'Saving…') : t('common.save', 'Save')}
+        </Button>
+      </Stack>
     </Box>
   );
 }

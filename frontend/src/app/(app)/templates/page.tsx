@@ -3,79 +3,52 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
-  Box,
-  Button,
-  Card,
-  Chip,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogTitle,
-  IconButton,
-  MenuItem,
-  Stack,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  TextField,
-  Tooltip,
-  Typography,
+  Box, Button, Dialog, DialogTitle, DialogContent, DialogActions,
+  IconButton, MenuItem, Stack, TextField, Tooltip, Typography,
 } from '@mui/material';
 import {
-  Add as AddIcon,
-  Refresh as RefreshIcon,
-  Article as TemplateIcon,
-  Preview as PreviewIcon,
+  Add as AddIcon, Visibility as PreviewIcon, Block as DeactivateIcon,
 } from '@mui/icons-material';
 import { templateApi } from '@/api';
-import type { DocumentTemplate, DocumentTemplateCategory } from '@/types';
+import type { DocumentTemplate } from '@/types';
 import { useAuth } from '@/context/AuthContext';
+import PageHeader from '@/components/common/PageHeader';
+import DataGrid, { type Column } from '@/components/common/DataGrid';
+import DrawerForm from '@/components/common/DrawerForm';
+import StatusBadge from '@/components/common/StatusBadge';
 
-const CATEGORIES: DocumentTemplateCategory[] = ['Contract', 'Motion', 'Letter', 'Filing', 'Report', 'Other'];
+const CATEGORIES = ['Contract', 'Motion', 'Letter', 'Filing', 'Report', 'Other'] as const;
 
 export default function TemplatesPage() {
   const { t } = useTranslation();
   const { hasAnyRole } = useAuth();
+  const canManage = hasAnyRole('Lawyer', 'TenantAdmin', 'SystemAdmin');
+
   const [templates, setTemplates] = useState<DocumentTemplate[]>([]);
   const [loading, setLoading] = useState(true);
-  const [cursor, setCursor] = useState<string | null>(null);
-  const [hasMore, setHasMore] = useState(false);
-  const [dialogOpen, setDialogOpen] = useState(false);
+  const [category, setCategory] = useState<string>('');
+
+  // Drawer
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [form, setForm] = useState({ name: '', category: 'Contract', description: '', template_body: '' });
+
+  // Preview
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewHtml, setPreviewHtml] = useState('');
-  const [previewTemplateId, setPreviewTemplateId] = useState<string | null>(null);
-  const [form, setForm] = useState({
-    name: '',
-    category: 'Letter' as DocumentTemplateCategory,
-    description: '',
-    template_body: '',
-  });
-  const [saving, setSaving] = useState(false);
-  const [categoryFilter, setCategoryFilter] = useState('');
+  const [previewTitle, setPreviewTitle] = useState('');
 
-  const load = useCallback(async (cur?: string | null) => {
+  const load = useCallback(async () => {
     setLoading(true);
     try {
-      const params: Record<string, string | number | boolean | undefined> = {
-        cursor: cur || undefined,
-        limit: 20,
-      };
-      if (categoryFilter) params.category = categoryFilter;
-      const res = await templateApi.list(params);
-      if (cur) {
-        setTemplates(prev => [...prev, ...res.data]);
-      } else {
-        setTemplates(res.data);
-      }
-      setCursor(res.nextCursor);
-      setHasMore(!!res.nextCursor);
+      const params: Record<string, unknown> = { limit: 100 };
+      if (category) params.category = category;
+      const res = await templateApi.list(params as any);
+      setTemplates(res.data);
     } finally {
       setLoading(false);
     }
-  }, [categoryFilter]);
+  }, [category]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -87,177 +60,179 @@ export default function TemplatesPage() {
         category: form.category,
         description: form.description || undefined,
         template_body: form.template_body,
-      });
-      setDialogOpen(false);
-      setForm({ name: '', category: 'Letter', description: '', template_body: '' });
+      } as any);
+      setDrawerOpen(false);
+      setForm({ name: '', category: 'Contract', description: '', template_body: '' });
       load();
     } finally {
       setSaving(false);
     }
   };
 
-  const handlePreview = async (templateId: string) => {
-    setPreviewTemplateId(templateId);
+  const handlePreview = async (tpl: DocumentTemplate) => {
     try {
-      const res = await templateApi.render(templateId, {});
-      setPreviewHtml(res.rendered);
+      const html = await templateApi.render(tpl.id, {});
+      setPreviewHtml(typeof html === 'string' ? html : (html as any)?.data ?? '');
+      setPreviewTitle(tpl.name);
       setPreviewOpen(true);
     } catch {
-      setPreviewHtml('Error rendering template. Some variables may be required.');
+      setPreviewHtml('<p>Could not render preview.</p>');
+      setPreviewTitle(tpl.name);
       setPreviewOpen(true);
     }
   };
 
   const handleDeactivate = async (id: string) => {
-    try {
-      await templateApi.deactivate(id);
-      load();
-    } catch {
-      // error handled
-    }
+    await templateApi.deactivate(id);
+    load();
   };
 
-  const canManage = hasAnyRole('Lawyer', 'TenantAdmin', 'SystemAdmin');
+  const columns: Column<DocumentTemplate>[] = [
+    { field: 'name', headerName: t('templates.name', 'Name'), flex: 2, sortable: true },
+    {
+      field: 'category',
+      headerName: t('templates.category', 'Category'),
+      width: 140,
+      renderCell: (row) => <StatusBadge status={row.category} variant="outlined" />,
+    },
+    { field: 'description', headerName: t('common.description', 'Description'), flex: 2 },
+    {
+      field: 'is_active',
+      headerName: t('templates.status', 'Status'),
+      width: 120,
+      renderCell: (row) => (
+        <StatusBadge status={(row as any).is_active !== false ? 'Active' : 'Inactive'} />
+      ),
+    },
+    {
+      field: 'created_at',
+      headerName: t('common.createdAt', 'Created'),
+      width: 150,
+      sortable: true,
+      renderCell: (row) => new Date(row.created_at).toLocaleDateString(),
+    },
+    {
+      field: 'actions',
+      headerName: '',
+      width: 100,
+      renderCell: (row) => (
+        <Stack direction="row" spacing={0.5}>
+          <Tooltip title={t('templates.preview', 'Preview')}>
+            <IconButton size="small" onClick={(e) => { e.stopPropagation(); handlePreview(row); }}>
+              <PreviewIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
+          {canManage && (row as any).is_active !== false && (
+            <Tooltip title={t('templates.deactivate', 'Deactivate')}>
+              <IconButton size="small" color="warning" onClick={(e) => { e.stopPropagation(); handleDeactivate(row.id); }}>
+                <DeactivateIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
+          )}
+        </Stack>
+      ),
+    },
+  ];
 
   return (
     <Box>
-      <Stack direction="row" justifyContent="space-between" alignItems="center" mb={2}>
-        <Typography variant="h5" fontWeight={600}>
-          <TemplateIcon sx={{ mr: 1, verticalAlign: 'middle' }} />
-          {t('nav.templates', 'Document Templates')}
-        </Typography>
-        <Stack direction="row" spacing={1}>
-          <TextField
-            select
-            size="small"
-            label={t('template.category', 'Category')}
-            value={categoryFilter}
-            onChange={e => setCategoryFilter(e.target.value)}
-            sx={{ minWidth: 140 }}
-          >
-            <MenuItem value="">All</MenuItem>
-            {CATEGORIES.map(c => <MenuItem key={c} value={c}>{c}</MenuItem>)}
-          </TextField>
-          <Tooltip title={t('common.refresh', 'Refresh')}>
-            <IconButton onClick={() => load()}>
-              <RefreshIcon />
-            </IconButton>
-          </Tooltip>
-          {canManage && (
-            <Button variant="contained" startIcon={<AddIcon />} onClick={() => setDialogOpen(true)}>
-              {t('template.add', 'New Template')}
+      <PageHeader
+        title={t('templates.title', 'Document Templates')}
+        subtitle={t('templates.subtitle', 'Manage reusable document templates')}
+        breadcrumbs={[{ label: t('nav.templates', 'Templates') }]}
+        actions={
+          canManage ? (
+            <Button variant="contained" startIcon={<AddIcon />} onClick={() => setDrawerOpen(true)}>
+              {t('templates.create', 'New Template')}
             </Button>
-          )}
-        </Stack>
+          ) : undefined
+        }
+      />
+
+      {/* Category filter */}
+      <Stack direction="row" spacing={2} sx={{ mb: 2, maxWidth: 280 }}>
+        <TextField
+          select fullWidth size="small"
+          value={category}
+          label={t('templates.category', 'Category')}
+          onChange={e => setCategory(e.target.value)}
+        >
+          <MenuItem value="">{t('common.all', 'All')}</MenuItem>
+          {CATEGORIES.map(c => <MenuItem key={c} value={c}>{c}</MenuItem>)}
+        </TextField>
       </Stack>
 
-      <Card>
-        <TableContainer>
-          <Table>
-            <TableHead>
-              <TableRow>
-                <TableCell>{t('template.name', 'Name')}</TableCell>
-                <TableCell>{t('template.category', 'Category')}</TableCell>
-                <TableCell>{t('template.description', 'Description')}</TableCell>
-                <TableCell>{t('template.status', 'Status')}</TableCell>
-                <TableCell>{t('common.createdAt', 'Created')}</TableCell>
-                <TableCell>{t('common.actions', 'Actions')}</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {templates.map(tpl => (
-                <TableRow key={tpl.id} hover>
-                  <TableCell>
-                    <Typography variant="body2" fontWeight={500}>{tpl.name}</Typography>
-                  </TableCell>
-                  <TableCell>
-                    <Chip label={tpl.category} size="small" variant="outlined" />
-                  </TableCell>
-                  <TableCell>{tpl.description || '—'}</TableCell>
-                  <TableCell>
-                    <Chip
-                      label={tpl.is_active ? 'Active' : 'Inactive'}
-                      size="small"
-                      color={tpl.is_active ? 'success' : 'default'}
-                    />
-                  </TableCell>
-                  <TableCell>{new Date(tpl.created_at).toLocaleDateString()}</TableCell>
-                  <TableCell>
-                    <Stack direction="row" spacing={0.5}>
-                      <Tooltip title="Preview">
-                        <IconButton size="small" onClick={() => handlePreview(tpl.id)}>
-                          <PreviewIcon fontSize="small" />
-                        </IconButton>
-                      </Tooltip>
-                      {canManage && tpl.is_active && (
-                        <Button size="small" color="error" onClick={() => handleDeactivate(tpl.id)}>
-                          Deactivate
-                        </Button>
-                      )}
-                    </Stack>
-                  </TableCell>
-                </TableRow>
-              ))}
-              {templates.length === 0 && !loading && (
-                <TableRow>
-                  <TableCell colSpan={6} align="center">
-                    <Typography variant="body2" color="text.secondary" py={4}>
-                      {t('common.noData', 'No data found')}
-                    </Typography>
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </TableContainer>
-        {hasMore && (
-          <Box textAlign="center" py={2}>
-            <Button onClick={() => load(cursor)} disabled={loading}>
-              {t('common.loadMore', 'Load More')}
+      <DataGrid<DocumentTemplate>
+        columns={columns}
+        rows={templates}
+        loading={loading}
+        getRowId={(r) => r.id}
+        searchPlaceholder={t('templates.search', 'Search templates…')}
+        onRefresh={load}
+        emptyMessage={t('templates.empty', 'No templates found')}
+        emptyAction={
+          canManage ? (
+            <Button variant="contained" startIcon={<AddIcon />} onClick={() => setDrawerOpen(true)}>
+              {t('templates.create', 'New Template')}
             </Button>
-          </Box>
-        )}
-      </Card>
+          ) : undefined
+        }
+      />
 
-      {/* Create Template Dialog */}
-      <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} maxWidth="md" fullWidth>
-        <DialogTitle>{t('template.add', 'New Template')}</DialogTitle>
-        <DialogContent>
-          <Stack spacing={2} mt={1}>
-            <TextField label="Template Name" fullWidth required value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} />
-            <TextField label="Category" select fullWidth value={form.category} onChange={e => setForm(f => ({ ...f, category: e.target.value as DocumentTemplateCategory }))}>
-              {CATEGORIES.map(c => <MenuItem key={c} value={c}>{c}</MenuItem>)}
-            </TextField>
-            <TextField label="Description" fullWidth value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} />
-            <TextField
-              label="Template Body (Handlebars)"
-              fullWidth
-              multiline
-              rows={10}
-              required
-              value={form.template_body}
-              onChange={e => setForm(f => ({ ...f, template_body: e.target.value }))}
-              helperText="Use {{variableName}} for dynamic content"
-              sx={{ fontFamily: 'monospace' }}
-            />
-          </Stack>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setDialogOpen(false)}>{t('common.cancel', 'Cancel')}</Button>
-          <Button variant="contained" onClick={handleCreate} disabled={saving || !form.name || !form.template_body}>{t('common.save', 'Save')}</Button>
-        </DialogActions>
-      </Dialog>
+      {/* ----- Create Template Drawer ----- */}
+      <DrawerForm
+        open={drawerOpen}
+        title={t('templates.create', 'New Template')}
+        width={600}
+        onClose={() => setDrawerOpen(false)}
+        onSubmit={handleCreate}
+        loading={saving}
+        submitLabel={t('common.save', 'Save')}
+      >
+        <Stack spacing={2.5}>
+          <TextField
+            label={t('templates.name', 'Name')}
+            fullWidth required
+            value={form.name}
+            onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
+          />
+          <TextField
+            label={t('templates.category', 'Category')}
+            select fullWidth
+            value={form.category}
+            onChange={e => setForm(f => ({ ...f, category: e.target.value }))}
+          >
+            {CATEGORIES.map(c => <MenuItem key={c} value={c}>{c}</MenuItem>)}
+          </TextField>
+          <TextField
+            label={t('common.description', 'Description')}
+            fullWidth multiline rows={2}
+            value={form.description}
+            onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
+          />
+          <TextField
+            label={t('templates.body', 'Template Body')}
+            fullWidth required multiline rows={10}
+            value={form.template_body}
+            onChange={e => setForm(f => ({ ...f, template_body: e.target.value }))}
+            inputProps={{ style: { fontFamily: 'monospace', fontSize: 13 } }}
+            helperText={t('templates.bodyHelp', 'Use Handlebars syntax: {{variableName}}')}
+          />
+        </Stack>
+      </DrawerForm>
 
-      {/* Preview Dialog */}
+      {/* ----- Preview Dialog ----- */}
       <Dialog open={previewOpen} onClose={() => setPreviewOpen(false)} maxWidth="md" fullWidth>
-        <DialogTitle>Template Preview</DialogTitle>
-        <DialogContent>
-          <Box sx={{ whiteSpace: 'pre-wrap', fontFamily: 'serif', p: 2, border: '1px solid', borderColor: 'divider', borderRadius: 1, minHeight: 200 }}>
-            {previewHtml}
-          </Box>
+        <DialogTitle>{previewTitle}</DialogTitle>
+        <DialogContent dividers>
+          <Typography
+            component="div"
+            sx={{ '& *': { maxWidth: '100%' } }}
+            dangerouslySetInnerHTML={{ __html: previewHtml }}
+          />
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setPreviewOpen(false)}>Close</Button>
+          <Button onClick={() => setPreviewOpen(false)}>{t('common.close', 'Close')}</Button>
         </DialogActions>
       </Dialog>
     </Box>

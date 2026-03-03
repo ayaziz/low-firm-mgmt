@@ -1,288 +1,150 @@
 'use client';
 
 import React, { useEffect, useState, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
 import { useTranslation } from 'react-i18next';
+import { useRouter } from 'next/navigation';
 import {
-  Box,
-  Button,
-  Card,
-  Chip,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogTitle,
-  IconButton,
-  MenuItem,
-  Stack,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  TextField,
-  Tooltip,
-  Typography,
+  Box, Button, IconButton, Stack, Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
+  TextField, MenuItem, Typography, Paper,
 } from '@mui/material';
-import {
-  Add as AddIcon,
-  Refresh as RefreshIcon,
-  Visibility as ViewIcon,
-} from '@mui/icons-material';
+import { Add as AddIcon, Delete as DeleteIcon, Refresh as RefreshIcon } from '@mui/icons-material';
 import { accountingApi, caseApi, customerApi } from '@/api';
-import type { Invoice, Case, Customer } from '@/types';
+import DrawerForm from '@/components/common/DrawerForm';
+import EmptyState from '@/components/common/EmptyState';
+import LoadingSkeleton from '@/components/common/LoadingSkeleton';
+import StatusBadge from '@/components/common/StatusBadge';
 
-const STATUS_COLORS: Record<string, 'default' | 'info' | 'warning' | 'success' | 'error'> = {
-  Draft: 'default',
-  Finalized: 'info',
-  Sent: 'warning',
-  Paid: 'success',
-  Overdue: 'error',
-  Void: 'default',
-};
+interface LineItem { description: string; quantity: number; unitPrice: number; }
 
 export default function InvoicesTab() {
   const { t } = useTranslation();
   const router = useRouter();
-  const [invoices, setInvoices] = useState<Invoice[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [invoices, setInvoices] = useState<any[]>([]);
   const [cursor, setCursor] = useState<string | null>(null);
   const [hasMore, setHasMore] = useState(false);
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const [cases, setCases] = useState<Case[]>([]);
-  const [customers, setCustomers] = useState<Customer[]>([]);
-  const [form, setForm] = useState({
-    caseId: '',
-    customerId: '',
-    dueDate: '',
-    lineItems: [{ description: '', quantity: 1, unitPrice: 0 }],
-  });
+  const [loading, setLoading] = useState(true);
+  const [cases, setCases] = useState<any[]>([]);
+  const [customers, setCustomers] = useState<any[]>([]);
+  const [drawerOpen, setDrawerOpen] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [form, setForm] = useState({ caseId: '', customerId: '', dueDate: '' });
+  const [lineItems, setLineItems] = useState<LineItem[]>([{ description: '', quantity: 1, unitPrice: 0 }]);
 
-  const load = useCallback(async (cur?: string | null) => {
+  const load = useCallback(async (c?: string | null) => {
     setLoading(true);
     try {
-      const res = await accountingApi.listInvoices({ cursor: cur || undefined, limit: 20 });
-      if (cur) {
-        setInvoices(prev => [...prev, ...res.data]);
-      } else {
-        setInvoices(res.data);
-      }
-      setCursor(res.nextCursor);
-      setHasMore(!!res.nextCursor);
-    } finally {
-      setLoading(false);
-    }
+      const res = await accountingApi.listInvoices({ cursor: c ?? undefined, limit: 20 });
+      const list = Array.isArray(res) ? res : res.data ?? [];
+      if (c) setInvoices(prev => [...prev, ...list]);
+      else setInvoices(list);
+      setCursor(res.nextCursor ?? (res as any).next_cursor ?? null);
+      setHasMore(!!(res.nextCursor ?? (res as any).next_cursor));
+    } finally { setLoading(false); }
   }, []);
 
   useEffect(() => { load(); }, [load]);
 
-  const openCreateDialog = async () => {
-    setDialogOpen(true);
-    const [casesRes, custRes] = await Promise.all([
-      caseApi.list({ limit: 100 }).catch(() => ({ data: [] as Case[], nextCursor: null })),
-      customerApi.list({ limit: 100 }).catch(() => ({ data: [] as Customer[], nextCursor: null })),
-    ]);
-    setCases(casesRes.data);
-    setCustomers(custRes.data);
+  useEffect(() => {
+    Promise.all([caseApi.list({ limit: 100 }), customerApi.list({ limit: 100 })]).then(([c, cu]) => {
+      setCases(Array.isArray(c) ? c : c.data ?? []);
+      setCustomers(Array.isArray(cu) ? cu : cu.data ?? []);
+    });
+  }, []);
+
+  const openDrawer = () => {
+    setForm({ caseId: '', customerId: '', dueDate: '' });
+    setLineItems([{ description: '', quantity: 1, unitPrice: 0 }]);
+    setDrawerOpen(true);
   };
 
-  const addLineItem = () => {
-    setForm(f => ({
-      ...f,
-      lineItems: [...f.lineItems, { description: '', quantity: 1, unitPrice: 0 }],
-    }));
+  const updateLine = (i: number, key: keyof LineItem, value: any) => {
+    setLineItems(prev => prev.map((l, idx) => idx === i ? { ...l, [key]: value } : l));
   };
 
-  const updateLineItem = (idx: number, field: string, value: string | number) => {
-    setForm(f => ({
-      ...f,
-      lineItems: f.lineItems.map((li, i) => (i === idx ? { ...li, [field]: value } : li)),
-    }));
-  };
+  const addLine = () => setLineItems(prev => [...prev, { description: '', quantity: 1, unitPrice: 0 }]);
+  const removeLine = (i: number) => setLineItems(prev => prev.filter((_, idx) => idx !== i));
 
-  const removeLineItem = (idx: number) => {
-    setForm(f => ({
-      ...f,
-      lineItems: f.lineItems.filter((_, i) => i !== idx),
-    }));
-  };
+  const total = lineItems.reduce((s, l) => s + l.quantity * l.unitPrice, 0);
 
   const handleCreate = async () => {
     setSaving(true);
     try {
-      await accountingApi.createInvoice({
-        caseId: form.caseId,
-        customerId: form.customerId,
-        dueDate: form.dueDate,
-        lineItems: form.lineItems.map(li => ({
-          description: li.description,
-          quantity: Number(li.quantity),
-          unitPrice: Number(li.unitPrice),
-        })),
-      });
-      setDialogOpen(false);
-      setForm({ caseId: '', customerId: '', dueDate: '', lineItems: [{ description: '', quantity: 1, unitPrice: 0 }] });
+      await accountingApi.createInvoice({ caseId: form.caseId, customerId: form.customerId, dueDate: form.dueDate, lineItems });
+      setDrawerOpen(false);
       load();
-    } finally {
-      setSaving(false);
-    }
+    } finally { setSaving(false); }
   };
-
-  const total = (inv: Invoice) =>
-    inv.line_items?.reduce((s, li) => s + li.quantity * li.unit_price, 0) ?? inv.total_amount ?? 0;
 
   return (
     <Box>
-      <Stack direction="row" justifyContent="flex-end" spacing={1} mb={2}>
-        <Tooltip title={t('common.refresh')}>
-          <IconButton onClick={() => load()}>
-            <RefreshIcon />
-          </IconButton>
-        </Tooltip>
-        <Button variant="contained" startIcon={<AddIcon />} onClick={openCreateDialog}>
-          {t('accounting.createInvoice')}
-        </Button>
+      <Stack direction="row" spacing={2} mb={2} justifyContent="flex-end">
+        <IconButton onClick={() => load()}><RefreshIcon /></IconButton>
+        <Button variant="contained" startIcon={<AddIcon />} onClick={openDrawer}>{t('common.create', 'Create')}</Button>
       </Stack>
 
-      <Card>
-        <TableContainer>
-          <Table>
-            <TableHead>
-              <TableRow>
-                <TableCell>{t('accounting.invoiceNumber')}</TableCell>
-                <TableCell>{t('accounting.amount')}</TableCell>
-                <TableCell>{t('accounting.status')}</TableCell>
-                <TableCell>{t('accounting.dueDate')}</TableCell>
-                <TableCell>{t('common.createdAt')}</TableCell>
-                <TableCell width={60} />
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {invoices.map(inv => (
-                <TableRow
-                  key={inv.id}
-                  hover
-                  sx={{ cursor: 'pointer' }}
-                  onClick={() => router.push(`/accounting/invoices/${inv.id}`)}
-                >
-                  <TableCell sx={{ fontFamily: 'monospace' }}>{inv.invoice_number}</TableCell>
-                  <TableCell>${total(inv).toFixed(2)}</TableCell>
-                  <TableCell>
-                    <Chip label={inv.status} size="small" color={STATUS_COLORS[inv.status] || 'default'} />
-                  </TableCell>
-                  <TableCell>{inv.due_date ? new Date(inv.due_date).toLocaleDateString() : '—'}</TableCell>
-                  <TableCell>{new Date(inv.created_at).toLocaleDateString()}</TableCell>
-                  <TableCell>
-                    <IconButton size="small"><ViewIcon fontSize="small" /></IconButton>
-                  </TableCell>
-                </TableRow>
-              ))}
-              {invoices.length === 0 && !loading && (
+      {loading && invoices.length === 0 ? <LoadingSkeleton variant="table" /> : invoices.length > 0 ? (
+        <>
+          <TableContainer component={Paper}>
+            <Table size="small">
+              <TableHead>
                 <TableRow>
-                  <TableCell colSpan={6} align="center">
-                    <Typography variant="body2" color="text.secondary" py={4}>
-                      {t('common.noData')}
-                    </Typography>
-                  </TableCell>
+                  <TableCell>#</TableCell>
+                  <TableCell>{t('accounting.customer', 'Customer')}</TableCell>
+                  <TableCell>{t('accounting.amount', 'Amount')}</TableCell>
+                  <TableCell>{t('common.status', 'Status')}</TableCell>
+                  <TableCell>{t('accounting.dueDate', 'Due Date')}</TableCell>
                 </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </TableContainer>
-        {hasMore && (
-          <Box textAlign="center" py={2}>
-            <Button onClick={() => load(cursor)} disabled={loading}>{t('common.loadMore')}</Button>
-          </Box>
-        )}
-      </Card>
+              </TableHead>
+              <TableBody>
+                {invoices.map(inv => (
+                  <TableRow key={inv.id} hover sx={{ cursor: 'pointer' }} onClick={() => router.push(`/accounting/invoices/${inv.id}`)}>
+                    <TableCell>{inv.invoice_number ?? inv.id?.slice(0, 8)}</TableCell>
+                    <TableCell>{inv.customer_name ?? inv.customerId}</TableCell>
+                    <TableCell>{Number(inv.total_amount ?? inv.total ?? 0).toFixed(2)}</TableCell>
+                    <TableCell><StatusBadge status={inv.status ?? 'Draft'} /></TableCell>
+                    <TableCell>{inv.due_date ? new Date(inv.due_date).toLocaleDateString() : '—'}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
+          {hasMore && (
+            <Stack alignItems="center" mt={2}>
+              <Button onClick={() => load(cursor)} disabled={loading}>{t('common.loadMore', 'Load more')}</Button>
+            </Stack>
+          )}
+        </>
+      ) : (
+        <EmptyState icon={<AddIcon />} title={t('accounting.noInvoices', 'No invoices')} message={t('accounting.noInvoicesMsg', 'Create your first invoice to get started')} />
+      )}
 
-      {/* Create Invoice Dialog */}
-      <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} maxWidth="md" fullWidth>
-        <DialogTitle>{t('accounting.createInvoice')}</DialogTitle>
-        <DialogContent>
-          <Stack spacing={2} mt={1}>
-            <TextField
-              label={t('customer.title')}
-              select
-              fullWidth
-              required
-              value={form.customerId}
-              onChange={e => setForm(f => ({ ...f, customerId: e.target.value }))}
-            >
-              {customers.map(c => (
-                <MenuItem key={c.id} value={c.id}>{c.name}</MenuItem>
-              ))}
-            </TextField>
-            <TextField
-              label={t('case.title')}
-              select
-              fullWidth
-              required
-              value={form.caseId}
-              onChange={e => setForm(f => ({ ...f, caseId: e.target.value }))}
-            >
-              {cases.map(c => (
-                <MenuItem key={c.id} value={c.id}>{c.title} ({c.system_case_ref})</MenuItem>
-              ))}
-            </TextField>
-            <TextField
-              label={t('accounting.dueDate')}
-              type="date"
-              fullWidth
-              InputLabelProps={{ shrink: true }}
-              value={form.dueDate}
-              onChange={e => setForm(f => ({ ...f, dueDate: e.target.value }))}
-            />
-            <Typography variant="subtitle2">{t('accounting.lineItems')}</Typography>
-            {form.lineItems.map((li, idx) => (
-              <Stack key={idx} direction="row" spacing={1} alignItems="center">
-                <TextField
-                  label={t('accounting.description')}
-                  size="small"
-                  value={li.description}
-                  onChange={e => updateLineItem(idx, 'description', e.target.value)}
-                  sx={{ flex: 2 }}
-                />
-                <TextField
-                  label={t('accounting.quantity')}
-                  type="number"
-                  size="small"
-                  value={li.quantity}
-                  onChange={e => updateLineItem(idx, 'quantity', e.target.value)}
-                  sx={{ width: 100 }}
-                />
-                <TextField
-                  label={t('accounting.unitPrice')}
-                  type="number"
-                  size="small"
-                  value={li.unitPrice}
-                  onChange={e => updateLineItem(idx, 'unitPrice', e.target.value)}
-                  sx={{ width: 120 }}
-                />
-                <Typography variant="body2" sx={{ width: 80 }}>
-                  ${(Number(li.quantity) * Number(li.unitPrice)).toFixed(2)}
-                </Typography>
-                {form.lineItems.length > 1 && (
-                  <Button size="small" color="error" onClick={() => removeLineItem(idx)}>✕</Button>
-                )}
-              </Stack>
-            ))}
-            <Button size="small" onClick={addLineItem}>{t('common.add')} +</Button>
-          </Stack>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setDialogOpen(false)}>{t('common.cancel')}</Button>
-          <Button
-            variant="contained"
-            onClick={handleCreate}
-            disabled={saving || !form.caseId || form.lineItems.every(li => !li.description)}
-          >
-            {t('common.create')}
-          </Button>
-        </DialogActions>
-      </Dialog>
+      <DrawerForm open={drawerOpen} title={t('accounting.createInvoice', 'Create Invoice')} width={560} onClose={() => setDrawerOpen(false)} onSubmit={handleCreate} loading={saving}>
+        <Stack spacing={2.5}>
+          <TextField select label={t('accounting.case', 'Case')} fullWidth value={form.caseId} onChange={e => setForm(f => ({ ...f, caseId: e.target.value }))}>
+            {cases.map(c => <MenuItem key={c.id} value={c.id}>{c.title ?? c.case_number}</MenuItem>)}
+          </TextField>
+          <TextField select label={t('accounting.customer', 'Customer')} fullWidth value={form.customerId} onChange={e => setForm(f => ({ ...f, customerId: e.target.value }))}>
+            {customers.map(c => <MenuItem key={c.id} value={c.id}>{c.name}</MenuItem>)}
+          </TextField>
+          <TextField label={t('accounting.dueDate', 'Due Date')} type="date" fullWidth InputLabelProps={{ shrink: true }} value={form.dueDate} onChange={e => setForm(f => ({ ...f, dueDate: e.target.value }))} />
+
+          <Typography variant="subtitle2">{t('accounting.lineItems', 'Line Items')}</Typography>
+          {lineItems.map((li, i) => (
+            <Stack key={i} direction="row" spacing={1} alignItems="center">
+              <TextField label="Description" size="small" sx={{ flex: 2 }} value={li.description} onChange={e => updateLine(i, 'description', e.target.value)} />
+              <TextField label="Qty" size="small" type="number" sx={{ width: 80 }} value={li.quantity} onChange={e => updateLine(i, 'quantity', Number(e.target.value))} />
+              <TextField label="Price" size="small" type="number" sx={{ width: 100 }} value={li.unitPrice} onChange={e => updateLine(i, 'unitPrice', Number(e.target.value))} />
+              {lineItems.length > 1 && (
+                <IconButton size="small" color="error" onClick={() => removeLine(i)}><DeleteIcon fontSize="small" /></IconButton>
+              )}
+            </Stack>
+          ))}
+          <Button size="small" startIcon={<AddIcon />} onClick={addLine}>{t('accounting.addLine', 'Add Line')}</Button>
+          <Typography variant="body2" textAlign="right" fontWeight={600}>
+            {t('accounting.total', 'Total')}: {total.toFixed(2)}
+          </Typography>
+        </Stack>
+      </DrawerForm>
     </Box>
   );
 }

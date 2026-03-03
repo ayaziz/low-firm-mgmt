@@ -206,34 +206,35 @@ export interface DocumentVersion {
 
 // ── Accounting ──
 export interface Invoice {
-  id: string;
-  case_id: string;
-  customer_id: string;
-  invoice_number: string;
-  total_amount: number;
-  paid_amount: number;
-  currency: string;
-  status: InvoiceStatus;
-  due_date: string;
-  finalized_at?: string;
-  sent_at?: string;
-  voided_at?: string;
-  notes?: string;
-  line_items?: InvoiceLineItem[];
-  payments?: Payment[];
-  created_at: string;
-  updated_at: string;
-  row_version: string;
-  customer_name?: string;
-  case_title?: string;
+	id: string
+	case_id: string
+	customer_id: string
+	invoice_number: string
+	total_amount: number
+	paid_amount: number
+	currency: string
+	status: InvoiceStatus
+	due_date: string
+	finalized_at?: string
+	sent_at?: string
+	voided_at?: string
+	notes?: string
+	lineItems?: InvoiceLineItem[]
+	payments?: Payment[]
+	created_at: string
+	updated_at: string
+	row_version: string
+	customer_name?: string
+	case_title?: string
 }
 
 export interface InvoiceLineItem {
-  id?: string;
-  description: string;
-  quantity: number;
-  unit_price: number;
-  amount: number;
+	id?: string
+	description: string
+	quantity: number
+	unit_price: number
+	line_total: number
+  tax_rate: number
 }
 
 export interface Payment {
@@ -423,7 +424,7 @@ export interface CalendarEvent {
   location?: string;
   is_all_day: boolean;
   recurrence?: string;
-  created_by: string;
+  recurrence_end_date?: string;
   created_at: string;
   updated_at: string;
   case_title?: string;

@@ -1,7 +1,8 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useRouter } from 'next/navigation';
 import {
   Box,
   Card,
@@ -11,63 +12,132 @@ import {
   List,
   ListItemButton,
   ListItemText,
+  ListItemIcon,
   Chip,
-  Skeleton,
+  Button,
+  Stack,
+  Divider,
 } from '@mui/material';
+import {
+  Gavel as CaseIcon,
+  Notifications as NotifIcon,
+  AttachMoney as MoneyIcon,
+  Timer as TimeIcon,
+  People as PeopleIcon,
+  Event as CalendarIcon,
+  TrendingUp,
+  Description as DocIcon,
+  Warning as WarningIcon,
+  Assignment as TaskIcon,
+} from '@mui/icons-material';
+import { PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip as RechartsTooltip } from 'recharts';
 import { useAuth } from '@/context/AuthContext';
-import { caseApi, accountingApi, notificationApi } from '@/api';
-import type { Case, Invoice } from '@/types'
+import { caseApi, accountingApi, notificationApi, calendarApi, reportApi, timeEntryApi } from '@/api';
+import type { Case, Invoice, CalendarEvent, ReportResult } from '@/types';
+import PageHeader from '@/components/common/PageHeader';
+import KPICard from '@/components/common/KPICard';
+import StatusBadge from '@/components/common/StatusBadge';
+import LoadingSkeleton from '@/components/common/LoadingSkeleton';
+import EmptyState from '@/components/common/EmptyState';
 
-function StatCard({ title, value, color }: { title: string; value: string | number; color?: string }) {
-  return (
-    <Card>
-      <CardContent>
-        <Typography variant="body2" color="text.secondary" gutterBottom>
-          {title}
-        </Typography>
-        <Typography variant="h4" fontWeight={700} color={color || 'text.primary'}>
-          {value}
-        </Typography>
-      </CardContent>
-    </Card>
-  );
-}
+const PIE_COLORS = ['#1B3A5C', '#4A7C59', '#F59E0B', '#EF4444', '#8B5CF6', '#06B6D4'];
 
 export default function DashboardPage() {
   const { t } = useTranslation();
   const { user, hasAnyRole } = useAuth();
+  const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [recentCases, setRecentCases] = useState<Case[]>([]);
   const [recentInvoices, setRecentInvoices] = useState<Invoice[]>([]);
+  const [upcomingEvents, setUpcomingEvents] = useState<CalendarEvent[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
-  const [stats, setStats] = useState({ activeCases: 0, pendingInvoices: 0, overdueInvoices: 0 });
+  const [casesByState, setCasesByState] = useState<Array<{ name: string; value: number }>>([]);
+  const [stats, setStats] = useState({
+    activeCases: 0,
+    pendingInvoices: 0,
+    overdueInvoices: 0,
+    totalReceivable: 0,
+    totalHoursWeek: 0,
+  });
+
+  const isLawyer = hasAnyRole('Lawyer');
+  const isAccountant = hasAnyRole('Accountant');
+  const isAdmin = hasAnyRole('TenantAdmin', 'SystemAdmin');
 
   useEffect(() => {
     async function load() {
       try {
-        const [casesRes, notifRes] = await Promise.all([
+        const promises: Promise<unknown>[] = [
           caseApi.list({ limit: 5 }).catch(() => ({ data: [], cursor: null })),
           notificationApi.getUnreadCount().catch(() => ({ count: 0 })),
-        ]);
+          calendarApi.getMyEvents({ limit: 5 }).catch(() => ({ data: [], cursor: null })),
+        ];
+
+        // Fetch report data for case pie chart
+        promises.push(
+          reportApi.generate('cases-by-state').catch(() => ({ columns: [], rows: [] })),
+        );
+
+        if (hasAnyRole('Accountant', 'TenantAdmin', 'SystemAdmin')) {
+          promises.push(
+            accountingApi.listInvoices({ limit: 10 }).catch(() => ({ data: [], cursor: null })),
+          );
+        }
+
+        if (hasAnyRole('Lawyer', 'TenantAdmin', 'SystemAdmin')) {
+          promises.push(
+            timeEntryApi.summary().catch(() => ({ total_hours: 0, billable_hours: 0, total_amount: 0 })),
+          );
+        }
+
+        const results = await Promise.all(promises);
+
+        const casesRes = results[0] as { data: Case[] };
+        const notifRes = results[1] as { count: number };
+        const eventsRes = results[2] as { data: CalendarEvent[] };
+        const reportRes = results[3] as ReportResult;
 
         setRecentCases(casesRes.data);
         setUnreadCount(notifRes.count);
+        setUpcomingEvents(eventsRes.data || []);
+
+        // Parse pie chart data
+        if (reportRes.data && reportRes.data.length > 0) {
+          const pieData = reportRes.data.map((r: Record<string, unknown>) => ({
+            name: String(r.state || r.name || ''),
+            value: Number(r.count || r.value || 0),
+          }));
+          setCasesByState(pieData);
+        }
 
         const activeCases = casesRes.data.filter(
           (c: Case) => c.state === 'Intake' || c.state === 'Active',
         ).length;
 
+        let pendingInvoices = 0;
+        let overdueInvoices = 0;
+        let totalReceivable = 0;
+
         if (hasAnyRole('Accountant', 'TenantAdmin', 'SystemAdmin')) {
-          const invoicesRes = await accountingApi
-            .listInvoices({ limit: 10 })
-            .catch(() => ({ data: [], cursor: null }));
+          const invoicesRes = results[4] as { data: Invoice[] };
           setRecentInvoices(invoicesRes.data);
-          const pending = invoicesRes.data.filter((i: Invoice) => i.status === 'Sent').length;
-          const overdue = invoicesRes.data.filter((i: Invoice) => i.status === 'Sent' && new Date(i.due_date) < new Date()).length;
-          setStats({ activeCases, pendingInvoices: pending, overdueInvoices: overdue });
-        } else {
-          setStats({ activeCases, pendingInvoices: 0, overdueInvoices: 0 });
+          pendingInvoices = invoicesRes.data.filter((i: Invoice) => i.status === 'Sent').length;
+          overdueInvoices = invoicesRes.data.filter(
+            (i: Invoice) => i.status === 'Sent' && new Date(i.due_date) < new Date(),
+          ).length;
+          totalReceivable = invoicesRes.data
+            .filter((i: Invoice) => i.status === 'Sent' || i.status === 'PartiallyPaid')
+            .reduce((s: number, i: Invoice) => s + (i.total_amount - (i.paid_amount || 0)), 0);
         }
+
+        let totalHoursWeek = 0;
+        const timeSummaryIdx = hasAnyRole('Accountant', 'TenantAdmin', 'SystemAdmin') ? 5 : 4;
+        if (hasAnyRole('Lawyer', 'TenantAdmin', 'SystemAdmin') && results[timeSummaryIdx]) {
+          const summary = results[timeSummaryIdx] as { total_hours?: number };
+          totalHoursWeek = summary.total_hours || 0;
+        }
+
+        setStats({ activeCases, pendingInvoices, overdueInvoices, totalReceivable, totalHoursWeek });
       } finally {
         setLoading(false);
       }
@@ -78,70 +148,139 @@ export default function DashboardPage() {
   if (loading) {
     return (
       <Box>
-        <Typography variant="h5" gutterBottom>
-          {t('dashboard.title')}
-        </Typography>
-        <Grid container spacing={2}>
-          {[1, 2, 3].map(i => (
-            <Grid item xs={12} sm={4} key={i}>
-              <Skeleton variant="rounded" height={100} />
-            </Grid>
-          ))}
-        </Grid>
+        <PageHeader title={t('dashboard.title')} />
+        <LoadingSkeleton variant="cards" columns={4} />
       </Box>
     );
   }
 
   return (
     <Box>
-      <Typography variant="h5" fontWeight={600} gutterBottom>
-        {t('dashboard.title')}
-      </Typography>
-      <Typography variant="body2" color="text.secondary" mb={3}>
-        {t('dashboard.welcome', { name: user?.displayName || '' })}
-      </Typography>
+      <PageHeader
+        title={`${t('dashboard.welcome')}, ${user?.displayName || ''}`}
+        subtitle={new Date().toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+      />
 
-      {/* Stats Row */}
+      {/* KPI Row */}
       <Grid container spacing={2} mb={3}>
-        <Grid item xs={12} sm={4}>
-          <StatCard title={t('dashboard.activeCases')} value={stats.activeCases} color="primary.main" />
+        <Grid item xs={6} sm={3}>
+          <KPICard
+            title={t('dashboard.activeCases')}
+            value={stats.activeCases}
+            icon={<CaseIcon />}
+            color="#1B3A5C"
+            onClick={() => router.push('/cases')}
+          />
         </Grid>
-        <Grid item xs={12} sm={4}>
-          <StatCard title={t('dashboard.notifications')} value={unreadCount} color="warning.main" />
+        <Grid item xs={6} sm={3}>
+          <KPICard
+            title={t('dashboard.notifications')}
+            value={unreadCount}
+            icon={<NotifIcon />}
+            color="#F59E0B"
+            onClick={() => router.push('/notifications')}
+          />
         </Grid>
-        {hasAnyRole('Accountant', 'TenantAdmin', 'SystemAdmin') && (
-          <Grid item xs={12} sm={4}>
-            <StatCard
+        {(isAccountant || isAdmin) && (
+          <Grid item xs={6} sm={3}>
+            <KPICard
               title={t('dashboard.overdueInvoices')}
               value={stats.overdueInvoices}
-              color="error.main"
+              icon={<WarningIcon />}
+              color="#EF4444"
+              trend={stats.overdueInvoices > 0 ? 'up' : 'flat'}
+              trendLabel={stats.overdueInvoices > 0 ? `${stats.overdueInvoices} overdue` : 'None'}
+              onClick={() => router.push('/accounting')}
+            />
+          </Grid>
+        )}
+        {(isLawyer || isAdmin) && (
+          <Grid item xs={6} sm={3}>
+            <KPICard
+              title={t('dashboard.hoursThisWeek')}
+              value={`${stats.totalHoursWeek}h`}
+              icon={<TimeIcon />}
+              color="#4A7C59"
+              onClick={() => router.push('/time-entries')}
+            />
+          </Grid>
+        )}
+        {(isAccountant || isAdmin) && (
+          <Grid item xs={6} sm={3}>
+            <KPICard
+              title={t('dashboard.totalReceivable')}
+              value={`$${stats.totalReceivable.toLocaleString()}`}
+              icon={<MoneyIcon />}
+              color="#8B5CF6"
+              onClick={() => router.push('/accounting')}
             />
           </Grid>
         )}
       </Grid>
 
       <Grid container spacing={3}>
-        {/* Recent Cases */}
-        {hasAnyRole('Lawyer', 'TenantAdmin', 'SystemAdmin') && (
-          <Grid item xs={12} md={6}>
-            <Card>
+        {/* Cases by State - Pie chart */}
+        {casesByState.length > 0 && (
+          <Grid item xs={12} md={4}>
+            <Card sx={{ height: '100%' }}>
               <CardContent>
-                <Typography variant="h6" gutterBottom>
-                  {t('dashboard.recentCases')}
+                <Typography variant="subtitle1" fontWeight={600} gutterBottom>
+                  {t('reports.casesByState')}
                 </Typography>
-                {recentCases.length === 0 ? (
-                  <Typography variant="body2" color="text.secondary">
-                    {t('common.noData')}
+                <Box sx={{ height: 220 }}>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={casesByState}
+                        dataKey="value"
+                        nameKey="name"
+                        cx="50%"
+                        cy="50%"
+                        outerRadius={80}
+                        label={({ name, value }) => `${name}: ${value}`}
+                      >
+                        {casesByState.map((_, idx) => (
+                          <Cell key={idx} fill={PIE_COLORS[idx % PIE_COLORS.length]} />
+                        ))}
+                      </Pie>
+                      <RechartsTooltip />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </Box>
+              </CardContent>
+            </Card>
+          </Grid>
+        )}
+
+        {/* Recent Cases */}
+        {(isLawyer || isAdmin) && (
+          <Grid item xs={12} md={casesByState.length > 0 ? 4 : 6}>
+            <Card sx={{ height: '100%' }}>
+              <CardContent>
+                <Stack direction="row" justifyContent="space-between" alignItems="center" mb={1}>
+                  <Typography variant="subtitle1" fontWeight={600}>
+                    {t('dashboard.recentCases')}
                   </Typography>
+                  <Button size="small" onClick={() => router.push('/cases')}>
+                    {t('common.all')}
+                  </Button>
+                </Stack>
+                {recentCases.length === 0 ? (
+                  <EmptyState message={t('common.noData')} />
                 ) : (
                   <List dense disablePadding>
                     {recentCases.map(c => (
-                      <ListItemButton key={c.id} href={`/cases/${c.id}`}>
+                      <ListItemButton key={c.id} onClick={() => router.push(`/cases/${c.id}`)} sx={{ borderRadius: 1, mb: 0.5 }}>
+                        <ListItemIcon sx={{ minWidth: 32 }}>
+                          <CaseIcon fontSize="small" color="action" />
+                        </ListItemIcon>
                         <ListItemText
                           primary={c.title}
                           secondary={c.system_case_ref}
+                          primaryTypographyProps={{ fontSize: '0.8125rem', fontWeight: 500 }}
+                          secondaryTypographyProps={{ fontSize: '0.75rem' }}
                         />
-                        <Chip label={c.state} size="small" variant="outlined" />
+                        <StatusBadge status={c.state} />
                       </ListItemButton>
                     ))}
                   </List>
@@ -151,38 +290,70 @@ export default function DashboardPage() {
           </Grid>
         )}
 
+        {/* Upcoming Events */}
+        <Grid item xs={12} md={casesByState.length > 0 ? 4 : 6}>
+          <Card sx={{ height: '100%' }}>
+            <CardContent>
+              <Stack direction="row" justifyContent="space-between" alignItems="center" mb={1}>
+                <Typography variant="subtitle1" fontWeight={600}>
+                  {t('dashboard.upcomingSessions')}
+                </Typography>
+                <Button size="small" onClick={() => router.push('/calendar')}>
+                  {t('common.all')}
+                </Button>
+              </Stack>
+              {upcomingEvents.length === 0 ? (
+                <EmptyState message={t('common.noData')} />
+              ) : (
+                <List dense disablePadding>
+                  {upcomingEvents.map(ev => (
+                    <ListItemButton key={ev.id} sx={{ borderRadius: 1, mb: 0.5 }}>
+                      <ListItemIcon sx={{ minWidth: 32 }}>
+                        <CalendarIcon fontSize="small" color="action" />
+                      </ListItemIcon>
+                      <ListItemText
+                        primary={ev.title}
+                        secondary={ev.start_at ? new Date(ev.start_at).toLocaleString() : ''}
+                        primaryTypographyProps={{ fontSize: '0.8125rem', fontWeight: 500 }}
+                        secondaryTypographyProps={{ fontSize: '0.75rem' }}
+                      />
+                    </ListItemButton>
+                  ))}
+                </List>
+              )}
+            </CardContent>
+          </Card>
+        </Grid>
+
         {/* Recent Invoices (Accountant / Admin) */}
-        {hasAnyRole('Accountant', 'TenantAdmin', 'SystemAdmin') && (
+        {(isAccountant || isAdmin) && (
           <Grid item xs={12} md={6}>
             <Card>
               <CardContent>
-                <Typography variant="h6" gutterBottom>
-                  {t('dashboard.recentInvoices')}
-                </Typography>
-                {recentInvoices.length === 0 ? (
-                  <Typography variant="body2" color="text.secondary">
-                    {t('common.noData')}
+                <Stack direction="row" justifyContent="space-between" alignItems="center" mb={1}>
+                  <Typography variant="subtitle1" fontWeight={600}>
+                    {t('dashboard.recentInvoices')}
                   </Typography>
+                  <Button size="small" onClick={() => router.push('/accounting')}>
+                    {t('common.all')}
+                  </Button>
+                </Stack>
+                {recentInvoices.length === 0 ? (
+                  <EmptyState message={t('common.noData')} />
                 ) : (
                   <List dense disablePadding>
                     {recentInvoices.map(inv => (
-                      <ListItemButton key={inv.id} href={`/accounting/invoices/${inv.id}`}>
+                      <ListItemButton key={inv.id} onClick={() => router.push(`/accounting/invoices/${inv.id}`)} sx={{ borderRadius: 1, mb: 0.5 }}>
+                        <ListItemIcon sx={{ minWidth: 32 }}>
+                          <MoneyIcon fontSize="small" color="action" />
+                        </ListItemIcon>
                         <ListItemText
                           primary={inv.invoice_number}
-                          secondary={`${inv.currency} ${inv.total_amount}`}
+                          secondary={`${inv.currency} ${Number(inv.total_amount).toLocaleString()}`}
+                          primaryTypographyProps={{ fontSize: '0.8125rem', fontWeight: 500 }}
+                          secondaryTypographyProps={{ fontSize: '0.75rem' }}
                         />
-                        <Chip
-                          label={inv.status}
-                          size="small"
-                          color={
-                            inv.status === 'Paid'
-                              ? 'success'
-                              : inv.status === 'Voided'
-                              ? 'error'
-                              : 'default'
-                          }
-                          variant="outlined"
-                        />
+                        <StatusBadge status={inv.status} />
                       </ListItemButton>
                     ))}
                   </List>

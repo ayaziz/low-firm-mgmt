@@ -1,59 +1,35 @@
 'use client';
 
 import React, { useEffect, useState, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useTranslation } from 'react-i18next';
-import {
-  Box,
-  Button,
-  Card,
-  Chip,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogTitle,
-  IconButton,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  TextField,
-  Tooltip,
-  Typography,
-  MenuItem,
-  Stack,
-} from '@mui/material';
-import { Add as AddIcon, Visibility as ViewIcon, Refresh as RefreshIcon } from '@mui/icons-material';
+import { Box, Button, MenuItem, Stack, TextField } from '@mui/material';
+import { Add as AddIcon } from '@mui/icons-material';
 import { customerApi } from '@/api';
 import type { Customer, CustomerType } from '@/types';
 import { useAuth } from '@/context/AuthContext';
 import { CAPABILITIES } from '@/auth/capabilities';
+import PageHeader from '@/components/common/PageHeader';
+import DataGrid, { type Column } from '@/components/common/DataGrid';
+import StatusBadge from '@/components/common/StatusBadge';
+import DrawerForm from '@/components/common/DrawerForm';
 
 export default function CustomerListPage() {
   const { t } = useTranslation();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { hasAnyRole } = useAuth();
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(true);
-  const [cursor, setCursor] = useState<string | null>(null);
-  const [hasMore, setHasMore] = useState(false);
-  const [dialogOpen, setDialogOpen] = useState(false);
+  const [drawerOpen, setDrawerOpen] = useState(false);
   const [form, setForm] = useState({ name: '', customer_type: 'Individual' as CustomerType, national_id: '' });
   const [saving, setSaving] = useState(false);
 
-  const load = useCallback(async (cur?: string | null) => {
+  const load = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await customerApi.list({ cursor: cur || undefined, limit: 20 });
-      if (cur) {
-        setCustomers(prev => [...prev, ...res.data]);
-      } else {
-        setCustomers(res.data);
-      }
-      setCursor(res.nextCursor);
-      setHasMore(!!res.nextCursor);
+      const res = await customerApi.list({ limit: 50 });
+      setCustomers(res.data);
     } finally {
       setLoading(false);
     }
@@ -61,131 +37,106 @@ export default function CustomerListPage() {
 
   useEffect(() => { load(); }, [load]);
 
+  // Handle ?action=new from SpeedDial
+  useEffect(() => {
+    if (searchParams.get('action') === 'new') {
+      setDrawerOpen(true);
+      router.replace('/customers');
+    }
+  }, [searchParams, router]);
+
   const handleCreate = async () => {
     setSaving(true);
     try {
       const created = await customerApi.create(form);
-      setDialogOpen(false);
-      setForm({ name: '', customer_type: 'Individual' as CustomerType, national_id: '' });
+      setDrawerOpen(false);
+      setForm({ name: '', customer_type: 'Individual', national_id: '' });
       router.push(`/customers/${created.id}`);
     } finally {
       setSaving(false);
     }
   };
 
+  const columns: Column<Customer>[] = [
+    { field: 'name', headerName: t('customer.name'), sortable: true },
+    {
+      field: 'customer_type',
+      headerName: t('customer.type'),
+      width: 140,
+      renderCell: (row) => <StatusBadge status={row.customer_type} size="small" variant="outlined" />,
+    },
+    {
+      field: 'national_id',
+      headerName: t('customer.nationalId'),
+      width: 180,
+      renderCell: (row) => (
+        <span style={{ fontFamily: 'monospace' }}>{row.national_id || '—'}</span>
+      ),
+    },
+    {
+      field: 'status',
+      headerName: t('customer.status'),
+      width: 120,
+      renderCell: (row) => <StatusBadge status={row.status} size="small" />,
+    },
+  ];
+
   return (
     <Box>
-      <Stack direction="row" justifyContent="space-between" alignItems="center" mb={2}>
-        <Typography variant="h5" fontWeight={600}>
-          {t('customer.title')}
-        </Typography>
-        <Stack direction="row" spacing={1}>
-          <Tooltip title={t('common.refresh')}>
-            <IconButton onClick={() => load()}>
-              <RefreshIcon />
-            </IconButton>
-          </Tooltip>
-          {hasAnyRole(...CAPABILITIES.canCreateCustomer) && (
-            <Button variant="contained" startIcon={<AddIcon />} onClick={() => setDialogOpen(true)}>
+      <PageHeader
+        title={t('customer.title')}
+        actions={
+          hasAnyRole(...CAPABILITIES.canCreateCustomer) ? (
+            <Button variant="contained" startIcon={<AddIcon />} onClick={() => setDrawerOpen(true)}>
               {t('customer.add')}
             </Button>
-          )}
+          ) : undefined
+        }
+      />
+
+      <DataGrid<Customer>
+        columns={columns}
+        rows={customers}
+        loading={loading}
+        getRowId={(r) => r.id}
+        onRowClick={(row) => router.push(`/customers/${row.id}`)}
+        onRefresh={load}
+        emptyMessage={t('common.noData')}
+      />
+
+      <DrawerForm
+        open={drawerOpen}
+        onClose={() => setDrawerOpen(false)}
+        title={t('customer.add')}
+        onSubmit={handleCreate}
+        loading={saving}
+      >
+        <Stack spacing={2}>
+          <TextField
+            label={t('customer.name')}
+            fullWidth
+            required
+            value={form.name}
+            onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+          />
+          <TextField
+            label={t('customer.type')}
+            select
+            fullWidth
+            value={form.customer_type}
+            onChange={(e) => setForm((f) => ({ ...f, customer_type: e.target.value as CustomerType }))}
+          >
+            <MenuItem value="Individual">{t('customer.individual')}</MenuItem>
+            <MenuItem value="Organization">{t('customer.organization')}</MenuItem>
+          </TextField>
+          <TextField
+            label={t('customer.nationalId')}
+            fullWidth
+            value={form.national_id}
+            onChange={(e) => setForm((f) => ({ ...f, national_id: e.target.value }))}
+          />
         </Stack>
-      </Stack>
-
-      <Card>
-        <TableContainer>
-          <Table>
-            <TableHead>
-              <TableRow>
-                <TableCell>{t('customer.name')}</TableCell>
-                <TableCell>{t('customer.type')}</TableCell>
-                <TableCell>{t('customer.nationalId')}</TableCell>
-                <TableCell>{t('customer.status')}</TableCell>
-                <TableCell width={60} />
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {customers.map(c => (
-                <TableRow
-                  key={c.id}
-                  hover
-                  sx={{ cursor: 'pointer' }}
-                  onClick={() => router.push(`/customers/${c.id}`)}
-                >
-                  <TableCell>{c.name}</TableCell>
-                  <TableCell>
-                    <Chip label={c.customer_type} size="small" variant="outlined" />
-                  </TableCell>
-                  <TableCell sx={{ fontFamily: 'monospace' }}>{c.national_id}</TableCell>
-                  <TableCell>
-                    <Chip label={c.status} size="small" color={c.status === 'Active' ? 'success' : 'default'} variant="outlined" />
-                  </TableCell>
-                  <TableCell>
-                    <IconButton size="small">
-                      <ViewIcon fontSize="small" />
-                    </IconButton>
-                  </TableCell>
-                </TableRow>
-              ))}
-              {customers.length === 0 && !loading && (
-                <TableRow>
-                  <TableCell colSpan={5} align="center">
-                    <Typography variant="body2" color="text.secondary" py={4}>
-                      {t('common.noData')}
-                    </Typography>
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </TableContainer>
-        {hasMore && (
-          <Box textAlign="center" py={2}>
-            <Button onClick={() => load(cursor)} disabled={loading}>
-              {t('common.loadMore')}
-            </Button>
-          </Box>
-        )}
-      </Card>
-
-      {/* Create Dialog */}
-      <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} maxWidth="sm" fullWidth>
-        <DialogTitle>{t('customer.add')}</DialogTitle>
-        <DialogContent>
-          <Stack spacing={2} mt={1}>
-            <TextField
-              label={t('customer.name')}
-              fullWidth
-              required
-              value={form.name}
-              onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
-            />
-            <TextField
-              label={t('customer.type')}
-              select
-              fullWidth
-              value={form.customer_type}
-              onChange={e => setForm(f => ({ ...f, customer_type: e.target.value as CustomerType }))}
-            >
-              <MenuItem value="Individual">{t('customer.individual')}</MenuItem>
-              <MenuItem value="Organization">{t('customer.organization')}</MenuItem>
-            </TextField>
-            <TextField
-              label={t('customer.nationalId')}
-              fullWidth
-              value={form.national_id}
-              onChange={e => setForm(f => ({ ...f, national_id: e.target.value }))}
-            />
-          </Stack>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setDialogOpen(false)}>{t('common.cancel')}</Button>
-          <Button variant="contained" onClick={handleCreate} disabled={saving || !form.name}>
-            {t('common.save')}
-          </Button>
-        </DialogActions>
-      </Dialog>
+      </DrawerForm>
     </Box>
   );
 }

@@ -35,6 +35,9 @@ import {
 import { reportApi } from '@/api';
 import { useAuth } from '@/context/AuthContext';
 import type { ReportResult } from '@/types';
+import PageHeader from '@/components/common/PageHeader';
+import LoadingSkeleton from '@/components/common/LoadingSkeleton';
+import EmptyState from '@/components/common/EmptyState';
 
 const CHART_COLORS = ['#1B3A5C', '#2E7D32', '#ED6C02', '#D32F2F', '#1565C0', '#6A1B9A', '#00897B', '#EF6C00', '#546E7A'];
 
@@ -86,11 +89,7 @@ export default function ReportsPage() {
 
   const renderChart = () => {
     if (!result || !result.data || result.data.length === 0) {
-      return (
-        <Typography color="text.secondary" sx={{ py: 4, textAlign: 'center' }}>
-          {t('reports.noData')}
-        </Typography>
-      );
+      return <EmptyState message={t('reports.noData')} />;
     }
 
     const data = result.data;
@@ -178,9 +177,7 @@ export default function ReportsPage() {
 
   return (
     <Box>
-      <Typography variant="h5" fontWeight={700} gutterBottom>
-        {t('reports.title')}
-      </Typography>
+      <PageHeader title={t('reports.title')} />
 
       <Grid container spacing={3}>
         {/* Left: report selector & filters */}
@@ -290,7 +287,7 @@ export default function ReportsPage() {
             />
             <CardContent>
               {loading ? (
-                <Typography color="text.secondary">{t('common.loading')}</Typography>
+                <LoadingSkeleton variant="cards" columns={1} />
               ) : (
                 renderChart()
               )}

@@ -1,7 +1,7 @@
 import { get, post, patch, del } from './client';
 import type { CalendarEvent, CalendarAttendee, CalendarReminder, PaginatedResult } from '@/types';
 
-/** Map snake_case CalendarEvent fields → camelCase backend DTO */
+/** Map snake_case CalendarEvent fields → camelCase CreateCalendarEventDto / UpdateCalendarEventDto */
 function toCalendarDto(data: Partial<CalendarEvent>): Record<string, unknown> {
   return {
     title: data.title,
@@ -12,7 +12,8 @@ function toCalendarDto(data: Partial<CalendarEvent>): Record<string, unknown> {
     hearingId: data.hearing_id,
     location: data.location,
     description: data.description,
-    isAllDay: data.is_all_day,
+    recurrence: data.recurrence,
+    recurrenceEndDate: data.recurrence_end_date,
   };
 }
 
@@ -30,19 +31,11 @@ export const calendarApi = {
   },
 
   create(data: Partial<CalendarEvent>): Promise<CalendarEvent> {
-<<<<<<< HEAD
-    return post<CalendarEvent>('/calendar', toCalendarDto(data));
+    return post<CalendarEvent>('/calendar/events', toCalendarDto(data));
   },
 
   update(id: string, data: Partial<CalendarEvent>): Promise<CalendarEvent> {
-    return patch<CalendarEvent>(`/calendar/${id}`, toCalendarDto(data));
-=======
-    return post<CalendarEvent>('/calendar/events', data);
-  },
-
-  update(id: string, data: Partial<CalendarEvent>): Promise<CalendarEvent> {
-    return patch<CalendarEvent>(`/calendar/events/${id}`, data);
->>>>>>> da422d6fe0707d6f320fd0d42b16d1e32a3feb85
+    return patch<CalendarEvent>(`/calendar/events/${id}`, toCalendarDto(data));
   },
 
   addAttendee(eventId: string, userId: string): Promise<CalendarAttendee> {
@@ -50,11 +43,7 @@ export const calendarApi = {
   },
 
   updateRsvp(eventId: string, rsvpStatus: string): Promise<CalendarAttendee> {
-<<<<<<< HEAD
-    return patch<CalendarAttendee>(`/calendar/${eventId}/rsvp`, { rsvp: rsvpStatus });
-=======
     return patch<CalendarAttendee>(`/calendar/events/${eventId}/rsvp`, { rsvp: rsvpStatus });
->>>>>>> da422d6fe0707d6f320fd0d42b16d1e32a3feb85
   },
 
   addReminder(eventId: string, data: Partial<CalendarReminder>): Promise<CalendarReminder> {

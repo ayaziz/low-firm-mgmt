@@ -2,7 +2,9 @@
 
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Box, Tab, Tabs, Typography } from '@mui/material';
+import { Box, Tab, Tabs } from '@mui/material';
+import ProtectedRoute from '@/components/ProtectedRoute';
+import PageHeader from '@/components/common/PageHeader';
 import InvoicesTab from './InvoicesTab';
 import ExpensesTab from './ExpensesTab';
 import WagesTab from './WagesTab';
@@ -12,10 +14,9 @@ export default function AccountingPage() {
   const [tab, setTab] = useState(0);
 
   return (
+    <ProtectedRoute requiredRoles={['Accountant', 'TenantAdmin', 'SystemAdmin']}>
     <Box>
-      <Typography variant="h5" fontWeight={600} mb={2}>
-        {t('accounting.title')}
-      </Typography>
+      <PageHeader title={t('accounting.title', 'Accounting')} />
       <Tabs value={tab} onChange={(_, v) => setTab(v)} sx={{ mb: 3 }}>
         <Tab label={t('accounting.invoices')} />
         <Tab label={t('accounting.expenses')} />
@@ -25,5 +26,6 @@ export default function AccountingPage() {
       {tab === 1 && <ExpensesTab />}
       {tab === 2 && <WagesTab />}
     </Box>
+    </ProtectedRoute>
   );
 }

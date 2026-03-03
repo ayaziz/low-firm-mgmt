@@ -21,16 +21,16 @@ export const accountingApi = {
     return post<Invoice>('/invoices', data);
   },
 
-  finalizeInvoice(id: string, rowVersion: string): Promise<Invoice> {
-    return post<Invoice>(`/invoices/${id}/finalize`, { rowVersion });
+  finalizeInvoice(id: string): Promise<Invoice> {
+    return post<Invoice>(`/invoices/${id}/finalize`);
   },
 
-  sendInvoice(id: string, rowVersion: string): Promise<Invoice> {
-    return post<Invoice>(`/invoices/${id}/send`, { rowVersion });
+  sendInvoice(id: string): Promise<Invoice> {
+    return post<Invoice>(`/invoices/${id}/send`);
   },
 
-  voidInvoice(id: string, reason: string, rowVersion: string): Promise<Invoice> {
-    return post<Invoice>(`/invoices/${id}/void`, { reason, rowVersion });
+  voidInvoice(id: string, reason: string): Promise<Invoice> {
+    return post<Invoice>(`/invoices/${id}/void`, { reason });
   },
 
   downloadInvoicePdf(id: string): Promise<void> {
@@ -41,8 +41,8 @@ export const accountingApi = {
   createPayment(data: {
     invoiceId: string;
     amount: number;
-    paymentMethod: string;
-    paymentDate: string;
+    method: string;
+    paymentDate?: string;
     reference?: string;
     notes?: string;
   }): Promise<Payment> {
@@ -59,9 +59,10 @@ export const accountingApi = {
 
   createExpense(data: {
     caseId?: string;
-    category: string;
+    categoryId: string;
     amount: number;
-    description: string;
+    description?: string;
+    expenseDate?: string;
   }): Promise<Expense> {
     return post<Expense>('/expenses', data);
   },
@@ -82,9 +83,7 @@ export const accountingApi = {
   createWage(data: {
     userId: string;
     period: string;
-    baseAmount: number;
-    bonusAmount?: number;
-    deductions?: number;
+    amount: number;
     notes?: string;
   }): Promise<Wage> {
     return post<Wage>('/wages', data);
