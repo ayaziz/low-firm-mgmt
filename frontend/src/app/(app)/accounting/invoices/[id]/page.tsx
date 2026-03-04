@@ -121,9 +121,9 @@ export default function InvoiceDetailPage() {
     );
   }
 
-  const total = invoice.lineItems?.reduce((s, li) => s + (li.quantity ?? 0) * (li.unit_price ?? 0), 0)
-    ?? invoice.total_amount ?? 0;
-  const paidAmount = invoice.paid_amount ?? 0;
+  const total = invoice.lineItems?.reduce((s, li) => s + (Number(li.quantity) || 0) * (Number(li.unit_price) || 0), 0)
+    ?? Number(invoice.total_amount) ?? 0;
+  const paidAmount = Number(invoice.paid_amount) || 0;
   const balance = total - paidAmount;
 
   return (
@@ -204,9 +204,9 @@ export default function InvoiceDetailPage() {
 						<CardHeader title="Summary" />
 						<CardContent>
 							<Stack spacing={1.5}>
-								<DetailRow label="Total" value={`$${total?.toFixed(2)}`} />
-								<DetailRow label="Paid" value={`$${paidAmount?.toFixed(2)}`} />
-								<DetailRow label="Balance" value={`$${balance?.toFixed(2)}`} />
+					<DetailRow label="Total" value={`$${Number(total).toFixed(2)}`} />
+							<DetailRow label="Paid" value={`$${Number(paidAmount).toFixed(2)}`} />
+							<DetailRow label="Balance" value={`$${Number(balance).toFixed(2)}`} />
 								{invoice.due_date && (
 									<DetailRow
 										label={t('accounting.dueDate')}
@@ -251,11 +251,11 @@ export default function InvoiceDetailPage() {
 											<TableCell>{li.description}</TableCell>
 											<TableCell align="right">{li.quantity}</TableCell>
 											<TableCell align="right">
-												${li.unit_price?.toFixed(2)}
-											</TableCell>
-											<TableCell align="right">
-												$
-												{((li.quantity ?? 0) * (li.unit_price ?? 0))?.toFixed(
+											${Number(li.unit_price ?? 0).toFixed(2)}
+										</TableCell>
+										<TableCell align="right">
+											$
+											{((Number(li.quantity) || 0) * (Number(li.unit_price) || 0)).toFixed(
 													2,
 												)}
 											</TableCell>
@@ -266,7 +266,7 @@ export default function InvoiceDetailPage() {
 											<strong>Total</strong>
 										</TableCell>
 										<TableCell align="right">
-											<strong>${total?.toFixed(2)}</strong>
+										<strong>${Number(total).toFixed(2)}</strong>
 										</TableCell>
 									</TableRow>
 								</TableBody>
@@ -293,7 +293,7 @@ export default function InvoiceDetailPage() {
 									<TableBody>
 										{invoice.payments.map((p, i) => (
 											<TableRow key={p.id || i}>
-												<TableCell>${p.amount.toFixed(2)}</TableCell>
+												<TableCell>${Number(p.amount).toFixed(2)}</TableCell>
 												<TableCell>{p.payment_method}</TableCell>
 												<TableCell>{p.reference || '—'}</TableCell>
 												<TableCell>
@@ -337,7 +337,7 @@ export default function InvoiceDetailPage() {
 									amount: Number(e.target.value),
 								}))
 							}
-							helperText={`Balance: $${balance?.toFixed(2)}`}
+							helperText={`Balance: $${Number(balance).toFixed(2)}`}
 						/>
 						<TextField
 							label={t('accounting.paymentMethod')}

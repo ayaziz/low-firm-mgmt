@@ -34,7 +34,7 @@ export default function DocumentListPage() {
   const [totalCount, setTotalCount] = useState(0);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [cases, setCases] = useState<Case[]>([]);
-  const [form, setForm] = useState({ title: '', caseId: '', docTypeId: '', confidentiality: 'Standard' });
+  const [form, setForm] = useState({ title: '', caseId: '', docTypeId: '', confidentiality: 'Normal' });
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [saving, setSaving] = useState(false);
   const [dragOver, setDragOver] = useState(false);
@@ -101,7 +101,7 @@ export default function DocumentListPage() {
   };
 
   const resetForm = () => {
-    setForm({ title: '', caseId: '', docTypeId: '', confidentiality: 'Standard' });
+    setForm({ title: '', caseId: '', docTypeId: '', confidentiality: 'Normal' });
     setSelectedFile(null);
   };
 

@@ -40,6 +40,7 @@ export class CreatePaymentDto {
 export class CreateExpenseDto {
   @IsUUID() caseId: string;
   @IsUUID() categoryId: string;
+  @IsUUID() customerId: string;
   @IsNumber() amount: number;
   @IsOptional() @IsString() description?: string;
   @IsOptional() @IsDateString() expenseDate?: string;

@@ -46,7 +46,7 @@ export default function CustomerDetailPage() {
   const [editForm, setEditForm] = useState({ full_name: '', notes: '' });
 
   const [contactOpen, setContactOpen] = useState(false);
-  const [contactForm, setContactForm] = useState({ name: '', contact_role: '', phone: '', email: '' });
+  const [contactForm, setContactForm] = useState({ name: '', role_id: '', phone: '', email: '' });
 
   const [addressOpen, setAddressOpen] = useState(false);
   const [addressForm, setAddressForm] = useState({ address_type: '', line1: '', line2: '', city: '', country: '' });
@@ -99,7 +99,7 @@ export default function CustomerDetailPage() {
     try {
       await customerApi.addContact(id, contactForm);
       setContactOpen(false);
-      setContactForm({ name: '', contact_role: '', phone: '', email: '' });
+      setContactForm({ name: '', role_id: '', phone: '', email: '' });
       load();
     } finally { setSaving(false); }
   };
@@ -433,7 +433,7 @@ export default function CustomerDetailPage() {
       >
         <Stack spacing={2.5}>
           <TextField label={t('customer.contactName', 'Name')} fullWidth required value={contactForm.name} onChange={e => setContactForm(f => ({ ...f, name: e.target.value }))} />
-          <TextField label={t('customer.contactRole', 'Role')} fullWidth value={contactForm.contact_role} onChange={e => setContactForm(f => ({ ...f, contact_role: e.target.value }))} />
+          <TextField label={t('customer.contactRole', 'Role')} fullWidth value={contactForm.role_id} onChange={e => setContactForm(f => ({ ...f, role_id: e.target.value }))} />
           <TextField label={t('customer.phone', 'Phone')} fullWidth value={contactForm.phone} onChange={e => setContactForm(f => ({ ...f, phone: e.target.value }))} />
           <TextField label={t('customer.email', 'Email')} fullWidth value={contactForm.email} onChange={e => setContactForm(f => ({ ...f, email: e.target.value }))} />
         </Stack>

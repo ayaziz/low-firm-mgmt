@@ -60,6 +60,7 @@ export const accountingApi = {
   createExpense(data: {
     caseId?: string;
     categoryId: string;
+    customerId: string;
     amount: number;
     description?: string;
     expenseDate?: string;

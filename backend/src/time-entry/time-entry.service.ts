@@ -23,15 +23,12 @@ export class TimeEntryService {
     );
     if (!caseRows || caseRows.length === 0) throw new NotFoundException('Case not found');
 
-    const totalAmount = dto.hours * (dto.ratePerHour || 0);
-
     await this.prisma.executeTenant(
       tenantSlug,
-      `INSERT INTO time_entries (id, case_id, user_id, entry_date, hours, description, activity_type, rate_per_hour, total_amount, hearing_id, billable, status, created_at, updated_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'Draft', NOW(), NOW())`,
+      `INSERT INTO time_entries (id, case_id, user_id, entry_date, hours, description, hourly_rate, billable, status, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'Draft', NOW(), NOW())`,
       [entryId, dto.caseId, userId, dto.entryDate, dto.hours, dto.description,
-       dto.activityType || 'General', dto.ratePerHour || 0, totalAmount,
-       dto.hearingId || null, dto.billable !== false],
+       dto.ratePerHour || 0, dto.billable !== false],
     );
 
     await this.audit.log({
@@ -44,7 +41,7 @@ export class TimeEntryService {
   }
 
   async list(tenantSlug: string, caseId?: string, userId?: string, status?: string, startDate?: string, endDate?: string, cursor?: string, limit = 20) {
-    let sql = `SELECT te.*, c.title AS case_title, u.email AS user_email, u.display_name AS user_name
+    let sql = `SELECT te.*, c.title AS case_title, u.email AS user_email, u."displayName" AS user_name
                FROM time_entries te
                LEFT JOIN cases c ON te.case_id = c.id
                LEFT JOIN public.users u ON te.user_id::text = u.id
@@ -73,9 +70,9 @@ export class TimeEntryService {
     let sql = `SELECT
                  COUNT(*)::int AS total_entries,
                  COALESCE(SUM(hours), 0)::float AS total_hours,
-                 COALESCE(SUM(total_amount), 0)::float AS total_amount,
+                 COALESCE(SUM(hours * hourly_rate), 0)::float AS total_amount,
                  COALESCE(SUM(CASE WHEN billable THEN hours ELSE 0 END), 0)::float AS billable_hours,
-                 COALESCE(SUM(CASE WHEN billable THEN total_amount ELSE 0 END), 0)::float AS billable_amount,
+                 COALESCE(SUM(CASE WHEN billable THEN hours * hourly_rate ELSE 0 END), 0)::float AS billable_amount,
                  COALESCE(SUM(CASE WHEN NOT billable THEN hours ELSE 0 END), 0)::float AS non_billable_hours
                FROM time_entries WHERE 1=1`;
     const params: any[] = [];
@@ -120,15 +117,8 @@ export class TimeEntryService {
     if (dto.entryDate !== undefined) { setClauses.push(`entry_date = $${idx++}`); params.push(dto.entryDate); }
     if (dto.hours !== undefined) { setClauses.push(`hours = $${idx++}`); params.push(dto.hours); }
     if (dto.description !== undefined) { setClauses.push(`description = $${idx++}`); params.push(dto.description); }
-    if (dto.activityType !== undefined) { setClauses.push(`activity_type = $${idx++}`); params.push(dto.activityType); }
-    if (dto.ratePerHour !== undefined) { setClauses.push(`rate_per_hour = $${idx++}`); params.push(dto.ratePerHour); }
+    if (dto.ratePerHour !== undefined) { setClauses.push(`hourly_rate = $${idx++}`); params.push(dto.ratePerHour); }
     if (dto.billable !== undefined) { setClauses.push(`billable = $${idx++}`); params.push(dto.billable); }
-
-    // Recalculate total_amount
-    const hours = dto.hours !== undefined ? dto.hours : entry.hours;
-    const rate = dto.ratePerHour !== undefined ? dto.ratePerHour : entry.rate_per_hour;
-    setClauses.push(`total_amount = $${idx++}`);
-    params.push(hours * rate);
 
     params.push(entryId);
     await this.prisma.executeTenant(

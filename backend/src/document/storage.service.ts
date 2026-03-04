@@ -7,19 +7,33 @@ import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 export class StorageService {
   private s3: S3Client;
   private bucket: string;
+  private internalEndpoint: string;
+  private publicEndpoint: string;
 
   constructor(private config: ConfigService) {
-    const endpoint = config.get<string>('MINIO_ENDPOINT', 'http://localhost:9000');
+    this.internalEndpoint = config.get<string>('MINIO_ENDPOINT', 'http://localhost:9000');
+    this.publicEndpoint = config.get<string>('MINIO_PUBLIC_ENDPOINT', this.internalEndpoint);
     const accessKey = config.get<string>('MINIO_ACCESS_KEY', 'minioadmin');
     const secretKey = config.get<string>('MINIO_SECRET_KEY', 'minioadmin');
     this.bucket = config.get<string>('MINIO_BUCKET', 'loma-documents');
 
     this.s3 = new S3Client({
-      endpoint,
+      endpoint: this.internalEndpoint,
       region: 'us-east-1',
       credentials: { accessKeyId: accessKey, secretAccessKey: secretKey },
       forcePathStyle: true,
+      // Disable automatic CRC32 checksums injected by SDK v3 >= 3.350.
+      // MinIO validates the checksum baked into the pre-signed URL against the
+      // actual uploaded body and returns 403 when they don't match.
+      requestChecksumCalculation: 'WHEN_REQUIRED',
+      responseChecksumValidation: 'WHEN_REQUIRED',
     });
+  }
+
+  /** Rewrite the internal Docker endpoint to the public-facing URL so browsers can resolve it. */
+  private rewriteUrl(url: string): string {
+    if (this.internalEndpoint === this.publicEndpoint) return url;
+    return url.replace(this.internalEndpoint, this.publicEndpoint);
   }
 
   /**
@@ -35,12 +49,14 @@ export class StorageService {
 
   async getUploadUrl(key: string, mimeType: string): Promise<string> {
     const command = new PutObjectCommand({ Bucket: this.bucket, Key: key, ContentType: mimeType });
-    return getSignedUrl(this.s3, command, { expiresIn: 900 }); // 15 min
+    const url = await getSignedUrl(this.s3, command, { expiresIn: 900 }); // 15 min
+    return this.rewriteUrl(url);
   }
 
   async getDownloadUrl(key: string): Promise<string> {
     const command = new GetObjectCommand({ Bucket: this.bucket, Key: key });
-    return getSignedUrl(this.s3, command, { expiresIn: 300 }); // 5 min
+    const url = await getSignedUrl(this.s3, command, { expiresIn: 300 }); // 5 min
+    return this.rewriteUrl(url);
   }
 
   async deleteObject(key: string): Promise<void> {

@@ -251,6 +251,7 @@ export interface Payment {
 export interface Expense {
   id: string;
   case_id?: string;
+  customer_id?: string;
   category: string;
   amount: number;
   currency: string;

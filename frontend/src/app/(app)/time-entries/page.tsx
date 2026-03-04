@@ -11,8 +11,8 @@ import {
   AccessTime as TimeIcon, AttachMoney as MoneyIcon,
   Receipt as EntryIcon, Timer as BillableIcon,
 } from '@mui/icons-material';
-import { timeEntryApi } from '@/api';
-import type { TimeEntry } from '@/types';
+import { timeEntryApi, caseApi } from '@/api'
+import type { TimeEntry,Case } from '@/types';
 import { useAuth } from '@/context/AuthContext';
 import PageHeader from '@/components/common/PageHeader';
 import DataGrid, { type Column } from '@/components/common/DataGrid';
@@ -41,6 +41,7 @@ export default function TimeEntriesPage() {
   const { t } = useTranslation();
   const { user, hasAnyRole } = useAuth();
   const canApprove = hasAnyRole('TenantAdmin', 'SystemAdmin', 'Accountant');
+  const [cases, setCases] = useState<Case[]>([]);
 
   const [entries, setEntries] = useState<TimeEntry[]>([]);
   const [loading, setLoading] = useState(true);
@@ -55,7 +56,7 @@ export default function TimeEntriesPage() {
   });
 
   // Drawer
-  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [drawerOpen, setDrawerOpen] = useState(false)
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({
     case_id: '',
@@ -76,7 +77,9 @@ export default function TimeEntriesPage() {
         timeEntryApi.list(params as any),
         timeEntryApi.summary().catch(() => null),
       ]);
-      setEntries(res.data);
+      const list = Array.isArray(res) ? res : (res.data ?? [])
+
+      setEntries(list);
       if (sum) setSummary(sum as any);
     } finally {
       setLoading(false);
@@ -85,18 +88,26 @@ export default function TimeEntriesPage() {
 
   useEffect(() => { load(); }, [load]);
 
+  const openDrawer = async () => {
+    setDrawerOpen(true);
+    const [caseRes] = await Promise.all([
+      caseApi.list({ limit: 100 }).catch(() => ({ data: [], cursor: null })),
+      //adminApi.listMasterData('docType').catch(() => []),
+    ]);
+    setCases(caseRes.data);
+  };
   const handleCreate = async () => {
     setSaving(true);
     try {
       await timeEntryApi.create({
-        case_id: form.case_id,
-        date: form.date,
-        hours: parseFloat(form.hours),
-        rate: form.rate ? parseFloat(form.rate) : undefined,
-        activity_type: form.activity_type,
-        description: form.description || undefined,
-        billable: form.billable,
-      } as any);
+				case_id: form.case_id,
+				entry_date: form.date,
+				hours: parseFloat(form.hours),
+				rate: form.rate ? parseFloat(form.rate) : undefined,
+				activity_type: form.activity_type,
+				description: form.description || undefined,
+				billable: form.billable,
+			} as any)
       setDrawerOpen(false);
       setForm({ case_id: '', date: '', hours: '1', rate: '', activity_type: '', description: '', billable: true });
       load();
@@ -204,116 +215,180 @@ export default function TimeEntriesPage() {
   ];
 
   return (
-    <Box>
-      <PageHeader
-        title={t('timeEntries.title', 'Time Entries')}
-        subtitle={t('timeEntries.subtitle', 'Track billable and non-billable work time')}
-        breadcrumbs={[{ label: t('nav.timeEntries', 'Time Entries') }]}
-        actions={
-          <Button variant="contained" startIcon={<AddIcon />} onClick={() => setDrawerOpen(true)}>
-            {t('timeEntries.create', 'New Entry')}
-          </Button>
-        }
-      />
+		<Box>
+			<PageHeader
+				title={t('timeEntries.title', 'Time Entries')}
+				subtitle={t(
+					'timeEntries.subtitle',
+					'Track billable and non-billable work time',
+				)}
+				breadcrumbs={[{ label: t('nav.timeEntries', 'Time Entries') }]}
+				actions={
+					<Button
+						variant="contained"
+						startIcon={<AddIcon />}
+						onClick={openDrawer}
+					>
+						{t('timeEntries.create', 'New Entry')}
+					</Button>
+				}
+			/>
 
-      {/* Summary KPI row */}
-      <Stack direction="row" spacing={2} sx={{ mb: 3 }} flexWrap="wrap" useFlexGap>
-        <KPICard title={t('timeEntries.totalHours', 'Total Hours')} value={formatHours(summary.total_hours || 0)} icon={<TimeIcon />} color="primary" />
-        <KPICard title={t('timeEntries.billableHours', 'Billable')} value={formatHours(summary.billable_hours || 0)} icon={<BillableIcon />} color="success" />
-        <KPICard title={t('timeEntries.totalAmount', 'Total Amount')} value={`$${Number(summary.total_amount || 0).toFixed(2)}`} icon={<MoneyIcon />} color="info" />
-        <KPICard title={t('timeEntries.entries', 'Entries')} value={String(summary.entry_count || 0)} icon={<EntryIcon />} color="secondary" />
-      </Stack>
+			{/* Summary KPI row */}
+			<Stack
+				direction="row"
+				spacing={2}
+				sx={{ mb: 3 }}
+				flexWrap="wrap"
+				useFlexGap
+			>
+				<KPICard
+					title={t('timeEntries.totalHours', 'Total Hours')}
+					value={formatHours(summary.total_hours || 0)}
+					icon={<TimeIcon />}
+					color="primary"
+				/>
+				<KPICard
+					title={t('timeEntries.billableHours', 'Billable')}
+					value={formatHours(summary.billable_hours || 0)}
+					icon={<BillableIcon />}
+					color="success"
+				/>
+				<KPICard
+					title={t('timeEntries.totalAmount', 'Total Amount')}
+					value={`$${Number(summary.total_amount || 0).toFixed(2)}`}
+					icon={<MoneyIcon />}
+					color="info"
+				/>
+				<KPICard
+					title={t('timeEntries.entries', 'Entries')}
+					value={String(summary.entry_count || 0)}
+					icon={<EntryIcon />}
+					color="secondary"
+				/>
+			</Stack>
 
-      {/* Status filter */}
-      <Stack direction="row" spacing={2} sx={{ mb: 2, maxWidth: 280 }}>
-        <TextField
-          select fullWidth size="small"
-          value={statusFilter}
-          label={t('timeEntries.status', 'Status')}
-          onChange={e => setStatusFilter(e.target.value)}
-        >
-          <MenuItem value="">{t('common.all', 'All')}</MenuItem>
-          {STATUS_OPTIONS.map(s => <MenuItem key={s} value={s}>{s}</MenuItem>)}
-        </TextField>
-      </Stack>
+			{/* Status filter */}
+			<Stack direction="row" spacing={2} sx={{ mb: 2, maxWidth: 280 }}>
+				<TextField
+					select
+					fullWidth
+					size="small"
+					value={statusFilter}
+					label={t('timeEntries.status', 'Status')}
+					onChange={(e) => setStatusFilter(e.target.value)}
+				>
+					<MenuItem value="">{t('common.all', 'All')}</MenuItem>
+					{STATUS_OPTIONS.map((s) => (
+						<MenuItem key={s} value={s}>
+							{s}
+						</MenuItem>
+					))}
+				</TextField>
+			</Stack>
 
-      <DataGrid<TimeEntry>
-        columns={columns}
-        rows={entries}
-        loading={loading}
-        getRowId={(r) => r.id}
-        searchPlaceholder={t('timeEntries.search', 'Search time entries…')}
-        onRefresh={load}
-        emptyMessage={t('timeEntries.empty', 'No time entries found')}
-        emptyAction={
-          <Button variant="contained" startIcon={<AddIcon />} onClick={() => setDrawerOpen(true)}>
-            {t('timeEntries.create', 'New Entry')}
-          </Button>
-        }
-      />
+			<DataGrid<TimeEntry>
+				columns={columns}
+				rows={entries}
+				loading={loading}
+				getRowId={(r) => r.id}
+				searchPlaceholder={t('timeEntries.search', 'Search time entries…')}
+				onRefresh={load}
+				emptyMessage={t('timeEntries.empty', 'No time entries found')}
+				emptyAction={
+					<Button
+						variant="contained"
+						startIcon={<AddIcon />}
+						onClick={openDrawer}
+					>
+						{t('timeEntries.create', 'New Entry')}
+					</Button>
+				}
+			/>
 
-      {/* ----- Create Entry Drawer ----- */}
-      <DrawerForm
-        open={drawerOpen}
-        title={t('timeEntries.create', 'New Entry')}
-        onClose={() => setDrawerOpen(false)}
-        onSubmit={handleCreate}
-        loading={saving}
-        submitLabel={t('common.save', 'Save')}
-      >
-        <Stack spacing={2.5}>
-          <TextField
-            label={t('timeEntries.caseId', 'Case ID')}
-            fullWidth required
-            value={form.case_id}
-            onChange={e => setForm(f => ({ ...f, case_id: e.target.value }))}
-          />
-          <TextField
-            label={t('timeEntries.date', 'Date')}
-            type="date"
-            fullWidth required
-            InputLabelProps={{ shrink: true }}
-            value={form.date}
-            onChange={e => setForm(f => ({ ...f, date: e.target.value }))}
-          />
-          <TextField
-            label={t('timeEntries.hours', 'Hours')}
-            type="number"
-            fullWidth required
-            inputProps={{ step: 0.25, min: 0.25 }}
-            value={form.hours}
-            onChange={e => setForm(f => ({ ...f, hours: e.target.value }))}
-          />
-          <TextField
-            label={t('timeEntries.rate', 'Rate ($/hr)')}
-            type="number"
-            fullWidth
-            value={form.rate}
-            onChange={e => setForm(f => ({ ...f, rate: e.target.value }))}
-          />
-          <TextField
-            label={t('timeEntries.activity', 'Activity Type')}
-            fullWidth required
-            value={form.activity_type}
-            onChange={e => setForm(f => ({ ...f, activity_type: e.target.value }))}
-          />
-          <TextField
-            label={t('common.description', 'Description')}
-            fullWidth multiline rows={3}
-            value={form.description}
-            onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
-          />
-          <FormControlLabel
-            control={
-              <Switch
-                checked={form.billable}
-                onChange={e => setForm(f => ({ ...f, billable: e.target.checked }))}
-              />
-            }
-            label={t('timeEntries.billable', 'Billable')}
-          />
-        </Stack>
-      </DrawerForm>
-    </Box>
-  );
+			{/* ----- Create Entry Drawer ----- */}
+			<DrawerForm
+				open={drawerOpen}
+				title={t('timeEntries.create', 'New Entry')}
+				onClose={() => setDrawerOpen(false)}
+				onSubmit={handleCreate}
+				loading={saving}
+				submitLabel={t('common.save', 'Save')}
+			>
+				<Stack spacing={2.5}>
+					<TextField
+						label={t('case.title')}
+						select
+						fullWidth
+						value={form.case_id}
+						onChange={(e) =>
+							setForm((f) => ({ ...f, case_id: e.target.value }))
+						}
+					>
+						<MenuItem value="">— {t('common.noData')} —</MenuItem>
+						{cases.map((c) => (
+							<MenuItem key={c.id} value={c.id}>
+								{c.title} ({c.system_case_ref})
+							</MenuItem>
+						))}
+					</TextField>
+					<TextField
+						label={t('timeEntries.date', 'Date')}
+						type="date"
+						fullWidth
+						required
+						InputLabelProps={{ shrink: true }}
+						value={form.date}
+						onChange={(e) => setForm((f) => ({ ...f, date: e.target.value }))}
+					/>
+					<TextField
+						label={t('timeEntries.hours', 'Hours')}
+						type="number"
+						fullWidth
+						required
+						inputProps={{ step: 0.25, min: 0.25 }}
+						value={form.hours}
+						onChange={(e) => setForm((f) => ({ ...f, hours: e.target.value }))}
+					/>
+					<TextField
+						label={t('timeEntries.rate', 'Rate ($/hr)')}
+						type="number"
+						fullWidth
+						value={form.rate}
+						onChange={(e) => setForm((f) => ({ ...f, rate: e.target.value }))}
+					/>
+					<TextField
+						label={t('timeEntries.activity', 'Activity Type')}
+						fullWidth
+						required
+						value={form.activity_type}
+						onChange={(e) =>
+							setForm((f) => ({ ...f, activity_type: e.target.value }))
+						}
+					/>
+					<TextField
+						label={t('common.description', 'Description')}
+						fullWidth
+						multiline
+						rows={3}
+						value={form.description}
+						onChange={(e) =>
+							setForm((f) => ({ ...f, description: e.target.value }))
+						}
+					/>
+					<FormControlLabel
+						control={
+							<Switch
+								checked={form.billable}
+								onChange={(e) =>
+									setForm((f) => ({ ...f, billable: e.target.checked }))
+								}
+							/>
+						}
+						label={t('timeEntries.billable', 'Billable')}
+					/>
+				</Stack>
+			</DrawerForm>
+		</Box>
+	)
 }

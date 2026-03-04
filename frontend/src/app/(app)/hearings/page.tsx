@@ -40,7 +40,8 @@ export default function HearingsPage() {
     setLoading(true);
     try {
       const res = await hearingApi.list({ limit: 50 });
-      setHearings(res.data);
+      const items = Array.isArray(res) ? res : ((res as any).data ?? []);
+      setHearings(items);
     } finally {
       setLoading(false);
     }

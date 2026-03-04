@@ -36,7 +36,7 @@ export class HearingController {
     const data = await this.hearingService.list(
       user.tenantSlug, caseId, status, courtId, judgeId, cursor, limit ? parseInt(limit, 10) : 20,
     );
-    return { success: true, ...data };
+    return { success: true, data };
   }
 
   @Get(':id')

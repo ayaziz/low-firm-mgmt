@@ -17,6 +17,8 @@ export default function CalendarPage() {
   const { t } = useTranslation();
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [loading, setLoading] = useState(true);
+  const [cursor, setCursor] = useState<string | null>(null);
+  const [hasMore, setHasMore] = useState(false);
   const [tab, setTab] = useState(0);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -29,16 +31,27 @@ export default function CalendarPage() {
     description: '',
   });
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    try {
-      const fetcher = tab === 1 ? calendarApi.getMyEvents : calendarApi.list;
-      const res = await fetcher({ limit: 100 });
-      setEvents(res.data);
-    } finally {
-      setLoading(false);
-    }
-  }, [tab]);
+  const load = useCallback(
+		async (c?: string | null) => {
+			setLoading(true)
+			try {
+				const fetcher = tab === 1 ? calendarApi.getMyEvents : calendarApi.list
+				const res = await fetcher({
+					cursor: c ?? undefined,
+					limit: 20,
+				})
+        const list = Array.isArray(res) ? res : (res.data ?? [])
+
+        if (c) setEvents((prev) => [...prev, ...list])
+      else setEvents(list)
+      setCursor(res.nextCursor ?? (res as any).next_cursor ?? null);
+      setHasMore(!!(res.nextCursor ?? (res as any).next_cursor));
+			} finally {
+				setLoading(false)
+			}
+		},
+		[tab],
+	)
 
   useEffect(() => { load(); }, [load]);
 
