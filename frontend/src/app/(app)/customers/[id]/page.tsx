@@ -5,7 +5,7 @@ import { useParams } from 'next/navigation';
 import { useTranslation } from 'react-i18next';
 import {
   Box, Button, Card, CardContent, Checkbox, Divider, Grid,
-  IconButton, List, ListItem, ListItemIcon, ListItemText, Stack, Tab, Tabs, TextField, Typography,
+  IconButton, List, ListItem, ListItemIcon, ListItemText, MenuItem, Stack, Tab, Tabs, TextField, Typography,
 } from '@mui/material';
 import {
   Add as AddIcon, Edit as EditIcon, Delete as DeleteIcon, Download as DownloadIcon,
@@ -43,13 +43,15 @@ export default function CustomerDetailPage() {
 
   /* ---- drawer state ---- */
   const [editOpen, setEditOpen] = useState(false);
-  const [editForm, setEditForm] = useState({ full_name: '', notes: '' });
+  const [editForm, setEditForm] = useState({ name: '', notes: '' })
 
   const [contactOpen, setContactOpen] = useState(false);
   const [contactForm, setContactForm] = useState({ name: '', role_id: '', phone: '', email: '' });
+  const [editContact, setEditContact] = useState<Contact | null>(null);
 
   const [addressOpen, setAddressOpen] = useState(false);
   const [addressForm, setAddressForm] = useState({ address_type: '', line1: '', line2: '', city: '', country: '' });
+  const [editAddress, setEditAddress] = useState<Address | null>(null);
 
   /* ---- tab data ---- */
   const [documents, setDocuments] = useState<Doc[]>([]);
@@ -71,7 +73,7 @@ export default function CustomerDetailPage() {
         customerApi.getFinancialSummary(id).catch(() => null),
       ]);
       setCustomer(c);
-      setEditForm({ full_name: c.name, notes: c.notes || '' });
+      setEditForm({ name: c.name, notes: c.notes || '' })
       setDocuments(Array.isArray(docs) ? docs : docs.data ?? []);
       setChecklist(Array.isArray(complianceRes) ? complianceRes : complianceRes.items ?? []);
       setAuditEvents(Array.isArray(auditRes) ? auditRes : auditRes.data ?? []);
@@ -88,18 +90,33 @@ export default function CustomerDetailPage() {
     if (!customer) return;
     setSaving(true);
     try {
-      await customerApi.update(id, { ...editForm, row_version: customer.row_version });
+      await customerApi.update(id, {
+				...editForm,
+				rowVersion: customer.rowVersion,
+			})
       await load();
       setEditOpen(false);
     } finally { setSaving(false); }
   };
 
+  const openCreateContact = () => { setEditContact(null); setContactForm({ name: '', role_id: '', phone: '', email: '' }); setContactOpen(true); };
+  const openEditContact = (c: Contact) => {
+    setEditContact(c);
+    setContactForm({ name: c.name, role_id: (c as any).role_id || '', phone: c.phone || '', email: c.email || '' });
+    setContactOpen(true);
+  };
+
   const handleAddContact = async () => {
     setSaving(true);
     try {
-      await customerApi.addContact(id, contactForm);
+      if (editContact) {
+        await customerApi.updateContact(id, editContact.id, contactForm);
+      } else {
+        await customerApi.addContact(id, contactForm);
+      }
       setContactOpen(false);
       setContactForm({ name: '', role_id: '', phone: '', email: '' });
+      setEditContact(null);
       load();
     } finally { setSaving(false); }
   };
@@ -109,12 +126,24 @@ export default function CustomerDetailPage() {
     load();
   };
 
+  const openCreateAddress = () => { setEditAddress(null); setAddressForm({ address_type: '', line1: '', line2: '', city: '', country: '' }); setAddressOpen(true); };
+  const openEditAddress = (a: Address) => {
+    setEditAddress(a);
+    setAddressForm({ address_type: a.address_type || '', line1: a.line1 || '', line2: a.line2 || '', city: a.city || '', country: a.country || '' });
+    setAddressOpen(true);
+  };
+
   const handleAddAddress = async () => {
     setSaving(true);
     try {
-      await customerApi.addAddress(id, addressForm);
+      if (editAddress) {
+        await customerApi.updateAddress(id, editAddress.id, addressForm);
+      } else {
+        await customerApi.addAddress(id, addressForm);
+      }
       setAddressOpen(false);
       setAddressForm({ address_type: '', line1: '', line2: '', city: '', country: '' });
+      setEditAddress(null);
       load();
     } finally { setSaving(false); }
   };
@@ -208,7 +237,7 @@ export default function CustomerDetailPage() {
           <TabPanel value={tab} index={1}>
             <Stack direction="row" justifyContent="space-between" alignItems="center" mb={2}>
               <Typography variant="h6">{t('customer.contacts', 'Contacts')}</Typography>
-              <Button variant="contained" startIcon={<AddIcon />} size="small" onClick={() => setContactOpen(true)}>
+              <Button variant="contained" startIcon={<AddIcon />} size="small" onClick={openCreateContact}>
                 {t('common.add', 'Add')}
               </Button>
             </Stack>
@@ -220,9 +249,10 @@ export default function CustomerDetailPage() {
                       {i > 0 && <Divider />}
                       <ListItem
                         secondaryAction={
-                          <IconButton edge="end" onClick={() => handleDeleteContact(c.id)}>
-                            <DeleteIcon fontSize="small" />
-                          </IconButton>
+                          <Stack direction="row" spacing={0.5}>
+                            <IconButton size="small" onClick={() => openEditContact(c)}><EditIcon fontSize="small" /></IconButton>
+                            <IconButton size="small" onClick={() => handleDeleteContact(c.id)}><DeleteIcon fontSize="small" /></IconButton>
+                          </Stack>
                         }
                       >
                         <ListItemText
@@ -243,7 +273,7 @@ export default function CustomerDetailPage() {
           <TabPanel value={tab} index={2}>
             <Stack direction="row" justifyContent="space-between" alignItems="center" mb={2}>
               <Typography variant="h6">{t('customer.addresses', 'Addresses')}</Typography>
-              <Button variant="contained" startIcon={<AddIcon />} size="small" onClick={() => setAddressOpen(true)}>
+              <Button variant="contained" startIcon={<AddIcon />} size="small" onClick={openCreateAddress}>
                 {t('common.add', 'Add')}
               </Button>
             </Stack>
@@ -255,9 +285,10 @@ export default function CustomerDetailPage() {
                       <CardContent>
                         <Stack direction="row" justifyContent="space-between" alignItems="center">
                           <StatusBadge status={a.address_type} variant="outlined" />
-                          <IconButton size="small" onClick={() => handleDeleteAddress(a.id)}>
-                            <DeleteIcon fontSize="small" />
-                          </IconButton>
+                          <Stack direction="row" spacing={0.5}>
+                            <IconButton size="small" onClick={() => openEditAddress(a)}><EditIcon fontSize="small" /></IconButton>
+                            <IconButton size="small" onClick={() => handleDeleteAddress(a.id)}><DeleteIcon fontSize="small" /></IconButton>
+                          </Stack>
                         </Stack>
                         <Typography variant="body2" mt={1}>{a.line1}</Typography>
                         {a.line2 && <Typography variant="body2">{a.line2}</Typography>}
@@ -409,8 +440,8 @@ export default function CustomerDetailPage() {
           <TextField
             label={t('customer.name', 'Name')}
             fullWidth
-            value={editForm.full_name}
-            onChange={e => setEditForm(f => ({ ...f, full_name: e.target.value }))}
+            value={editForm.name}
+            onChange={e => setEditForm(f => ({ ...f, name: e.target.value }))}
           />
           <TextField
             label={t('customer.notes', 'Notes')}
@@ -423,32 +454,45 @@ export default function CustomerDetailPage() {
         </Stack>
       </DrawerForm>
 
-      {/* Add Contact */}
+      {/* Add/Edit Contact */}
       <DrawerForm
         open={contactOpen}
-        title={`${t('common.add', 'Add')} ${t('customer.contact', 'Contact')}`}
-        onClose={() => setContactOpen(false)}
+        title={editContact ? `${t('common.edit', 'Edit')} ${t('customer.contact', 'Contact')}` : `${t('common.add', 'Add')} ${t('customer.contact', 'Contact')}`}
+        onClose={() => { setContactOpen(false); setEditContact(null); }}
         onSubmit={handleAddContact}
         loading={saving}
       >
         <Stack spacing={2.5}>
           <TextField label={t('customer.contactName', 'Name')} fullWidth required value={contactForm.name} onChange={e => setContactForm(f => ({ ...f, name: e.target.value }))} />
-          <TextField label={t('customer.contactRole', 'Role')} fullWidth value={contactForm.role_id} onChange={e => setContactForm(f => ({ ...f, role_id: e.target.value }))} />
+          <TextField label={t('customer.contactRole', 'Role')} select fullWidth value={contactForm.role_id} onChange={e => setContactForm(f => ({ ...f, role_id: e.target.value }))}>
+            <MenuItem value=""><em>{t('common.none', 'None')}</em></MenuItem>
+            <MenuItem value="Owner">Owner</MenuItem>
+            <MenuItem value="Manager">Manager</MenuItem>
+            <MenuItem value="Legal Representative">Legal Representative</MenuItem>
+            <MenuItem value="Accountant">Accountant</MenuItem>
+            <MenuItem value="Primary Contact">Primary Contact</MenuItem>
+            <MenuItem value="Other">Other</MenuItem>
+          </TextField>
           <TextField label={t('customer.phone', 'Phone')} fullWidth value={contactForm.phone} onChange={e => setContactForm(f => ({ ...f, phone: e.target.value }))} />
           <TextField label={t('customer.email', 'Email')} fullWidth value={contactForm.email} onChange={e => setContactForm(f => ({ ...f, email: e.target.value }))} />
         </Stack>
       </DrawerForm>
 
-      {/* Add Address */}
+      {/* Add/Edit Address */}
       <DrawerForm
         open={addressOpen}
-        title={`${t('common.add', 'Add')} ${t('customer.address', 'Address')}`}
-        onClose={() => setAddressOpen(false)}
+        title={editAddress ? `${t('common.edit', 'Edit')} ${t('customer.address', 'Address')}` : `${t('common.add', 'Add')} ${t('customer.address', 'Address')}`}
+        onClose={() => { setAddressOpen(false); setEditAddress(null); }}
         onSubmit={handleAddAddress}
         loading={saving}
       >
         <Stack spacing={2.5}>
-          <TextField label={t('customer.addressType', 'Type')} fullWidth required value={addressForm.address_type} onChange={e => setAddressForm(f => ({ ...f, address_type: e.target.value }))} />
+          <TextField label={t('customer.addressType', 'Type')} select fullWidth required value={addressForm.address_type} onChange={e => setAddressForm(f => ({ ...f, address_type: e.target.value }))}>
+            <MenuItem value="Home">Home</MenuItem>
+            <MenuItem value="Work">Work</MenuItem>
+            <MenuItem value="Mailing">Mailing</MenuItem>
+            <MenuItem value="Other">Other</MenuItem>
+          </TextField>
           <TextField label={t('customer.addressLine1', 'Line 1')} fullWidth required value={addressForm.line1} onChange={e => setAddressForm(f => ({ ...f, line1: e.target.value }))} />
           <TextField label={t('customer.addressLine2', 'Line 2')} fullWidth value={addressForm.line2} onChange={e => setAddressForm(f => ({ ...f, line2: e.target.value }))} />
           <TextField label={t('customer.city', 'City')} fullWidth value={addressForm.city} onChange={e => setAddressForm(f => ({ ...f, city: e.target.value }))} />

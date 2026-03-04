@@ -35,7 +35,9 @@ import {
   CheckCircle as FinalizeIcon,
   Payment as PaymentIcon,
   Block as VoidIcon,
+  Edit as EditIcon,
 } from '@mui/icons-material';
+import type { Payment } from '@/types';
 import { accountingApi } from '@/api';
 import type { Invoice } from '@/types';
 
@@ -59,6 +61,7 @@ export default function InvoiceDetailPage() {
   const [paymentDialogOpen, setPaymentDialogOpen] = useState(false);
   const [paymentForm, setPaymentForm] = useState({ amount: 0, method: 'BankTransfer', reference: '' });
   const [saving, setSaving] = useState(false);
+  const [editPayment, setEditPayment] = useState<Payment | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -95,18 +98,37 @@ export default function InvoiceDetailPage() {
     await accountingApi.downloadInvoicePdf(id);
   };
 
+  const openEditPayment = (p: Payment) => {
+    setEditPayment(p);
+    setPaymentForm({
+      amount: Number(p.amount),
+      method: p.payment_method || 'BankTransfer',
+      reference: p.reference || '',
+    });
+    setPaymentDialogOpen(true);
+  };
+
   const handleRecordPayment = async () => {
     setSaving(true);
     try {
-      await accountingApi.createPayment({
-        invoiceId: id,
-        amount: Number(paymentForm.amount),
-        method: paymentForm.method,
-        paymentDate: new Date().toISOString().split('T')[0],
-        reference: paymentForm.reference || undefined,
-      });
+      if (editPayment) {
+        await accountingApi.updatePayment(editPayment.id, {
+          amount: Number(paymentForm.amount),
+          method: paymentForm.method,
+          reference: paymentForm.reference || undefined,
+        });
+      } else {
+        await accountingApi.createPayment({
+          invoiceId: id,
+          amount: Number(paymentForm.amount),
+          method: paymentForm.method,
+          paymentDate: new Date().toISOString().split('T')[0],
+          reference: paymentForm.reference || undefined,
+        });
+      }
       setPaymentDialogOpen(false);
       setPaymentForm({ amount: 0, method: 'BankTransfer', reference: '' });
+      setEditPayment(null);
       load();
     } finally {
       setSaving(false);
@@ -288,16 +310,22 @@ export default function InvoiceDetailPage() {
 											<TableCell>{t('accounting.paymentMethod')}</TableCell>
 											<TableCell>Reference</TableCell>
 											<TableCell>{t('common.createdAt')}</TableCell>
-										</TableRow>
-									</TableHead>
-									<TableBody>
-										{invoice.payments.map((p, i) => (
-											<TableRow key={p.id || i}>
-												<TableCell>${Number(p.amount).toFixed(2)}</TableCell>
-												<TableCell>{p.payment_method}</TableCell>
-												<TableCell>{p.reference || '—'}</TableCell>
-												<TableCell>
-													{new Date(p.created_at).toLocaleString()}
+										<TableCell align="right">{t('common.actions')}</TableCell>
+									</TableRow>
+								</TableHead>
+								<TableBody>
+									{invoice.payments.map((p, i) => (
+										<TableRow key={p.id || i}>
+											<TableCell>${Number(p.amount).toFixed(2)}</TableCell>
+											<TableCell>{p.payment_method}</TableCell>
+											<TableCell>{p.reference || '—'}</TableCell>
+											<TableCell>
+												{new Date(p.created_at).toLocaleString()}
+											</TableCell>
+											<TableCell align="right">
+												<IconButton size="small" onClick={() => openEditPayment(p)}>
+													<EditIcon fontSize="small" />
+												</IconButton>
 												</TableCell>
 											</TableRow>
 										))}
@@ -318,11 +346,11 @@ export default function InvoiceDetailPage() {
 			{/* Record Payment Dialog */}
 			<Dialog
 				open={paymentDialogOpen}
-				onClose={() => setPaymentDialogOpen(false)}
+				onClose={() => { setPaymentDialogOpen(false); setEditPayment(null); }}
 				maxWidth="xs"
 				fullWidth
 			>
-				<DialogTitle>{t('accounting.recordPayment')}</DialogTitle>
+				<DialogTitle>{editPayment ? t('common.edit') + ' ' + t('accounting.payments') : t('accounting.recordPayment')}</DialogTitle>
 				<DialogContent>
 					<Stack spacing={2} mt={1}>
 						<TextField
@@ -364,7 +392,7 @@ export default function InvoiceDetailPage() {
 					</Stack>
 				</DialogContent>
 				<DialogActions>
-					<Button onClick={() => setPaymentDialogOpen(false)}>
+					<Button onClick={() => { setPaymentDialogOpen(false); setEditPayment(null); }}>
 						{t('common.cancel')}
 					</Button>
 					<Button

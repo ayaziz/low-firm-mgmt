@@ -7,8 +7,9 @@ import {
   CreateUserDto, UpdateUserDto,
   CreateMasterDataDto, UpdateMasterDataDto,
   SaveExpenseWorkflowDto, UpdateTenantSettingsDto,
-  UpsertRetentionPolicyDto, CreateCourtDto, UpdateCourtDto,
+  UpsertRetentionPolicyDto,
 } from './admin.dto';
+import { CreateCourtDto, UpdateCourtDto } from '../court/court.dto';
 
 @Controller('admin')
 @UseGuards(JwtAuthGuard, RolesGuard)

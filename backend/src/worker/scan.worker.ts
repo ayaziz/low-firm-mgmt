@@ -3,6 +3,8 @@ import { InjectQueue } from '@nestjs/bullmq';
 import { Job, Queue } from 'bullmq';
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { ScannerService } from './scanner.service';
+import { NotificationService } from '../notification/notification.service';
 
 interface ScanJobData {
   tenantSlug: string;
@@ -24,6 +26,8 @@ export class ScanWorker extends WorkerHost {
 
   constructor(
     private readonly prisma: PrismaService,
+    private readonly scanner: ScannerService,
+    private readonly notifications: NotificationService,
     @InjectQueue('document-ocr') private readonly ocrQueue: Queue,
   ) {
     super();
@@ -45,8 +49,10 @@ export class ScanWorker extends WorkerHost {
       return;
     }
 
-    // Deterministic scanner: filename containing "EICAR" → Failed, else → Passed
-    const scanResult = data.fileName && data.fileName.toUpperCase().includes('EICAR') ? 'Failed' : 'Passed';
+    // Use ScannerService (ClamAV integration with heuristic fallback)
+    const fileBuffer = await this.fetchFileBuffer(data);
+    const result = await this.scanner.scan(fileBuffer, data.fileName);
+    const scanResult = result.clean ? 'Passed' : 'Failed';
 
     // Update scan status
     await this.prisma.executeTenant(data.tenantSlug,
@@ -76,19 +82,57 @@ export class ScanWorker extends WorkerHost {
     await this.prisma.executeTenant(data.tenantSlug,
       `INSERT INTO audit_events (id, event_type, actor_user_id, entity_type, entity_id, payload, correlation_id, created_at)
        VALUES ($1, 'DOCUMENT_SCAN_COMPLETED', NULL, 'DocumentVersion', $2, $3, $4, NOW())`,
-      [uuidv4(), data.versionId, JSON.stringify({ result: scanResult, fileName: data.fileName }), data.correlationId]);
+      [uuidv4(), data.versionId,
+        JSON.stringify({ result: scanResult, virusName: result.virusName, fileName: data.fileName }),
+        data.correlationId]);
 
     // Create notification for uploader
     const notifTitle = scanResult === 'Passed' ? 'Document ready' : 'Upload failed security scan';
     const notifBody = scanResult === 'Passed'
       ? `Your document has been scanned and is now available.`
-      : `Your uploaded file did not pass the security scan and cannot be accessed.`;
+      : `Your uploaded file did not pass the security scan${result.virusName ? ` (${result.virusName})` : ''}.`;
 
-    await this.prisma.executeTenant(data.tenantSlug,
-      `INSERT INTO notifications (id, user_id, title, body, type, entity_type, entity_id, is_read, created_at)
-       VALUES ($1, $2, $3, $4, 'system', 'document', $5, false, NOW())`,
-      [uuidv4(), data.uploadedBy, notifTitle, notifBody, data.documentId]);
+    await this.notifications.create(data.tenantSlug, {
+      userId: data.uploadedBy,
+      title: notifTitle,
+      body: notifBody,
+      type: 'system',
+      entityType: 'document',
+      entityId: data.documentId,
+    });
 
     this.logger.log(`Scan complete for version ${data.versionId}: ${scanResult}`);
+  }
+
+  /**
+   * Fetch the file buffer from MinIO/S3.
+   * Falls back to an empty buffer when the object cannot be retrieved
+   * (the scanner heuristic still works on filename alone).
+   */
+  private async fetchFileBuffer(data: ScanJobData): Promise<Buffer> {
+    try {
+      const { GetObjectCommand, S3Client } = await import('@aws-sdk/client-s3');
+      const s3 = new S3Client({
+        endpoint: process.env.S3_ENDPOINT || 'http://minio:9000',
+        region: process.env.S3_REGION || 'us-east-1',
+        forcePathStyle: true,
+        credentials: {
+          accessKeyId: process.env.S3_ACCESS_KEY || 'minio',
+          secretAccessKey: process.env.S3_SECRET_KEY || 'minio123',
+        },
+      });
+      const resp = await s3.send(new GetObjectCommand({
+        Bucket: process.env.S3_BUCKET || 'loma-documents',
+        Key: data.providerObjectKey,
+      }));
+      const chunks: Uint8Array[] = [];
+      for await (const chunk of resp.Body as any) {
+        chunks.push(chunk);
+      }
+      return Buffer.concat(chunks);
+    } catch (err: any) {
+      this.logger.warn(`Could not fetch file for scan (${err.message}), using empty buffer`);
+      return Buffer.alloc(0);
+    }
   }
 }

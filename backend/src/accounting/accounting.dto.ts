@@ -10,7 +10,7 @@ export class InvoiceLineItemDto {
 }
 
 export class CreateInvoiceDto {
-  @IsUUID() caseId: string;
+  @IsOptional() @IsUUID() caseId?: string;
   @IsUUID() customerId: string;
   @IsOptional() @IsString() currency?: string;
   @IsOptional() @IsDateString() dueDate?: string;
@@ -30,7 +30,7 @@ export class VoidInvoiceDto {
 export class CreatePaymentDto {
   @IsUUID() invoiceId: string;
   @IsNumber() amount: number;
-  @IsEnum(['Cash', 'BankTransfer', 'Cheque', 'CreditCard', 'Other']) method: string;
+  @IsEnum(['Cash', 'BankTransfer', 'Cheque', 'Card', 'Other']) method: string;
   @IsOptional() @IsDateString() paymentDate?: string;
   @IsOptional() @IsString() reference?: string;
   @IsOptional() @IsString() notes?: string;
@@ -38,13 +38,13 @@ export class CreatePaymentDto {
 
 // --- Expenses ---
 export class CreateExpenseDto {
-  @IsUUID() caseId: string;
-  @IsUUID() categoryId: string;
-  @IsUUID() customerId: string;
+  @IsOptional() @IsUUID() caseId?: string;
+  @IsOptional() @IsUUID() categoryId?: string;
+  @IsOptional() @IsUUID() customerId?: string;
   @IsNumber() amount: number;
   @IsOptional() @IsString() description?: string;
   @IsOptional() @IsDateString() expenseDate?: string;
-  @IsOptional() @IsString() receiptDocId?: string;
+  @IsOptional() @IsUUID() receiptDocId?: string;
 }
 
 export class ApproveExpenseDto {
@@ -60,5 +60,51 @@ export class CreateWageDto {
   @IsUUID() userId: string;
   @IsNumber() amount: number;
   @IsString() period: string; // e.g., "2024-01"
+  @IsOptional() @IsString() notes?: string;
+  @IsOptional() @IsString() staffName?: string;
+  @IsOptional() @IsNumber() deductions?: number;
+  @IsOptional() @IsNumber() grossAmount?: number;
+  @IsOptional() @IsNumber() netAmount?: number;
+  @IsOptional() @IsEnum(['Pending', 'Paid', 'Cancelled']) paymentStatus?: string;
+}
+
+export class UpdateWageDto {
+  @IsOptional() @IsNumber() amount?: number;
+  @IsOptional() @IsString() period?: string;
+  @IsOptional() @IsString() notes?: string;
+  @IsOptional() @IsString() staffName?: string;
+  @IsOptional() @IsNumber() deductions?: number;
+  @IsOptional() @IsNumber() grossAmount?: number;
+  @IsOptional() @IsNumber() netAmount?: number;
+  @IsOptional() @IsEnum(['Pending', 'Paid', 'Cancelled']) paymentStatus?: string;
+}
+
+export class UpdateExpenseDto {
+  @IsOptional() @IsUUID() caseId?: string;
+  @IsOptional() @IsUUID() categoryId?: string;
+  @IsOptional() @IsUUID() customerId?: string;
+  @IsOptional() @IsNumber() amount?: number;
+  @IsOptional() @IsString() description?: string;
+  @IsOptional() @IsDateString() expenseDate?: string;
+  @IsOptional() @IsUUID() receiptDocId?: string;
+}
+
+export class UpdateInvoiceDto {
+  @IsOptional() @IsString() currency?: string;
+  @IsOptional() @IsDateString() dueDate?: string;
+  @IsOptional() @IsString() notes?: string;
+  @IsOptional() @IsNumber() discountRatePct?: number;
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => InvoiceLineItemDto)
+  lineItems?: InvoiceLineItemDto[];
+}
+
+export class UpdatePaymentDto {
+  @IsOptional() @IsNumber() amount?: number;
+  @IsOptional() @IsEnum(['Cash', 'BankTransfer', 'Cheque', 'Card', 'Other']) method?: string;
+  @IsOptional() @IsDateString() paymentDate?: string;
+  @IsOptional() @IsString() reference?: string;
   @IsOptional() @IsString() notes?: string;
 }

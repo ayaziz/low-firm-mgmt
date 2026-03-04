@@ -4,8 +4,7 @@ import {
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
-import { Roles } from '../common/decorators';
-import { CurrentUser } from '../common/decorators';
+import { Roles, CurrentUser, AuditAction } from '../common/decorators';
 import { FolderService } from './folder.service';
 import { CreateFolderDto, UpdateFolderDto, MoveFolderDto, MoveDocumentToFolderDto } from './folder.dto';
 
@@ -16,6 +15,7 @@ export class FolderController {
 
   @Post()
   @Roles('Lawyer', 'TenantAdmin', 'SystemAdmin')
+  @AuditAction({ eventType: 'FOLDER_CREATED', entityType: 'Folder' })
   @HttpCode(HttpStatus.CREATED)
   async create(@CurrentUser() user: any, @Body() dto: CreateFolderDto) {
     const data = await this.folderService.create(user.tenantSlug, dto, user.sub);

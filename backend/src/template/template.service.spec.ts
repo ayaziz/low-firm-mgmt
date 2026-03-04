@@ -25,8 +25,8 @@ describe('TemplateService', () => {
       const dto = {
         name: 'Contract',
         category: 'Contract' as const,
-        template_body: 'Dear {{clientName}}, your case {{caseRef}} is confirmed.',
-        variable_schema: { clientName: 'string', caseRef: 'string' },
+        templateBody: 'Dear {{clientName}}, your case {{caseRef}} is confirmed.',
+        variableSchema: { clientName: 'string', caseRef: 'string' },
       };
 
       mockPrisma.executeTenant.mockResolvedValue(undefined);
@@ -47,7 +47,7 @@ describe('TemplateService', () => {
       const dto = {
         name: 'Bad Template',
         category: 'Other' as const,
-        template_body: 'broken template',
+        templateBody: 'broken template',
       };
 
       await expect(
@@ -117,7 +117,7 @@ describe('TemplateService', () => {
       });
 
       await expect(
-        service.update('test-firm', 't1', { template_body: 'broken' }, 'user-1'),
+        service.update('test-firm', 't1', { templateBody: 'broken' }, 'user-1'),
       ).rejects.toThrow(BadRequestException);
 
       spy.mockRestore();

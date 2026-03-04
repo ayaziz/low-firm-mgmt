@@ -4,16 +4,16 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { useParams } from 'next/navigation';
 import { useTranslation } from 'react-i18next';
 import {
-  Box, Button, Card, CardContent, Chip, Divider, Grid,
+  Autocomplete, Box, Button, Card, CardContent, Chip, Divider, Grid,
   IconButton, List, ListItem, ListItemText, MenuItem, Stack, Tab, Tabs, TextField, Typography,
 } from '@mui/material';
 import {
-  Add as AddIcon, Download as DownloadIcon,
+  Add as AddIcon, Download as DownloadIcon, Edit as EditIcon,
 } from '@mui/icons-material';
-import { caseApi, documentApi, auditApi, accountingApi, adminApi } from '@/api';
+import { caseApi, documentApi, auditApi, accountingApi, adminApi, customerApi, courtApi } from '@/api';
 import type {
   Case, Task, Session, Filing, Note, Communication, CompletenessResult,
-  Document as Doc, AuditEvent, Invoice, MasterDataItem,
+  Document as Doc, AuditEvent, Invoice, MasterDataItem, UserInfo, Customer, Court,
 } from '@/types';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import { CAPABILITIES } from '@/auth/capabilities';
@@ -78,14 +78,18 @@ export default function CaseDetailPage() {
   const [filingOpen, setFilingOpen] = useState(false);
   const [noteOpen, setNoteOpen] = useState(false);
   const [commOpen, setCommOpen] = useState(false);
+  const [membershipOpen, setMembershipOpen] = useState(false);
+  const [partyOpen, setPartyOpen] = useState(false);
   const [saving, setSaving] = useState(false);
 
   /* ---- forms ---- */
-  const [taskForm, setTaskForm] = useState({ title: '', description: '', dueDate: '' });
-  const [sessionForm, setSessionForm] = useState({ title: '', typeId: '', startDateTime: '', endDateTime: '', location: '' });
+  const [taskForm, setTaskForm] = useState({ title: '', description: '', dueDate: '', assigneeUserId: '', linkedDocumentIds: [] as string[], estimatedHours: '' });
+  const [sessionForm, setSessionForm] = useState({ title: '', typeId: '', startDateTime: '', endDateTime: '', location: '', courtId: '', linkedDocumentIds: [] as string[] });
   const [filingForm, setFilingForm] = useState({ typeId: '', filedDate: '', notes: '' });
-  const [noteForm, setNoteForm] = useState({ content: '' });
+  const [noteForm, setNoteForm] = useState({ content: '', referencedNoteId: '' });
   const [commForm, setCommForm] = useState({ direction: 'Inbound' as 'Inbound' | 'Outbound', typeId: '', dateTime: '', summary: '' });
+  const [membershipForm, setMembershipForm] = useState({ userId: '', role: 'CaseMember' });
+  const [partyForm, setPartyForm] = useState({ partyId: '', partyRoleType: 'Customer', notes: '' });
 
   /* ---- confirm transition ---- */
   const [transitionTarget, setTransitionTarget] = useState<string | null>(null);
@@ -94,6 +98,16 @@ export default function CaseDetailPage() {
   const [sessionTypes, setSessionTypes] = useState<MasterDataItem[]>([]);
   const [filingTypes, setFilingTypes] = useState<MasterDataItem[]>([]);
   const [commTypes, setCommTypes] = useState<MasterDataItem[]>([]);
+  const [users, setUsers] = useState<UserInfo[]>([]);
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [courts, setCourts] = useState<Court[]>([]);
+
+  /* ---- edit state (null = create mode) ---- */
+  const [editTask, setEditTask] = useState<Task | null>(null);
+  const [editSession, setEditSession] = useState<Session | null>(null);
+  const [editFiling, setEditFiling] = useState<Filing | null>(null);
+  const [editNote, setEditNote] = useState<Note | null>(null);
+  const [editComm, setEditComm] = useState<Communication | null>(null);
 
   /* ---- load ---- */
   const load = useCallback(async () => {
@@ -138,10 +152,19 @@ export default function CaseDetailPage() {
       adminApi.listMasterData('sessionType').catch(() => []),
       adminApi.listMasterData('filingType').catch(() => []),
       adminApi.listMasterData('communicationType').catch(() => []),
-    ]).then(([st, ft, ct]) => {
+      adminApi.listUsers().catch(() => ({ data: [] })),
+      customerApi.list().catch(() => ({ data: [] })),
+      courtApi.list({ limit: 200 }).catch(() => ({ data: [] })),
+    ]).then(([st, ft, ct, usersRes, custRes, courtRes]) => {
       setSessionTypes((st as MasterDataItem[]).filter((i: MasterDataItem) => i.is_active));
       setFilingTypes((ft as MasterDataItem[]).filter((i: MasterDataItem) => i.is_active));
       setCommTypes((ct as MasterDataItem[]).filter((i: MasterDataItem) => i.is_active));
+      const uList = Array.isArray(usersRes) ? usersRes : (usersRes as any).data ?? [];
+      setUsers(uList);
+      const cList = Array.isArray(custRes) ? custRes : (custRes as any).data ?? [];
+      setCustomers(cList);
+      const crList = Array.isArray(courtRes) ? courtRes : (courtRes as any).data ?? [];
+      setCourts(crList.filter((c: Court) => c.is_active));
     });
   }, []);
 
@@ -153,17 +176,81 @@ export default function CaseDetailPage() {
     load();
   };
 
+  /* ---- open helpers ---- */
+  const openCreateTask = () => { setEditTask(null); setTaskForm({ title: '', description: '', dueDate: '', assigneeUserId: '', linkedDocumentIds: [], estimatedHours: '' }); setTaskOpen(true); };
+  const openEditTask = (tk: Task) => {
+    setEditTask(tk);
+    setTaskForm({ title: tk.title, description: tk.description || '', dueDate: tk.due_date ? tk.due_date.slice(0, 10) : '', assigneeUserId: (tk as any).assignee_user_id || '', linkedDocumentIds: (tk as any).linked_document_ids || [], estimatedHours: (tk as any).estimated_hours ?? '' });
+    setTaskOpen(true);
+  };
+  const openCreateSession = () => { setEditSession(null); setSessionForm({ title: '', typeId: '', startDateTime: '', endDateTime: '', location: '', courtId: '', linkedDocumentIds: [] }); setSessionOpen(true); };
+  const openEditSession = (s: Session) => {
+    setEditSession(s);
+    setSessionForm({
+      title: (s as any).title || '',
+      typeId: (s as any).type_id || (s as any).typeId || '',
+      startDateTime: s.session_date ? s.session_date.slice(0, 16) : '',
+      endDateTime: (s as any).end_date_time ? (s as any).end_date_time.slice(0, 16) : '',
+      location: s.location || '',
+      courtId: (s as any).court_id || '',
+      linkedDocumentIds: (s as any).linked_document_ids || [],
+    });
+    setSessionOpen(true);
+  };
+  const openCreateFiling = () => { setEditFiling(null); setFilingForm({ typeId: '', filedDate: '', notes: '' }); setFilingOpen(true); };
+  const openEditFiling = (f: Filing) => {
+    setEditFiling(f);
+    setFilingForm({ typeId: (f as any).type_id || (f as any).typeId || '', filedDate: f.filed_date ? f.filed_date.slice(0, 10) : '', notes: (f as any).notes || '' });
+    setFilingOpen(true);
+  };
+
+  const openCreateNote = () => { setEditNote(null); setNoteForm({ content: '', referencedNoteId: '' }); setNoteOpen(true); };
+  const openEditNote = (n: Note) => {
+    setEditNote(n);
+    setNoteForm({ content: (n as any).body || n.content || '', referencedNoteId: (n as any).referenced_note_id || '' });
+    setNoteOpen(true);
+  };
+
+  const openCreateComm = () => { setEditComm(null); setCommForm({ direction: 'Inbound', typeId: '', dateTime: '', summary: '' }); setCommOpen(true); };
+  const openEditComm = (c: Communication) => {
+    setEditComm(c);
+    setCommForm({
+      direction: c.direction || 'Inbound',
+      typeId: (c as any).type_id || '',
+      dateTime: ((c as any).date_time || c.comm_date || '').slice(0, 16),
+      summary: c.summary || '',
+    });
+    setCommOpen(true);
+  };
+
+  const openCreateMembership = () => { setMembershipForm({ userId: '', role: 'CaseMember' }); setMembershipOpen(true); };
+  const openCreateParty = () => { setPartyForm({ partyId: '', partyRoleType: 'Customer', notes: '' }); setPartyOpen(true); };
+
   const handleCreateTask = async () => {
     setSaving(true);
     try {
-      await caseApi.createTask(id, {
-        title: taskForm.title,
-        description: taskForm.description || undefined,
-        assigneeUserId: user?.id,
-        dueDate: taskForm.dueDate || undefined,
-      } as any);
+      if (editTask) {
+        await caseApi.updateTask(id, editTask.id, {
+          title: taskForm.title,
+          description: taskForm.description || undefined,
+          assigneeUserId: (taskForm as any).assigneeUserId || undefined,
+          dueDate: taskForm.dueDate || undefined,
+          linkedDocumentIds: taskForm.linkedDocumentIds.length ? taskForm.linkedDocumentIds : undefined,
+          estimatedHours: taskForm.estimatedHours ? Number(taskForm.estimatedHours) : undefined,
+        } as any);
+      } else {
+        await caseApi.createTask(id, {
+          title: taskForm.title,
+          description: taskForm.description || undefined,
+          assigneeUserId: (taskForm as any).assigneeUserId || user?.id,
+          dueDate: taskForm.dueDate || undefined,
+          linkedDocumentIds: taskForm.linkedDocumentIds.length ? taskForm.linkedDocumentIds : undefined,
+          estimatedHours: taskForm.estimatedHours ? Number(taskForm.estimatedHours) : undefined,
+        } as any);
+      }
       setTaskOpen(false);
-      setTaskForm({ title: '', description: '', dueDate: '' });
+      setTaskForm({ title: '', description: '', dueDate: '', assigneeUserId: '', linkedDocumentIds: [], estimatedHours: '' });
+      setEditTask(null);
       const res = await caseApi.listTasks(id);
       setTasks(Array.isArray(res) ? res : res.data ?? []);
     } finally { setSaving(false); }
@@ -172,15 +259,25 @@ export default function CaseDetailPage() {
   const handleCreateSession = async () => {
     setSaving(true);
     try {
-      await caseApi.createSession(id, {
-        title: sessionForm.title,
-        typeId: sessionForm.typeId,
-        startDateTime: sessionForm.startDateTime ? new Date(sessionForm.startDateTime).toISOString() : undefined,
-        endDateTime: sessionForm.endDateTime ? new Date(sessionForm.endDateTime).toISOString() : undefined,
-        location: sessionForm.location || undefined,
-      } as any);
+      if (editSession) {
+        await caseApi.rescheduleSession(id, editSession.id, {
+          newDateTime: sessionForm.startDateTime ? new Date(sessionForm.startDateTime).toISOString() : new Date().toISOString(),
+          reason: 'Rescheduled via edit',
+        });
+      } else {
+        await caseApi.createSession(id, {
+          title: sessionForm.title,
+          typeId: sessionForm.typeId,
+          startDateTime: sessionForm.startDateTime ? new Date(sessionForm.startDateTime).toISOString() : undefined,
+          endDateTime: sessionForm.endDateTime ? new Date(sessionForm.endDateTime).toISOString() : undefined,
+          location: sessionForm.location || undefined,
+          courtId: sessionForm.courtId || undefined,
+          linkedDocumentIds: sessionForm.linkedDocumentIds.length ? sessionForm.linkedDocumentIds : undefined,
+        } as any);
+      }
       setSessionOpen(false);
-      setSessionForm({ title: '', typeId: '', startDateTime: '', endDateTime: '', location: '' });
+      setSessionForm({ title: '', typeId: '', startDateTime: '', endDateTime: '', location: '', courtId: '', linkedDocumentIds: [] });
+      setEditSession(null);
       const res = await caseApi.listSessions(id);
       setSessions(Array.isArray(res) ? res : res.data ?? []);
     } finally { setSaving(false); }
@@ -189,13 +286,22 @@ export default function CaseDetailPage() {
   const handleCreateFiling = async () => {
     setSaving(true);
     try {
-      await caseApi.createFiling(id, {
-        typeId: filingForm.typeId,
-        filedDate: filingForm.filedDate || undefined,
-        notes: filingForm.notes || undefined,
-      } as any);
+      if (editFiling) {
+        await caseApi.updateFiling(id, editFiling.id, {
+          typeId: filingForm.typeId,
+          filedDate: filingForm.filedDate || undefined,
+          notes: filingForm.notes || undefined,
+        } as any);
+      } else {
+        await caseApi.createFiling(id, {
+          typeId: filingForm.typeId,
+          filedDate: filingForm.filedDate || undefined,
+          notes: filingForm.notes || undefined,
+        } as any);
+      }
       setFilingOpen(false);
       setFilingForm({ typeId: '', filedDate: '', notes: '' });
+      setEditFiling(null);
       const res = await caseApi.listFilings(id);
       setFilings(Array.isArray(res) ? res : res.data ?? []);
     } finally { setSaving(false); }
@@ -204,9 +310,14 @@ export default function CaseDetailPage() {
   const handleCreateNote = async () => {
     setSaving(true);
     try {
-      await caseApi.createNote(id, noteForm.content);
+      if (editNote) {
+        await caseApi.updateNote(id, editNote.id, { body: noteForm.content, referencedNoteId: noteForm.referencedNoteId || undefined });
+      } else {
+        await caseApi.createNote(id, noteForm.content, noteForm.referencedNoteId || undefined);
+      }
       setNoteOpen(false);
-      setNoteForm({ content: '' });
+      setNoteForm({ content: '', referencedNoteId: '' });
+      setEditNote(null);
       const res = await caseApi.listNotes(id);
       setNotes(Array.isArray(res) ? res : res.data ?? []);
     } finally { setSaving(false); }
@@ -215,16 +326,48 @@ export default function CaseDetailPage() {
   const handleCreateComm = async () => {
     setSaving(true);
     try {
-      await caseApi.createCommunication(id, {
-        typeId: commForm.typeId,
-        direction: commForm.direction,
-        dateTime: commForm.dateTime ? new Date(commForm.dateTime).toISOString() : new Date().toISOString(),
-        summary: commForm.summary || undefined,
-      } as any);
+      if (editComm) {
+        await caseApi.updateCommunication(id, editComm.id, {
+          typeId: commForm.typeId || undefined,
+          direction: commForm.direction,
+          dateTime: commForm.dateTime ? new Date(commForm.dateTime).toISOString() : undefined,
+          summary: commForm.summary || undefined,
+        });
+      } else {
+        await caseApi.createCommunication(id, {
+          typeId: commForm.typeId,
+          direction: commForm.direction,
+          dateTime: commForm.dateTime ? new Date(commForm.dateTime).toISOString() : new Date().toISOString(),
+          summary: commForm.summary || undefined,
+        } as any);
+      }
       setCommOpen(false);
       setCommForm({ direction: 'Inbound', typeId: '', dateTime: '', summary: '' });
+      setEditComm(null);
       const res = await caseApi.listCommunications(id);
       setComms(Array.isArray(res) ? res : res.data ?? []);
+    } finally { setSaving(false); }
+  };
+
+  const handleCreateMembership = async () => {
+    setSaving(true);
+    try {
+      await caseApi.addMembership(id, membershipForm.userId, membershipForm.role);
+      setMembershipOpen(false);
+      setMembershipForm({ userId: '', role: 'CaseMember' });
+      const res = await caseApi.listMemberships(id);
+      setMemberships(Array.isArray(res) ? res : (res as any).data ?? []);
+    } finally { setSaving(false); }
+  };
+
+  const handleCreateParty = async () => {
+    setSaving(true);
+    try {
+      await caseApi.addParty(id, { partyId: partyForm.partyId, partyRoleType: partyForm.partyRoleType });
+      setPartyOpen(false);
+      setPartyForm({ partyId: '', partyRoleType: 'Customer', notes: '' });
+      const res = await caseApi.listParties(id);
+      setParties(Array.isArray(res) ? res : (res as any).data ?? []);
     } finally { setSaving(false); }
   };
 
@@ -306,7 +449,7 @@ export default function CaseDetailPage() {
             <TabPanel value={tab} index={1}>
               <Stack direction="row" justifyContent="space-between" alignItems="center" mb={2}>
                 <Typography variant="h6">{t('case.tasks', 'Tasks')}</Typography>
-                <Button variant="contained" startIcon={<AddIcon />} size="small" onClick={() => setTaskOpen(true)}>{t('common.add', 'Add')}</Button>
+                <Button variant="contained" startIcon={<AddIcon />} size="small" onClick={openCreateTask}>{t('common.add', 'Add')}</Button>
               </Stack>
               {tasks.length > 0 ? (
                 <Card>
@@ -314,7 +457,9 @@ export default function CaseDetailPage() {
                     {tasks.map((tk, i) => (
                       <React.Fragment key={tk.id}>
                         {i > 0 && <Divider />}
-                        <ListItem>
+                        <ListItem secondaryAction={
+                          <IconButton edge="end" size="small" onClick={() => openEditTask(tk)}><EditIcon fontSize="small" /></IconButton>
+                        }>
                           <ListItemText
                             primary={tk.title}
                             secondary={tk.due_date ? `Due: ${new Date(tk.due_date).toLocaleDateString()}` : undefined}
@@ -332,7 +477,7 @@ export default function CaseDetailPage() {
             <TabPanel value={tab} index={2}>
               <Stack direction="row" justifyContent="space-between" alignItems="center" mb={2}>
                 <Typography variant="h6">{t('case.sessions', 'Sessions')}</Typography>
-                <Button variant="contained" startIcon={<AddIcon />} size="small" onClick={() => setSessionOpen(true)}>{t('common.add', 'Add')}</Button>
+                <Button variant="contained" startIcon={<AddIcon />} size="small" onClick={openCreateSession}>{t('common.add', 'Add')}</Button>
               </Stack>
               {sessions.length > 0 ? (
                 <Card>
@@ -340,7 +485,9 @@ export default function CaseDetailPage() {
                     {sessions.map((s, i) => (
                       <React.Fragment key={s.id}>
                         {i > 0 && <Divider />}
-                        <ListItem>
+                        <ListItem secondaryAction={
+                          <IconButton edge="end" size="small" onClick={() => openEditSession(s)}><EditIcon fontSize="small" /></IconButton>
+                        }>
                           <ListItemText
                             primary={`${s.session_type} — ${new Date(s.session_date).toLocaleString()}`}
                             secondary={s.location || s.notes}
@@ -358,7 +505,7 @@ export default function CaseDetailPage() {
             <TabPanel value={tab} index={3}>
               <Stack direction="row" justifyContent="space-between" alignItems="center" mb={2}>
                 <Typography variant="h6">{t('case.filings', 'Filings')}</Typography>
-                <Button variant="contained" startIcon={<AddIcon />} size="small" onClick={() => setFilingOpen(true)}>{t('common.add', 'Add')}</Button>
+                <Button variant="contained" startIcon={<AddIcon />} size="small" onClick={openCreateFiling}>{t('common.add', 'Add')}</Button>
               </Stack>
               {filings.length > 0 ? (
                 <Card>
@@ -366,7 +513,9 @@ export default function CaseDetailPage() {
                     {filings.map((f, i) => (
                       <React.Fragment key={f.id}>
                         {i > 0 && <Divider />}
-                        <ListItem>
+                        <ListItem secondaryAction={
+                          <IconButton edge="end" size="small" onClick={() => openEditFiling(f)}><EditIcon fontSize="small" /></IconButton>
+                        }>
                           <ListItemText
                             primary={f.title || f.filing_type}
                             secondary={[f.filing_type, f.filed_date ? new Date(f.filed_date).toLocaleDateString() : null].filter(Boolean).join(' · ')}
@@ -383,7 +532,7 @@ export default function CaseDetailPage() {
             <TabPanel value={tab} index={4}>
               <Stack direction="row" justifyContent="space-between" alignItems="center" mb={2}>
                 <Typography variant="h6">{t('case.notes', 'Notes')}</Typography>
-                <Button variant="contained" startIcon={<AddIcon />} size="small" onClick={() => setNoteOpen(true)}>{t('common.add', 'Add')}</Button>
+                <Button variant="contained" startIcon={<AddIcon />} size="small" onClick={openCreateNote}>{t('common.add', 'Add')}</Button>
               </Stack>
               {notes.length > 0 ? (
                 <Card>
@@ -391,7 +540,9 @@ export default function CaseDetailPage() {
                     {notes.map((n, i) => (
                       <React.Fragment key={n.id}>
                         {i > 0 && <Divider />}
-                        <ListItem>
+                        <ListItem secondaryAction={
+                          <IconButton edge="end" size="small" onClick={() => openEditNote(n)}><EditIcon fontSize="small" /></IconButton>
+                        }>
                           <ListItemText primary={n.content} secondary={new Date(n.created_at).toLocaleString()} />
                         </ListItem>
                       </React.Fragment>
@@ -405,7 +556,7 @@ export default function CaseDetailPage() {
             <TabPanel value={tab} index={5}>
               <Stack direction="row" justifyContent="space-between" alignItems="center" mb={2}>
                 <Typography variant="h6">{t('case.communications', 'Communications')}</Typography>
-                <Button variant="contained" startIcon={<AddIcon />} size="small" onClick={() => setCommOpen(true)}>{t('common.add', 'Add')}</Button>
+                <Button variant="contained" startIcon={<AddIcon />} size="small" onClick={openCreateComm}>{t('common.add', 'Add')}</Button>
               </Stack>
               {comms.length > 0 ? (
                 <Card>
@@ -413,7 +564,9 @@ export default function CaseDetailPage() {
                     {comms.map((c, i) => (
                       <React.Fragment key={c.id}>
                         {i > 0 && <Divider />}
-                        <ListItem>
+                        <ListItem secondaryAction={
+                          <IconButton edge="end" size="small" onClick={() => openEditComm(c)}><EditIcon fontSize="small" /></IconButton>
+                        }>
                           <ListItemText
                             primary={c.summary}
                             secondary={[c.direction, c.comm_type, new Date(c.created_at).toLocaleString()].filter(Boolean).join(' · ')}
@@ -428,7 +581,13 @@ export default function CaseDetailPage() {
 
             {/* ── Participants ───────────────────────────────── */}
             <TabPanel value={tab} index={6}>
-              <Typography variant="h6" mb={2}>{t('case.participants', 'Participants')}</Typography>
+              <Stack direction="row" justifyContent="space-between" alignItems="center" mb={2}>
+                <Typography variant="h6">{t('case.participants', 'Participants')}</Typography>
+                <Stack direction="row" spacing={1}>
+                  <Button variant="contained" size="small" startIcon={<AddIcon />} onClick={openCreateMembership}>{t('case.addMember', 'Add Member')}</Button>
+                  <Button variant="outlined" size="small" startIcon={<AddIcon />} onClick={openCreateParty}>{t('case.addParty', 'Add Party')}</Button>
+                </Stack>
+              </Stack>
               {memberships.length > 0 && (
                 <>
                   <Typography variant="subtitle2" color="text.secondary" mb={1}>{t('case.teamMembers', 'Team Members')}</Typography>
@@ -555,16 +714,29 @@ export default function CaseDetailPage() {
         {/* ============================================================ */}
 
         {/* Task */}
-        <DrawerForm open={taskOpen} title={`${t('common.add', 'Add')} ${t('case.task', 'Task')}`} onClose={() => setTaskOpen(false)} onSubmit={handleCreateTask} loading={saving}>
+        <DrawerForm open={taskOpen} title={editTask ? `${t('common.edit', 'Edit')} ${t('case.task', 'Task')}` : `${t('common.add', 'Add')} ${t('case.task', 'Task')}`} onClose={() => { setTaskOpen(false); setEditTask(null); }} onSubmit={handleCreateTask} loading={saving}>
           <Stack spacing={2.5}>
             <TextField label={t('case.taskTitle', 'Title')} fullWidth required value={taskForm.title} onChange={e => setTaskForm(f => ({ ...f, title: e.target.value }))} />
             <TextField label={t('case.description', 'Description')} fullWidth multiline rows={2} value={taskForm.description} onChange={e => setTaskForm(f => ({ ...f, description: e.target.value }))} />
+            <TextField label={t('case.assignee', 'Assignee')} select fullWidth value={taskForm.assigneeUserId} onChange={e => setTaskForm(f => ({ ...f, assigneeUserId: e.target.value }))}>
+              <MenuItem value=""><em>{t('common.none', 'None')}</em></MenuItem>
+              {users.map(u => <MenuItem key={u.id} value={u.id}>{u.displayName || u.email}</MenuItem>)}
+            </TextField>
             <TextField label={t('case.dueDate', 'Due date')} type="date" fullWidth InputLabelProps={{ shrink: true }} value={taskForm.dueDate} onChange={e => setTaskForm(f => ({ ...f, dueDate: e.target.value }))} />
+            <TextField label={t('case.estimatedHours', 'Estimated hours')} type="number" fullWidth inputProps={{ min: 0, step: 0.5 }} value={taskForm.estimatedHours} onChange={e => setTaskForm(f => ({ ...f, estimatedHours: e.target.value }))} />
+            <Autocomplete
+              multiple
+              options={documents}
+              getOptionLabel={(d: Doc) => d.title || d.id}
+              value={documents.filter(d => taskForm.linkedDocumentIds.includes(d.id))}
+              onChange={(_, vals) => setTaskForm(f => ({ ...f, linkedDocumentIds: vals.map(v => v.id) }))}
+              renderInput={(params) => <TextField {...params} label={t('case.linkedDocuments', 'Linked Documents')} />}
+            />
           </Stack>
         </DrawerForm>
 
         {/* Session */}
-        <DrawerForm open={sessionOpen} title={`${t('common.add', 'Add')} ${t('case.session', 'Session')}`} onClose={() => setSessionOpen(false)} onSubmit={handleCreateSession} loading={saving}>
+        <DrawerForm open={sessionOpen} title={editSession ? `${t('common.edit', 'Edit')} ${t('case.session', 'Session')}` : `${t('common.add', 'Add')} ${t('case.session', 'Session')}`} onClose={() => { setSessionOpen(false); setEditSession(null); }} onSubmit={handleCreateSession} loading={saving}>
           <Stack spacing={2.5}>
             <TextField label={t('case.sessionTitle', 'Title')} fullWidth required value={sessionForm.title} onChange={e => setSessionForm(f => ({ ...f, title: e.target.value }))} />
             <TextField label={t('case.sessionType', 'Type')} select fullWidth required value={sessionForm.typeId} onChange={e => setSessionForm(f => ({ ...f, typeId: e.target.value }))}>
@@ -573,11 +745,23 @@ export default function CaseDetailPage() {
             <TextField label={t('case.startDateTime', 'Start')} type="datetime-local" fullWidth required InputLabelProps={{ shrink: true }} value={sessionForm.startDateTime} onChange={e => setSessionForm(f => ({ ...f, startDateTime: e.target.value }))} />
             <TextField label={t('case.endDateTime', 'End')} type="datetime-local" fullWidth required InputLabelProps={{ shrink: true }} value={sessionForm.endDateTime} onChange={e => setSessionForm(f => ({ ...f, endDateTime: e.target.value }))} />
             <TextField label={t('case.location', 'Location')} fullWidth value={sessionForm.location} onChange={e => setSessionForm(f => ({ ...f, location: e.target.value }))} />
+            <TextField label={t('case.court', 'Court')} select fullWidth value={sessionForm.courtId} onChange={e => setSessionForm(f => ({ ...f, courtId: e.target.value }))}>
+              <MenuItem value="">{t('common.none', '— None —')}</MenuItem>
+              {courts.map(c => <MenuItem key={c.id} value={c.id}>{c.name}</MenuItem>)}
+            </TextField>
+            <Autocomplete
+              multiple
+              options={documents}
+              getOptionLabel={(d: Doc) => d.title || d.id}
+              value={documents.filter(d => sessionForm.linkedDocumentIds.includes(d.id))}
+              onChange={(_, vals) => setSessionForm(f => ({ ...f, linkedDocumentIds: vals.map(v => v.id) }))}
+              renderInput={(params) => <TextField {...params} label={t('case.linkedDocuments', 'Linked Documents')} />}
+            />
           </Stack>
         </DrawerForm>
 
         {/* Filing */}
-        <DrawerForm open={filingOpen} title={`${t('common.add', 'Add')} ${t('case.filing', 'Filing')}`} onClose={() => setFilingOpen(false)} onSubmit={handleCreateFiling} loading={saving}>
+        <DrawerForm open={filingOpen} title={editFiling ? `${t('common.edit', 'Edit')} ${t('case.filing', 'Filing')}` : `${t('common.add', 'Add')} ${t('case.filing', 'Filing')}`} onClose={() => { setFilingOpen(false); setEditFiling(null); }} onSubmit={handleCreateFiling} loading={saving}>
           <Stack spacing={2.5}>
             <TextField label={t('case.filingType', 'Type')} select fullWidth required value={filingForm.typeId} onChange={e => setFilingForm(f => ({ ...f, typeId: e.target.value }))}>
               {filingTypes.map(ft => <MenuItem key={ft.id} value={ft.id}>{ft.label_en}</MenuItem>)}
@@ -588,14 +772,18 @@ export default function CaseDetailPage() {
         </DrawerForm>
 
         {/* Note */}
-        <DrawerForm open={noteOpen} title={`${t('common.add', 'Add')} ${t('case.note', 'Note')}`} onClose={() => setNoteOpen(false)} onSubmit={handleCreateNote} loading={saving}>
+        <DrawerForm open={noteOpen} title={editNote ? `${t('common.edit', 'Edit')} ${t('case.note', 'Note')}` : `${t('common.add', 'Add')} ${t('case.note', 'Note')}`} onClose={() => { setNoteOpen(false); setEditNote(null); }} onSubmit={handleCreateNote} loading={saving}>
           <Stack spacing={2.5}>
-            <TextField label={t('case.noteContent', 'Content')} fullWidth multiline rows={4} value={noteForm.content} onChange={e => setNoteForm({ content: e.target.value })} />
+            <TextField label={t('case.noteContent', 'Content')} fullWidth multiline rows={4} value={noteForm.content} onChange={e => setNoteForm(f => ({ ...f, content: e.target.value }))} />
+            <TextField label={t('case.referencedNote', 'Referenced Note')} select fullWidth value={noteForm.referencedNoteId} onChange={e => setNoteForm(f => ({ ...f, referencedNoteId: e.target.value }))}>
+              <MenuItem value="">{t('common.none', '— None —')}</MenuItem>
+              {notes.filter(n => !editNote || n.id !== editNote.id).map(n => <MenuItem key={n.id} value={n.id}>{(n.content || '').substring(0, 60) || n.id}</MenuItem>)}
+            </TextField>
           </Stack>
         </DrawerForm>
 
         {/* Communication */}
-        <DrawerForm open={commOpen} title={`${t('common.add', 'Add')} ${t('case.communication', 'Communication')}`} onClose={() => setCommOpen(false)} onSubmit={handleCreateComm} loading={saving}>
+        <DrawerForm open={commOpen} title={editComm ? `${t('common.edit', 'Edit')} ${t('case.communication', 'Communication')}` : `${t('common.add', 'Add')} ${t('case.communication', 'Communication')}`} onClose={() => { setCommOpen(false); setEditComm(null); }} onSubmit={handleCreateComm} loading={saving}>
           <Stack spacing={2.5}>
             <TextField label={t('case.direction', 'Direction')} select fullWidth required value={commForm.direction} onChange={e => setCommForm(f => ({ ...f, direction: e.target.value as 'Inbound' | 'Outbound' }))}>
               <MenuItem value="Inbound">{t('case.inbound', 'Inbound')}</MenuItem>
@@ -606,6 +794,36 @@ export default function CaseDetailPage() {
             </TextField>
             <TextField label={t('case.dateTime', 'Date & time')} type="datetime-local" fullWidth required InputLabelProps={{ shrink: true }} value={commForm.dateTime} onChange={e => setCommForm(f => ({ ...f, dateTime: e.target.value }))} />
             <TextField label={t('case.summary', 'Summary')} fullWidth multiline rows={3} value={commForm.summary} onChange={e => setCommForm(f => ({ ...f, summary: e.target.value }))} />
+          </Stack>
+        </DrawerForm>
+
+        {/* Membership */}
+        <DrawerForm open={membershipOpen} title={`${t('common.add', 'Add')} ${t('case.teamMember', 'Team Member')}`} onClose={() => setMembershipOpen(false)} onSubmit={handleCreateMembership} loading={saving}>
+          <Stack spacing={2.5}>
+            <TextField label={t('case.user', 'User')} select fullWidth required value={membershipForm.userId} onChange={e => setMembershipForm(f => ({ ...f, userId: e.target.value }))}>
+              {users.map(u => <MenuItem key={u.id} value={u.id}>{u.displayName || u.email}</MenuItem>)}
+            </TextField>
+            <TextField label={t('case.role', 'Role')} select fullWidth required value={membershipForm.role} onChange={e => setMembershipForm(f => ({ ...f, role: e.target.value }))}>
+              <MenuItem value="CaseOwner">{t('case.caseOwner', 'Case Owner')}</MenuItem>
+              <MenuItem value="CaseMember">{t('case.caseMember', 'Case Member')}</MenuItem>
+              <MenuItem value="ReadOnly">{t('case.readOnly', 'Read Only')}</MenuItem>
+            </TextField>
+          </Stack>
+        </DrawerForm>
+
+        {/* Case Party */}
+        <DrawerForm open={partyOpen} title={`${t('common.add', 'Add')} ${t('case.caseParty', 'Case Party')}`} onClose={() => setPartyOpen(false)} onSubmit={handleCreateParty} loading={saving}>
+          <Stack spacing={2.5}>
+            <TextField label={t('case.party', 'Party (Customer)')} select fullWidth required value={partyForm.partyId} onChange={e => setPartyForm(f => ({ ...f, partyId: e.target.value }))}>
+              {customers.map(c => <MenuItem key={c.id} value={c.id}>{c.name}</MenuItem>)}
+            </TextField>
+            <TextField label={t('case.partyRole', 'Party Role')} select fullWidth required value={partyForm.partyRoleType} onChange={e => setPartyForm(f => ({ ...f, partyRoleType: e.target.value }))}>
+              <MenuItem value="Customer">{t('case.customer', 'Customer')}</MenuItem>
+              <MenuItem value="Opposing">{t('case.opposing', 'Opposing')}</MenuItem>
+              <MenuItem value="ExternalCounsel">{t('case.externalCounsel', 'External Counsel')}</MenuItem>
+              <MenuItem value="Other">{t('common.other', 'Other')}</MenuItem>
+            </TextField>
+            <TextField label={t('case.notes', 'Notes')} fullWidth multiline rows={2} value={partyForm.notes} onChange={e => setPartyForm(f => ({ ...f, notes: e.target.value }))} />
           </Stack>
         </DrawerForm>
 

@@ -6,7 +6,7 @@ import { CustomerService } from './customer.service';
 import { CreateCustomerDto, UpdateCustomerDto, CreateContactDto, CreateCustomerCommunicationDto } from './customer.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
-import { Roles } from '../common/decorators';
+import { Roles, AuditAction } from '../common/decorators';
 
 @Controller('customers')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -15,6 +15,7 @@ export class CustomerController {
 
   @Post()
   @Roles('Lawyer', 'TenantAdmin', 'SystemAdmin')
+  @AuditAction({ eventType: 'CUSTOMER_CREATED', entityType: 'Customer' })
   @HttpCode(HttpStatus.CREATED)
   async create(@Request() req: any, @Body() dto: CreateCustomerDto) {
     return this.customerService.create(req.user.tenantSlug, dto, req.user.id);
@@ -46,6 +47,7 @@ export class CustomerController {
 
   @Patch(':customerId')
   @Roles('Lawyer', 'TenantAdmin', 'SystemAdmin')
+  @AuditAction({ eventType: 'CUSTOMER_UPDATED', entityType: 'Customer', entityIdParam: 'customerId' })
   async update(
     @Request() req: any,
     @Param('customerId') customerId: string,

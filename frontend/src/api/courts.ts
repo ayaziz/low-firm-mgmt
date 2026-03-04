@@ -23,11 +23,24 @@ export const courtApi = {
     return get<PaginatedResult<Judge>>(`/courts/judges`, { ...params, courtId });
   },
 
-  createJudge(courtId: string, data: Partial<Judge>): Promise<Judge> {
+  createJudge(courtId: string, data: {
+    fullName: string;
+    title?: string;
+    specialization?: string;
+    phone?: string;
+    email?: string;
+  }): Promise<Judge> {
     return post<Judge>(`/courts/judges`, { ...data, courtId });
   },
 
-  updateJudge(courtId: string, judgeId: string, data: Partial<Judge>): Promise<Judge> {
+  updateJudge(courtId: string, judgeId: string, data: {
+    fullName?: string;
+    title?: string;
+    specialization?: string;
+    phone?: string;
+    email?: string;
+    isActive?: boolean;
+  }): Promise<Judge> {
     return patch<Judge>(`/courts/judges/${judgeId}`, data);
   },
 };

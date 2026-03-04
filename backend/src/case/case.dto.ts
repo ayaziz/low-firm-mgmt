@@ -1,4 +1,4 @@
-import { IsString, IsOptional, IsEnum, IsArray, IsBoolean, IsDateString } from 'class-validator';
+import { IsString, IsOptional, IsEnum, IsArray, IsBoolean, IsDateString, IsUUID, IsNumber } from 'class-validator';
 
 export class CreateCaseDto {
   @IsString()
@@ -8,20 +8,37 @@ export class CreateCaseDto {
   @IsString()
   description?: string;
 
-  @IsString()
+  @IsUUID()
   caseTypeId: string;
 
   @IsArray()
-  @IsString({ each: true })
+  @IsUUID('4', { each: true })
   customerIds: string[];
 
   @IsOptional()
-  @IsString()
+  @IsUUID()
   assignedLawyerUserId?: string;
 
   @IsOptional()
   @IsString()
   courtCaseNumber?: string;
+
+  @IsOptional()
+  @IsUUID()
+  primaryCourtId?: string;
+
+  @IsOptional()
+  @IsUUID()
+  primaryJudgeId?: string;
+}
+
+export class AddCaseCustomerDto {
+  @IsUUID()
+  customerId: string;
+
+  @IsOptional()
+  @IsEnum(['Client', 'Defendant', 'Witness', 'ThirdParty', 'Other'])
+  role?: string;
 }
 
 export class TransitionCaseDto {
@@ -44,7 +61,7 @@ export class ReopenCaseDto {
 }
 
 export class CreateMembershipDto {
-  @IsString()
+  @IsUUID()
   userId: string;
 
   @IsEnum(['CaseOwner', 'CaseMember', 'ReadOnly'])
@@ -59,11 +76,11 @@ export class CreateTaskDto {
   @IsString()
   description?: string;
 
-  @IsString()
+  @IsUUID()
   assigneeUserId: string;
 
   @IsOptional()
-  @IsString()
+  @IsUUID()
   reviewerUserId?: string;
 
   @IsOptional()
@@ -79,12 +96,21 @@ export class CreateTaskDto {
   startDate?: string;
 
   @IsOptional()
-  @IsString()
+  @IsUUID()
   customerId?: string;
 
   @IsOptional()
   @IsArray()
   tags?: string[];
+
+  @IsOptional()
+  @IsArray()
+  @IsUUID('4', { each: true })
+  linkedDocumentIds?: string[];
+
+  @IsOptional()
+  @IsNumber()
+  estimatedHours?: number;
 }
 
 export class UpdateTaskDto {
@@ -97,11 +123,11 @@ export class UpdateTaskDto {
   description?: string;
 
   @IsOptional()
-  @IsString()
+  @IsUUID()
   assigneeUserId?: string;
 
   @IsOptional()
-  @IsString()
+  @IsUUID()
   reviewerUserId?: string;
 
   @IsOptional()
@@ -115,28 +141,43 @@ export class UpdateTaskDto {
   @IsOptional()
   @IsDateString()
   dueDate?: string;
+
+  @IsOptional()
+  @IsArray()
+  @IsUUID('4', { each: true })
+  linkedDocumentIds?: string[];
+
+  @IsOptional()
+  @IsNumber()
+  estimatedHours?: number;
 }
 
 export class CreateSessionDto {
   @IsString()
   title: string;
 
-  @IsString()
+  @IsUUID()
   typeId: string;
 
   @IsDateString()
   startDateTime: string;
 
+  @IsOptional()
   @IsDateString()
-  endDateTime: string;
+  endDateTime?: string;
 
   @IsOptional()
   @IsString()
   location?: string;
 
   @IsOptional()
-  @IsString()
+  @IsUUID()
   courtId?: string;
+
+  @IsOptional()
+  @IsArray()
+  @IsUUID('4', { each: true })
+  linkedDocumentIds?: string[];
 }
 
 export class UpdateSessionDto {
@@ -155,6 +196,11 @@ export class UpdateSessionDto {
   @IsOptional()
   @IsString()
   location?: string;
+
+  @IsOptional()
+  @IsArray()
+  @IsUUID('4', { each: true })
+  linkedDocumentIds?: string[];
 }
 
 export class RescheduleSessionDto {
@@ -182,12 +228,12 @@ export class CreateNoteDto {
   visibilityScope?: string;
 
   @IsOptional()
-  @IsString()
+  @IsUUID()
   referencedNoteId?: string;
 }
 
 export class CreateFilingDto {
-  @IsString()
+  @IsUUID()
   typeId: string;
 
   @IsOptional()
@@ -226,7 +272,7 @@ export class UpdateFilingDto {
 }
 
 export class CreateCommunicationDto {
-  @IsString()
+  @IsUUID()
   typeId: string;
 
   @IsDateString()
@@ -235,16 +281,15 @@ export class CreateCommunicationDto {
   @IsEnum(['Inbound', 'Outbound'])
   direction: string;
 
-  @IsOptional()
   @IsString()
-  summary?: string;
+  summary: string;
 
   @IsOptional()
   @IsString()
   nextSteps?: string;
 
   @IsOptional()
-  @IsString()
+  @IsUUID()
   customerId?: string;
 
   @IsOptional()
@@ -256,15 +301,55 @@ export class CreateCommunicationDto {
   participants?: string;
 }
 
-export class AddCasePartyDto {
+export class UpdateNoteDto {
+  @IsOptional()
   @IsString()
+  body?: string;
+
+  @IsOptional()
+  @IsString()
+  title?: string;
+
+  @IsOptional()
+  @IsArray()
+  tags?: string[];
+}
+
+export class UpdateCommunicationDto {
+  @IsOptional()
+  @IsUUID()
+  typeId?: string;
+
+  @IsOptional()
+  @IsDateString()
+  dateTime?: string;
+
+  @IsOptional()
+  @IsEnum(['Inbound', 'Outbound'])
+  direction?: string;
+
+  @IsOptional()
+  @IsString()
+  summary?: string;
+
+  @IsOptional()
+  @IsString()
+  nextSteps?: string;
+
+  @IsOptional()
+  @IsString()
+  participants?: string;
+}
+
+export class AddCasePartyDto {
+  @IsUUID()
   partyId: string;
 
   @IsEnum(['Customer', 'Opposing', 'ExternalCounsel', 'Other'])
   partyRoleType: string;
 
   @IsOptional()
-  @IsString()
+  @IsUUID()
   participantRoleId?: string;
 
   @IsOptional()

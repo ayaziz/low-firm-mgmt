@@ -7,7 +7,7 @@ import {
   IconButton, MenuItem, Stack, TextField, Tooltip, Typography,
 } from '@mui/material';
 import {
-  Add as AddIcon, Visibility as PreviewIcon, Block as DeactivateIcon,
+  Add as AddIcon, Visibility as PreviewIcon, Block as DeactivateIcon, Edit as EditIcon,
 } from '@mui/icons-material';
 import { templateApi } from '@/api';
 import type { DocumentTemplate } from '@/types';
@@ -32,6 +32,7 @@ export default function TemplatesPage() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({ name: '', category: 'Contract', description: '', template_body: '' });
+  const [editTemplate, setEditTemplate] = useState<DocumentTemplate | null>(null);
 
   // Preview
   const [previewOpen, setPreviewOpen] = useState(false);
@@ -52,16 +53,43 @@ export default function TemplatesPage() {
 
   useEffect(() => { load(); }, [load]);
 
-  const handleCreate = async () => {
+  const openCreate = () => {
+    setEditTemplate(null);
+    setForm({ name: '', category: 'Contract', description: '', template_body: '' });
+    setDrawerOpen(true);
+  };
+
+  const openEdit = (tpl: DocumentTemplate) => {
+    setEditTemplate(tpl);
+    setForm({
+      name: tpl.name || '',
+      category: tpl.category || 'Contract',
+      description: (tpl as any).description || '',
+      template_body: (tpl as any).template_body || '',
+    });
+    setDrawerOpen(true);
+  };
+
+  const handleSave = async () => {
     setSaving(true);
     try {
-      await templateApi.create({
-        name: form.name,
-        category: form.category,
-        description: form.description || undefined,
-        template_body: form.template_body,
-      } as any);
+      if (editTemplate) {
+        await templateApi.update(editTemplate.id, {
+          name: form.name,
+          category: form.category as any,
+          description: form.description || undefined,
+          template_body: form.template_body,
+        } as any);
+      } else {
+        await templateApi.create({
+          name: form.name,
+          category: form.category,
+          description: form.description || undefined,
+          template_body: form.template_body,
+        } as any);
+      }
       setDrawerOpen(false);
+      setEditTemplate(null);
       setForm({ name: '', category: 'Contract', description: '', template_body: '' });
       load();
     } finally {
@@ -117,6 +145,13 @@ export default function TemplatesPage() {
       width: 100,
       renderCell: (row) => (
         <Stack direction="row" spacing={0.5}>
+          {canManage && (row as any).is_active !== false && (
+            <Tooltip title={t('templates.edit', 'Edit')}>
+              <IconButton size="small" onClick={(e) => { e.stopPropagation(); openEdit(row); }}>
+                <EditIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
+          )}
           <Tooltip title={t('templates.preview', 'Preview')}>
             <IconButton size="small" onClick={(e) => { e.stopPropagation(); handlePreview(row); }}>
               <PreviewIcon fontSize="small" />
@@ -142,7 +177,7 @@ export default function TemplatesPage() {
         breadcrumbs={[{ label: t('nav.templates', 'Templates') }]}
         actions={
           canManage ? (
-            <Button variant="contained" startIcon={<AddIcon />} onClick={() => setDrawerOpen(true)}>
+            <Button variant="contained" startIcon={<AddIcon />} onClick={openCreate}>
               {t('templates.create', 'New Template')}
             </Button>
           ) : undefined
@@ -172,7 +207,7 @@ export default function TemplatesPage() {
         emptyMessage={t('templates.empty', 'No templates found')}
         emptyAction={
           canManage ? (
-            <Button variant="contained" startIcon={<AddIcon />} onClick={() => setDrawerOpen(true)}>
+            <Button variant="contained" startIcon={<AddIcon />} onClick={openCreate}>
               {t('templates.create', 'New Template')}
             </Button>
           ) : undefined
@@ -182,10 +217,10 @@ export default function TemplatesPage() {
       {/* ----- Create Template Drawer ----- */}
       <DrawerForm
         open={drawerOpen}
-        title={t('templates.create', 'New Template')}
+        title={editTemplate ? t('templates.edit', 'Edit Template') : t('templates.create', 'New Template')}
         width={600}
-        onClose={() => setDrawerOpen(false)}
-        onSubmit={handleCreate}
+        onClose={() => { setDrawerOpen(false); setEditTemplate(null); }}
+        onSubmit={handleSave}
         loading={saving}
         submitLabel={t('common.save', 'Save')}
       >

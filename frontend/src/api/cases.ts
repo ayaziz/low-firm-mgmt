@@ -80,8 +80,12 @@ export const caseApi = {
     return get<PaginatedResult<Note>>(`/cases/${caseId}/notes`);
   },
 
-  createNote(caseId: string, content: string): Promise<Note> {
-    return post<Note>(`/cases/${caseId}/notes`, { body: content });
+  createNote(caseId: string, content: string, referencedNoteId?: string): Promise<Note> {
+    return post<Note>(`/cases/${caseId}/notes`, { body: content, ...(referencedNoteId ? { referencedNoteId } : {}) });
+  },
+
+  updateNote(caseId: string, noteId: string, data: { body?: string; title?: string; referencedNoteId?: string }): Promise<void> {
+    return patch(`/cases/${caseId}/notes/${noteId}`, data);
   },
 
   // Communications
@@ -91,6 +95,10 @@ export const caseApi = {
 
   createCommunication(caseId: string, data: Partial<Communication>): Promise<Communication> {
     return post<Communication>(`/cases/${caseId}/communications`, data);
+  },
+
+  updateCommunication(caseId: string, commId: string, data: Record<string, unknown>): Promise<void> {
+    return patch(`/cases/${caseId}/communications/${commId}`, data);
   },
 
   // Memberships
@@ -113,5 +121,10 @@ export const caseApi = {
 
   addParty(caseId: string, data: { partyId: string; partyRoleType: string }): Promise<void> {
     return post(`/cases/${caseId}/parties`, data);
+  },
+
+  // Case customers (post-creation linking)
+  addCaseCustomer(caseId: string, data: { customerId: string; role?: string }): Promise<void> {
+    return post(`/cases/${caseId}/customers`, data);
   },
 };

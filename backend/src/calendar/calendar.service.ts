@@ -4,6 +4,7 @@ import { AuditService } from '../audit/audit.service';
 import { NotificationService } from '../notification/notification.service';
 import { v4 as uuidv4 } from 'uuid';
 import { CreateCalendarEventDto, UpdateCalendarEventDto, AddAttendeeDto, AddReminderDto } from './calendar.dto';
+import { expandRecurrence } from './recurrence.util';
 
 @Injectable()
 export class CalendarService {
@@ -34,12 +35,13 @@ export class CalendarService {
 
     await this.prisma.executeTenant(
       tenantSlug,
-      `INSERT INTO calendar_events (id, title, start_at, end_at, event_type, case_id, hearing_id, location, description, status, recurrence, recurrence_end_date, created_by, created_at, updated_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'Scheduled', $10, $11, $12, NOW(), NOW())`,
+      `INSERT INTO calendar_events (id, title, start_at, end_at, event_type, case_id, hearing_id, location, description, status, recurrence, recurrence_end_date, recurrence_rule, all_day, created_by, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'Scheduled', $10, $11, $12, $13, $14, NOW(), NOW())`,
       [eventId, dto.title, dto.startAt, dto.endAt, dto.eventType,
        dto.caseId || null, dto.hearingId || null, dto.location || null,
        dto.description || null, dto.recurrence || 'None',
-       dto.recurrenceEndDate || null, userId],
+       dto.recurrenceEndDate || null, dto.recurrenceRule || null,
+       dto.allDay ?? false, userId],
     );
 
     // Add creator as attendee (auto-accepted)
@@ -110,8 +112,31 @@ export class CalendarService {
     params.push(limit + 1);
 
     const rows: any[] = await this.prisma.queryTenant(tenantSlug, sql, params);
-    const hasMore = rows.length > limit;
-    const data = hasMore ? rows.slice(0, limit) : rows;
+
+    // Expand recurring events into virtual instances within the requested range
+    const rangeStart = startDate ? new Date(startDate) : new Date(0);
+    const rangeEnd   = endDate   ? new Date(endDate)   : new Date('2100-01-01');
+    const expanded: any[] = [];
+    for (const row of rows) {
+      if (row.recurrence && row.recurrence !== 'None') {
+        const instances = expandRecurrence({
+          startAt: row.start_at,
+          endAt: row.end_at,
+          recurrence: row.recurrence,
+          recurrenceRule: row.recurrence_rule,
+          recurrenceEndDate: row.recurrence_end_date,
+        }, rangeStart, rangeEnd);
+        for (const inst of instances) {
+          expanded.push({ ...row, start_at: inst.startAt, end_at: inst.endAt, is_virtual: inst.isVirtual });
+        }
+      } else {
+        expanded.push({ ...row, is_virtual: false });
+      }
+    }
+    expanded.sort((a, b) => new Date(a.start_at).getTime() - new Date(b.start_at).getTime());
+
+    const hasMore = expanded.length > limit;
+    const data = hasMore ? expanded.slice(0, limit) : expanded;
 
     return { data, nextCursor: hasMore && data.length > 0 ? data[data.length - 1].start_at : null, hasMore };
   }
@@ -132,7 +157,30 @@ export class CalendarService {
     params.push(limit);
 
     const rows: any[] = await this.prisma.queryTenant(tenantSlug, sql, params);
-    return rows;
+
+    // Expand recurring events into virtual instances
+    const rangeStart = startDate ? new Date(startDate) : new Date(0);
+    const rangeEnd   = endDate   ? new Date(endDate)   : new Date('2100-01-01');
+    const expanded: any[] = [];
+    for (const row of rows) {
+      if (row.recurrence && row.recurrence !== 'None') {
+        const instances = expandRecurrence({
+          startAt: row.start_at,
+          endAt: row.end_at,
+          recurrence: row.recurrence,
+          recurrenceRule: row.recurrence_rule,
+          recurrenceEndDate: row.recurrence_end_date,
+        }, rangeStart, rangeEnd);
+        for (const inst of instances) {
+          expanded.push({ ...row, start_at: inst.startAt, end_at: inst.endAt, is_virtual: inst.isVirtual });
+        }
+      } else {
+        expanded.push({ ...row, is_virtual: false });
+      }
+    }
+    expanded.sort((a, b) => new Date(a.start_at).getTime() - new Date(b.start_at).getTime());
+
+    return expanded;
   }
 
   async getById(tenantSlug: string, eventId: string) {
@@ -168,6 +216,8 @@ export class CalendarService {
     if (dto.status !== undefined) { setClauses.push(`status = $${idx++}`); params.push(dto.status); }
     if (dto.recurrence !== undefined) { setClauses.push(`recurrence = $${idx++}`); params.push(dto.recurrence); }
     if (dto.recurrenceEndDate !== undefined) { setClauses.push(`recurrence_end_date = $${idx++}`); params.push(dto.recurrenceEndDate); }
+    if (dto.recurrenceRule !== undefined) { setClauses.push(`recurrence_rule = $${idx++}`); params.push(dto.recurrenceRule); }
+    if (dto.allDay !== undefined) { setClauses.push(`all_day = $${idx++}`); params.push(dto.allDay); }
 
     params.push(eventId);
     await this.prisma.executeTenant(

@@ -54,14 +54,4 @@ export class UpsertRetentionPolicyDto {
   @IsOptional() @IsString() description?: string;
 }
 
-export class CreateCourtDto {
-  @IsString() name: string;
-  @IsOptional() @IsString() notes?: string;
-  @IsOptional() @IsString() addressText?: string;
-}
-
-export class UpdateCourtDto {
-  @IsOptional() @IsString() name?: string;
-  @IsOptional() @IsString() notes?: string;
-  @IsOptional() @IsString() addressText?: string;
-}
+// Court DTOs consolidated in ../court/court.dto.ts

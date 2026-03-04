@@ -1,4 +1,4 @@
-import { IsString, IsOptional, IsEnum, IsBoolean, IsEmail } from 'class-validator';
+import { IsString, IsOptional, IsEnum, IsBoolean, IsEmail, IsUUID } from 'class-validator';
 
 // ── Court DTOs ──────────────────────────────────────────────────
 
@@ -76,7 +76,7 @@ export class UpdateCourtDto {
 // ── Judge DTOs ──────────────────────────────────────────────────
 
 export class CreateJudgeDto {
-  @IsString()
+  @IsUUID()
   courtId: string;
 
   @IsString()
@@ -101,7 +101,7 @@ export class CreateJudgeDto {
 
 export class UpdateJudgeDto {
   @IsOptional()
-  @IsString()
+  @IsUUID()
   courtId?: string;
 
   @IsOptional()

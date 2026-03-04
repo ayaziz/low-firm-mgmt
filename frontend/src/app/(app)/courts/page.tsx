@@ -9,6 +9,7 @@ import {
   Box,
   Button,
   Chip,
+  IconButton,
   MenuItem,
   Stack,
   Table,
@@ -23,6 +24,7 @@ import {
   AccountBalance as CourtIcon,
   ExpandMore as ExpandMoreIcon,
   Add as AddIcon,
+  Edit as EditIcon,
 } from '@mui/icons-material';
 import { courtApi } from '@/api';
 import type { Court, Judge, CourtType } from '@/types';
@@ -53,12 +55,20 @@ export default function CourtsPage() {
     name: '', court_type: 'Civil' as CourtType, jurisdiction: '', address: '', phone: '', email: '',
   });
   const [courtSaving, setCourtSaving] = useState(false);
+  const [editCourt, setEditCourt] = useState<Court | null>(null);
 
   /* ----- Judge drawer ----- */
   const [judgeOpen, setJudgeOpen] = useState(false);
   const [selectedCourtId, setSelectedCourtId] = useState<string | null>(null);
-  const [judgeForm, setJudgeForm] = useState({ name: '', title: '', chamber: '', phone: '', email: '' });
+  const [judgeForm, setJudgeForm] = useState({
+		fullName: '',
+		title: '',
+		specialization: '',
+		phone: '',
+		email: '',
+	})
   const [judgeSaving, setJudgeSaving] = useState(false);
+  const [editJudge, setEditJudge] = useState<Judge | null>(null);
 
   const canManage = hasAnyRole('TenantAdmin', 'SystemAdmin');
 
@@ -84,37 +94,99 @@ export default function CourtsPage() {
   };
 
   /* ---------- court CRUD ---------- */
-  const handleCreateCourt = async () => {
+  const openCreateCourt = () => {
+    setEditCourt(null);
+    setCourtForm({ name: '', court_type: 'Civil', jurisdiction: '', address: '', phone: '', email: '' });
+    setCourtOpen(true);
+  };
+
+  const openEditCourt = (court: Court) => {
+    setEditCourt(court);
+    setCourtForm({
+      name: court.name || '',
+      court_type: court.court_type || 'Civil',
+      jurisdiction: court.jurisdiction || '',
+      address: court.address || '',
+      phone: court.phone || '',
+      email: court.email || '',
+    });
+    setCourtOpen(true);
+  };
+
+  const handleSaveCourt = async () => {
     setCourtSaving(true);
     try {
-      await courtApi.create({
-        name: courtForm.name,
-        court_type: courtForm.court_type,
-        jurisdiction: courtForm.jurisdiction || undefined,
-        address: courtForm.address || undefined,
-        phone: courtForm.phone || undefined,
-        email: courtForm.email || undefined,
-      });
+      if (editCourt) {
+        await courtApi.update(editCourt.id, {
+          name: courtForm.name,
+          court_type: courtForm.court_type,
+          jurisdiction: courtForm.jurisdiction || undefined,
+          address: courtForm.address || undefined,
+          phone: courtForm.phone || undefined,
+          email: courtForm.email || undefined,
+        } as any);
+      } else {
+        await courtApi.create({
+          name: courtForm.name,
+          court_type: courtForm.court_type,
+          jurisdiction: courtForm.jurisdiction || undefined,
+          address: courtForm.address || undefined,
+          phone: courtForm.phone || undefined,
+          email: courtForm.email || undefined,
+        });
+      }
       setCourtOpen(false);
+      setEditCourt(null);
       setCourtForm({ name: '', court_type: 'Civil', jurisdiction: '', address: '', phone: '', email: '' });
       load();
     } finally { setCourtSaving(false); }
   };
 
   /* ---------- judge CRUD ---------- */
-  const handleCreateJudge = async () => {
+  const openCreateJudge = (courtId: string) => {
+    setEditJudge(null);
+    setSelectedCourtId(courtId);
+    setJudgeForm({ fullName: '', title: '', specialization: '', phone: '', email: '' });
+    setJudgeOpen(true);
+  };
+
+  const openEditJudge = (courtId: string, judge: Judge) => {
+    setEditJudge(judge);
+    setSelectedCourtId(courtId);
+    setJudgeForm({
+			fullName: judge.name || '',
+			title: judge.title || '',
+			specialization: judge.specialization || '',
+			phone: judge.phone || '',
+			email: judge.email || '',
+		})
+    setJudgeOpen(true);
+  };
+
+  const handleSaveJudge = async () => {
     if (!selectedCourtId) return;
     setJudgeSaving(true);
     try {
-      await courtApi.createJudge(selectedCourtId, {
-        name: judgeForm.name,
-        title: judgeForm.title || undefined,
-        chamber: judgeForm.chamber || undefined,
-        phone: judgeForm.phone || undefined,
-        email: judgeForm.email || undefined,
-      });
+      if (editJudge) {
+        await courtApi.updateJudge(selectedCourtId, editJudge.id, {
+          fullName: judgeForm.fullName,
+          title: judgeForm.title || undefined,
+          specialization: judgeForm.specialization || undefined,
+          phone: judgeForm.phone || undefined,
+          email: judgeForm.email || undefined,
+        });
+      } else {
+        await courtApi.createJudge(selectedCourtId, {
+          fullName: judgeForm.fullName,
+          title: judgeForm.title || undefined,
+          specialization: judgeForm.specialization || undefined,
+          phone: judgeForm.phone || undefined,
+          email: judgeForm.email || undefined,
+        });
+      }
       setJudgeOpen(false);
-      setJudgeForm({ name: '', title: '', chamber: '', phone: '', email: '' });
+      setEditJudge(null);
+      setJudgeForm({ fullName: '', title: '', specialization: '', phone: '', email: '' });
       loadJudges(selectedCourtId);
     } finally { setJudgeSaving(false); }
   };
@@ -130,7 +202,7 @@ export default function CourtsPage() {
         breadcrumbs={[{ label: t('nav.courts', 'Courts') }]}
         actions={
           canManage ? (
-            <Button variant="contained" startIcon={<AddIcon />} onClick={() => setCourtOpen(true)}>
+            <Button variant="contained" startIcon={<AddIcon />} onClick={openCreateCourt}>
               {t('court.add', 'Add Court')}
             </Button>
           ) : undefined
@@ -144,7 +216,7 @@ export default function CourtsPage() {
           message={t('court.emptyMessage', 'Add a court to start managing judges')}
           action={
             canManage ? (
-              <Button variant="contained" startIcon={<AddIcon />} onClick={() => setCourtOpen(true)}>
+              <Button variant="contained" startIcon={<AddIcon />} onClick={openCreateCourt}>
                 {t('court.add', 'Add Court')}
               </Button>
             ) : undefined
@@ -169,6 +241,11 @@ export default function CourtsPage() {
                     <Typography variant="body2" color="text.secondary">{court.jurisdiction}</Typography>
                   )}
                   {!court.is_active && <StatusBadge status="Inactive" />}
+                  {canManage && (
+                    <IconButton size="small" onClick={(e) => { e.stopPropagation(); openEditCourt(court); }}>
+                      <EditIcon fontSize="small" />
+                    </IconButton>
+                  )}
                 </Stack>
               </AccordionSummary>
               <AccordionDetails>
@@ -198,7 +275,7 @@ export default function CourtsPage() {
                     <Button
                       size="small"
                       startIcon={<AddIcon />}
-                      onClick={() => { setSelectedCourtId(court.id); setJudgeOpen(true); }}
+                      onClick={() => openCreateJudge(court.id)}
                     >
                       {t('court.addJudge', 'Add Judge')}
                     </Button>
@@ -220,8 +297,15 @@ export default function CourtsPage() {
                         <TableRow key={j.id}>
                           <TableCell>{j.name}</TableCell>
                           <TableCell>{j.title || '—'}</TableCell>
-                          <TableCell>{j.chamber || '—'}</TableCell>
+                          <TableCell>{j.specialization || '—'}</TableCell>
                           <TableCell>{j.email || j.phone || '—'}</TableCell>
+                          {canManage && (
+                            <TableCell>
+                              <IconButton size="small" onClick={() => openEditJudge(court.id, j)}>
+                                <EditIcon fontSize="small" />
+                              </IconButton>
+                            </TableCell>
+                          )}
                         </TableRow>
                       ))}
                     </TableBody>
@@ -248,9 +332,9 @@ export default function CourtsPage() {
       {/* ---------- Court Drawer ---------- */}
       <DrawerForm
         open={courtOpen}
-        title={t('court.add', 'Add Court')}
-        onClose={() => setCourtOpen(false)}
-        onSubmit={handleCreateCourt}
+        title={editCourt ? t('court.editCourt', 'Edit Court') : t('court.add', 'Add Court')}
+        onClose={() => { setCourtOpen(false); setEditCourt(null); }}
+        onSubmit={handleSaveCourt}
         loading={courtSaving}
         submitLabel={t('common.save', 'Save')}
       >
@@ -299,9 +383,9 @@ export default function CourtsPage() {
       {/* ---------- Judge Drawer ---------- */}
       <DrawerForm
         open={judgeOpen}
-        title={t('court.addJudge', 'Add Judge')}
-        onClose={() => setJudgeOpen(false)}
-        onSubmit={handleCreateJudge}
+        title={editJudge ? t('court.editJudge', 'Edit Judge') : t('court.addJudge', 'Add Judge')}
+        onClose={() => { setJudgeOpen(false); setEditJudge(null); }}
+        onSubmit={handleSaveJudge}
         loading={judgeSaving}
         submitLabel={t('common.save', 'Save')}
       >
@@ -309,8 +393,8 @@ export default function CourtsPage() {
           <TextField
             label={t('court.judgeName', 'Judge Name')}
             fullWidth required
-            value={judgeForm.name}
-            onChange={e => setJudgeForm(f => ({ ...f, name: e.target.value }))}
+            value={judgeForm.fullName}
+            onChange={e => setJudgeForm(f => ({ ...f, fullName: e.target.value }))}
           />
           <TextField
             label={t('court.judgeTitle', 'Title')}
@@ -319,10 +403,10 @@ export default function CourtsPage() {
             onChange={e => setJudgeForm(f => ({ ...f, title: e.target.value }))}
           />
           <TextField
-            label={t('court.chamber', 'Chamber')}
+            label={t('court.specialization', 'Specialization')}
             fullWidth
-            value={judgeForm.chamber}
-            onChange={e => setJudgeForm(f => ({ ...f, chamber: e.target.value }))}
+            value={judgeForm.specialization}
+            onChange={e => setJudgeForm(f => ({ ...f, specialization: e.target.value }))}
           />
           <TextField
             label={t('court.phone', 'Phone')}

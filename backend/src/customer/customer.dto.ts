@@ -1,4 +1,4 @@
-import { IsString, IsOptional, IsEnum, IsArray, IsDateString, ValidateNested } from 'class-validator';
+import { IsString, IsOptional, IsEnum, IsArray, IsDateString, ValidateNested, IsUUID, IsEmail, IsBoolean } from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class CreateContactDto {
@@ -6,7 +6,7 @@ export class CreateContactDto {
 	name: string
 
 	@IsOptional()
-	@IsString()
+	@IsEmail()
 	email?: string
 
 	@IsOptional()
@@ -14,24 +14,30 @@ export class CreateContactDto {
 	phone?: string
 
 	@IsOptional()
-	@IsString()
+	@IsUUID()
 	role_id?: string
 
 	@IsOptional()
+	@IsBoolean()
 	isPrimary?: boolean
 }
 
 export class CreateAddressDto {
   @IsOptional()
-  @IsString()
+  @IsEnum(['Home', 'Work', 'Mailing', 'Other'])
   type?: string;
 
   @IsOptional()
+  @IsBoolean()
   isPrimary?: boolean;
 
   @IsOptional()
   @IsString()
-  lines?: string;
+  line1?: string;
+
+  @IsOptional()
+  @IsString()
+  line2?: string;
 
   @IsOptional()
   @IsString()
@@ -55,7 +61,7 @@ export class CreateCustomerDto {
 	name: string
 
 	@IsEnum(['Individual', 'Organization'])
-	customer_type: 'Individual' | 'Organization'
+	customerType: 'Individual' | 'Organization'
 
 	@IsOptional()
 	@IsEnum(['Active', 'Inactive', 'Prospect'])
@@ -67,19 +73,19 @@ export class CreateCustomerDto {
 
 	@IsOptional()
 	@IsString()
-	national_id?: string
+	nationalId?: string
 
 	@IsOptional()
 	@IsString()
-	passport_number?: string
+	passportNumber?: string
 
 	@IsOptional()
 	@IsString()
-	registration_id?: string
+	registrationId?: string
 
 	@IsOptional()
 	@IsString()
-	tax_id?: string
+	taxId?: string
 
 	@IsOptional()
 	@IsArray()
@@ -128,7 +134,7 @@ export class UpdateCustomerDto {
 }
 
 export class CreateCustomerCommunicationDto {
-  @IsString()
+  @IsUUID()
   typeId: string;
 
   @IsDateString()
@@ -137,9 +143,8 @@ export class CreateCustomerCommunicationDto {
   @IsEnum(['Inbound', 'Outbound'])
   direction: string;
 
-  @IsOptional()
   @IsString()
-  summary?: string;
+  summary: string;
 
   @IsOptional()
   @IsString()

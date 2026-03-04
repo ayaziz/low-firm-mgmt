@@ -3,14 +3,17 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
-  Box, Button, IconButton, Stack, Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
-  TextField, Paper,
+  Box, Button, IconButton, MenuItem, Stack, Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
+  TextField, Paper, Tooltip,
 } from '@mui/material';
-import { Add as AddIcon, Refresh as RefreshIcon, Download as DownloadIcon } from '@mui/icons-material';
-import { accountingApi } from '@/api';
+import { Add as AddIcon, Refresh as RefreshIcon, Download as DownloadIcon, Edit as EditIcon } from '@mui/icons-material';
+import { accountingApi, adminApi } from '@/api';
+import type { UserInfo } from '@/types';
 import DrawerForm from '@/components/common/DrawerForm';
 import EmptyState from '@/components/common/EmptyState';
 import LoadingSkeleton from '@/components/common/LoadingSkeleton';
+
+const emptyForm = { userId: '', period: '', amount: '', staffName: '', deductions: '', grossAmount: '', netAmount: '', paymentStatus: 'Pending' };
 
 export default function WagesTab() {
   const { t } = useTranslation();
@@ -20,7 +23,9 @@ export default function WagesTab() {
   const [loading, setLoading] = useState(true);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [form, setForm] = useState({ userId: '', period: '', amount: '' });
+  const [form, setForm] = useState({ ...emptyForm });
+  const [users, setUsers] = useState<UserInfo[]>([]);
+  const [editWage, setEditWage] = useState<any | null>(null);
 
   const load = useCallback(async (c?: string | null) => {
     setLoading(true);
@@ -36,14 +41,65 @@ export default function WagesTab() {
 
   useEffect(() => { load(); }, [load]);
 
-  const handleCreate = async () => {
+  const handleSave = async () => {
     setSaving(true);
     try {
-      await accountingApi.createWage({ userId: form.userId, period: form.period, amount: Number(form.amount) });
+      if (editWage) {
+        await accountingApi.updateWage(editWage.id, {
+          amount: Number(form.amount),
+          period: form.period,
+          notes: '',
+          staffName: form.staffName || undefined,
+          deductions: form.deductions ? Number(form.deductions) : undefined,
+          grossAmount: form.grossAmount ? Number(form.grossAmount) : undefined,
+          netAmount: form.netAmount ? Number(form.netAmount) : undefined,
+          paymentStatus: form.paymentStatus || undefined,
+        });
+      } else {
+        await accountingApi.createWage({
+          userId: form.userId,
+          period: form.period,
+          amount: Number(form.amount),
+          staffName: form.staffName || undefined,
+          deductions: form.deductions ? Number(form.deductions) : undefined,
+          grossAmount: form.grossAmount ? Number(form.grossAmount) : undefined,
+          netAmount: form.netAmount ? Number(form.netAmount) : undefined,
+          paymentStatus: form.paymentStatus || undefined,
+        });
+      }
       setDrawerOpen(false);
-      setForm({ userId: '', period: '', amount: '' });
+      setForm({ ...emptyForm });
+      setEditWage(null);
       load();
     } finally { setSaving(false); }
+  };
+
+  const loadUsers = async () => {
+    const res = await adminApi.listUsers({ limit: '200' } as any).catch(() => ({ data: [] }));
+    setUsers(Array.isArray(res) ? res : (res as any).data ?? []);
+  };
+
+  const openCreate = async () => {
+    setEditWage(null);
+    setForm({ ...emptyForm });
+    setDrawerOpen(true);
+    await loadUsers();
+  };
+
+  const openEdit = async (w: any) => {
+    setEditWage(w);
+    setForm({
+      userId: w.user_id || '',
+      period: w.period || '',
+      amount: String(w.base_amount ?? w.amount ?? ''),
+      staffName: w.staff_name || '',
+      deductions: w.deductions != null ? String(w.deductions) : '',
+      grossAmount: w.gross_amount != null ? String(w.gross_amount) : '',
+      netAmount: w.net_amount != null ? String(w.net_amount) : '',
+      paymentStatus: w.payment_status || 'Pending',
+    });
+    setDrawerOpen(true);
+    await loadUsers();
   };
 
   const handleExport = async () => {
@@ -57,7 +113,7 @@ export default function WagesTab() {
       <Stack direction="row" spacing={2} mb={2} justifyContent="flex-end">
         <Button variant="outlined" startIcon={<DownloadIcon />} onClick={handleExport}>{t('accounting.exportCsv', 'Export CSV')}</Button>
         <IconButton onClick={() => load()}><RefreshIcon /></IconButton>
-        <Button variant="contained" startIcon={<AddIcon />} onClick={() => setDrawerOpen(true)}>{t('common.create', 'Create')}</Button>
+        <Button variant="contained" startIcon={<AddIcon />} onClick={openCreate}>{t('common.create', 'Create')}</Button>
       </Stack>
 
       {loading && wages.length === 0 ? <LoadingSkeleton variant="table" /> : wages.length > 0 ? (
@@ -73,6 +129,7 @@ export default function WagesTab() {
                   <TableCell>{t('accounting.deductions', 'Deductions')}</TableCell>
                   <TableCell>{t('accounting.netPay', 'Net Pay')}</TableCell>
                   <TableCell>{t('common.date', 'Date')}</TableCell>
+                  <TableCell>{t('common.actions', 'Actions')}</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -85,6 +142,9 @@ export default function WagesTab() {
                     <TableCell>{Number(w.deductions ?? 0).toFixed(2)}</TableCell>
                     <TableCell>{Number(w.net_amount ?? 0).toFixed(2)}</TableCell>
                     <TableCell>{w.created_at ? new Date(w.created_at).toLocaleDateString() : '—'}</TableCell>
+                    <TableCell>
+                      <IconButton size="small" onClick={() => openEdit(w)}><EditIcon fontSize="small" /></IconButton>
+                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -100,11 +160,23 @@ export default function WagesTab() {
         <EmptyState icon={<AddIcon />} title={t('accounting.noWages', 'No wages')} message={t('accounting.noWagesMsg', 'No wage records found')} />
       )}
 
-      <DrawerForm open={drawerOpen} title={t('accounting.createWage', 'Create Wage')} onClose={() => setDrawerOpen(false)} onSubmit={handleCreate} loading={saving}>
+      <DrawerForm open={drawerOpen} title={editWage ? t('accounting.editWage', 'Edit Wage') : t('accounting.createWage', 'Create Wage')} onClose={() => setDrawerOpen(false)} onSubmit={handleSave} loading={saving}>
         <Stack spacing={2.5}>
-          <TextField label={t('accounting.userId', 'User ID')} fullWidth value={form.userId} onChange={e => setForm(f => ({ ...f, userId: e.target.value }))} />
+          <TextField label={t('accounting.employee', 'Employee')} select fullWidth required value={form.userId} onChange={e => setForm(f => ({ ...f, userId: e.target.value }))}>
+            <MenuItem value="">— {t('common.select', 'Select')} —</MenuItem>
+            {users.map(u => <MenuItem key={u.id} value={u.id}>{(u as any).display_name || (u as any).displayName || u.email}</MenuItem>)}
+          </TextField>
           <TextField label={t('accounting.period', 'Period')} fullWidth placeholder="2024-01" value={form.period} onChange={e => setForm(f => ({ ...f, period: e.target.value }))} />
           <TextField label={t('accounting.amount', 'Amount')} type="number" fullWidth value={form.amount} onChange={e => setForm(f => ({ ...f, amount: e.target.value }))} />
+          <TextField label={t('accounting.staffName', 'Staff Name')} fullWidth value={form.staffName} onChange={e => setForm(f => ({ ...f, staffName: e.target.value }))} />
+          <TextField label={t('accounting.deductions', 'Deductions')} type="number" fullWidth value={form.deductions} onChange={e => setForm(f => ({ ...f, deductions: e.target.value }))} />
+          <TextField label={t('accounting.grossAmount', 'Gross Amount')} type="number" fullWidth value={form.grossAmount} onChange={e => setForm(f => ({ ...f, grossAmount: e.target.value }))} />
+          <TextField label={t('accounting.netAmount', 'Net Amount')} type="number" fullWidth value={form.netAmount} onChange={e => setForm(f => ({ ...f, netAmount: e.target.value }))} />
+          <TextField label={t('accounting.paymentStatus', 'Payment Status')} select fullWidth value={form.paymentStatus} onChange={e => setForm(f => ({ ...f, paymentStatus: e.target.value }))}>
+            <MenuItem value="Pending">Pending</MenuItem>
+            <MenuItem value="Paid">Paid</MenuItem>
+            <MenuItem value="Cancelled">Cancelled</MenuItem>
+          </TextField>
         </Stack>
       </DrawerForm>
     </Box>

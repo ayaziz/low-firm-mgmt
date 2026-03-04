@@ -19,6 +19,10 @@ import {
 	ApproveExpenseDto,
 	RejectExpenseDto,
 	CreateWageDto,
+	UpdateWageDto,
+	UpdateExpenseDto,
+	UpdateInvoiceDto,
+	UpdatePaymentDto,
 } from './accounting.dto'
 
 @Injectable()
@@ -608,11 +612,15 @@ export class AccountingService {
 
 	async createWage(tenantSlug: string, dto: CreateWageDto, userId: string) {
 		const wageId = uuidv4()
+		const grossAmount = dto.grossAmount ?? dto.amount;
+		const deductions = dto.deductions ?? 0;
+		const netAmount = dto.netAmount ?? (grossAmount - deductions);
 		await this.prisma.executeTenant(
 			tenantSlug,
-			`INSERT INTO wages (id, user_id, amount, period, notes, created_by, created_at)
-       VALUES ($1, $2, $3, $4, $5, $6, NOW())`,
-			[wageId, dto.userId, dto.amount, dto.period, dto.notes || null, userId],
+			`INSERT INTO wages (id, user_id, amount, period, notes, staff_name, deductions, gross_amount, net_amount, payment_status, created_by, created_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW())`,
+			[wageId, dto.userId, dto.amount, dto.period, dto.notes || null,
+			 dto.staffName || null, deductions, grossAmount, netAmount, dto.paymentStatus || 'Pending', userId],
 		)
 		await this.audit.log({
 			tenantSlug,
@@ -649,5 +657,113 @@ export class AccountingService {
 			csv += `${w.id},${w.user_id},${w.amount},${w.period},"${(w.notes || '').replace(/"/g, '""')}",${w.created_at}\n`
 		}
 		return csv
+	}
+
+	// ===================== UPDATE METHODS =====================
+
+	async updateWage(tenantSlug: string, wageId: string, dto: UpdateWageDto, userId: string) {
+		const rows: any[] = await this.prisma.queryTenant(tenantSlug, `SELECT * FROM wages WHERE id = $1`, [wageId])
+		if (!rows?.length) throw new NotFoundException('Wage not found')
+
+		const sets: string[] = []
+		const params: any[] = []
+		let idx = 1
+		if (dto.amount !== undefined) { sets.push(`amount = $${idx++}`); params.push(dto.amount) }
+		if (dto.period !== undefined) { sets.push(`period = $${idx++}`); params.push(dto.period) }
+		if (dto.notes !== undefined) { sets.push(`notes = $${idx++}`); params.push(dto.notes) }
+		if (dto.staffName !== undefined) { sets.push(`staff_name = $${idx++}`); params.push(dto.staffName) }
+		if (dto.deductions !== undefined) { sets.push(`deductions = $${idx++}`); params.push(dto.deductions) }
+		if (dto.grossAmount !== undefined) { sets.push(`gross_amount = $${idx++}`); params.push(dto.grossAmount) }
+		if (dto.netAmount !== undefined) { sets.push(`net_amount = $${idx++}`); params.push(dto.netAmount) }
+		if (dto.paymentStatus !== undefined) { sets.push(`payment_status = $${idx++}`); params.push(dto.paymentStatus) }
+		if (sets.length === 0) return rows[0]
+
+		params.push(wageId)
+		await this.prisma.executeTenant(tenantSlug, `UPDATE wages SET ${sets.join(', ')} WHERE id = $${idx}`, params)
+		await this.audit.log({ tenantSlug, eventType: 'WAGE_UPDATED', actorUserId: userId, entityType: 'Wage', entityId: wageId, payload: dto })
+		const updated = await this.prisma.queryTenant(tenantSlug, `SELECT * FROM wages WHERE id = $1`, [wageId])
+		return updated[0]
+	}
+
+	async updateExpense(tenantSlug: string, expenseId: string, dto: UpdateExpenseDto, userId: string) {
+		const rows: any[] = await this.prisma.queryTenant(tenantSlug, `SELECT * FROM expenses WHERE id = $1`, [expenseId])
+		if (!rows?.length) throw new NotFoundException('Expense not found')
+		if (rows[0].status !== 'Pending') throw new UnprocessableEntityException('Only pending expenses can be edited')
+
+		const sets: string[] = ['updated_at = NOW()']
+		const params: any[] = []
+		let idx = 1
+		if (dto.caseId !== undefined) { sets.push(`case_id = $${idx++}`); params.push(dto.caseId) }
+		if (dto.categoryId !== undefined) { sets.push(`category_id = $${idx++}`); params.push(dto.categoryId) }
+		if (dto.customerId !== undefined) { sets.push(`customer_id = $${idx++}`); params.push(dto.customerId) }
+		if (dto.amount !== undefined) { sets.push(`amount = $${idx++}`); params.push(dto.amount) }
+		if (dto.description !== undefined) { sets.push(`description = $${idx++}`); params.push(dto.description) }
+		if (dto.expenseDate !== undefined) { sets.push(`expense_date = $${idx++}`); params.push(dto.expenseDate) }
+		if (dto.receiptDocId !== undefined) { sets.push(`receipt_doc_id = $${idx++}`); params.push(dto.receiptDocId) }
+
+		params.push(expenseId)
+		await this.prisma.executeTenant(tenantSlug, `UPDATE expenses SET ${sets.join(', ')} WHERE id = $${idx}`, params)
+		await this.audit.log({ tenantSlug, eventType: 'EXPENSE_UPDATED', actorUserId: userId, entityType: 'Expense', entityId: expenseId, payload: dto })
+		const updated = await this.prisma.queryTenant(tenantSlug, `SELECT * FROM expenses WHERE id = $1`, [expenseId])
+		return updated[0]
+	}
+
+	async updateInvoice(tenantSlug: string, invoiceId: string, dto: UpdateInvoiceDto, userId: string) {
+		const rows: any[] = await this.prisma.queryTenant(tenantSlug, `SELECT * FROM invoices WHERE id = $1`, [invoiceId])
+		if (!rows?.length) throw new NotFoundException('Invoice not found')
+		if (rows[0].status !== 'Draft') throw new UnprocessableEntityException('Only draft invoices can be edited')
+
+		const sets: string[] = ['updated_at = NOW()']
+		const params: any[] = []
+		let idx = 1
+		if (dto.currency !== undefined) { sets.push(`currency = $${idx++}`); params.push(dto.currency) }
+		if (dto.dueDate !== undefined) { sets.push(`due_date = $${idx++}`); params.push(dto.dueDate) }
+		if (dto.notes !== undefined) { sets.push(`notes = $${idx++}`); params.push(dto.notes) }
+		if (dto.discountRatePct !== undefined) { sets.push(`discount_rate_pct = $${idx++}`); params.push(dto.discountRatePct) }
+
+		params.push(invoiceId)
+		await this.prisma.executeTenant(tenantSlug, `UPDATE invoices SET ${sets.join(', ')} WHERE id = $${idx}`, params)
+
+		// Update line items if provided
+		if (dto.lineItems) {
+			await this.prisma.executeTenant(tenantSlug, `DELETE FROM invoice_line_items WHERE invoice_id = $1`, [invoiceId])
+			for (const li of dto.lineItems) {
+				await this.prisma.executeTenant(
+					tenantSlug,
+					`INSERT INTO invoice_line_items (id, invoice_id, description, quantity, unit_price, tax_rate) VALUES ($1, $2, $3, $4, $5, $6)`,
+					[uuidv4(), invoiceId, li.description, li.quantity, li.unitPrice, li.taxRate || 0],
+				)
+			}
+			// Recalculate totals
+			const items: any[] = await this.prisma.queryTenant(tenantSlug, `SELECT * FROM invoice_line_items WHERE invoice_id = $1`, [invoiceId])
+			const subtotal = items.reduce((sum, i) => sum + i.quantity * i.unit_price, 0)
+			const discount = dto.discountRatePct ?? rows[0].discount_rate_pct ?? 0
+			const taxTotal = items.reduce((sum, i) => sum + i.quantity * i.unit_price * (i.tax_rate / 100), 0)
+			const totalAmount = subtotal - (subtotal * discount / 100) + taxTotal
+			await this.prisma.executeTenant(tenantSlug, `UPDATE invoices SET subtotal = $1, tax_total = $2, total_amount = $3, updated_at = NOW() WHERE id = $4`, [subtotal, taxTotal, totalAmount, invoiceId])
+		}
+
+		await this.audit.log({ tenantSlug, eventType: 'INVOICE_UPDATED', actorUserId: userId, entityType: 'Invoice', entityId: invoiceId, payload: dto })
+		return this.getInvoiceById(tenantSlug, invoiceId)
+	}
+
+	async updatePayment(tenantSlug: string, paymentId: string, dto: UpdatePaymentDto, userId: string) {
+		const rows: any[] = await this.prisma.queryTenant(tenantSlug, `SELECT * FROM payments WHERE id = $1`, [paymentId])
+		if (!rows?.length) throw new NotFoundException('Payment not found')
+
+		const sets: string[] = ['updated_at = NOW()']
+		const params: any[] = []
+		let idx = 1
+		if (dto.amount !== undefined) { sets.push(`amount = $${idx++}`); params.push(dto.amount) }
+		if (dto.method !== undefined) { sets.push(`method = $${idx++}`); params.push(dto.method) }
+		if (dto.paymentDate !== undefined) { sets.push(`payment_date = $${idx++}`); params.push(dto.paymentDate) }
+		if (dto.reference !== undefined) { sets.push(`reference = $${idx++}`); params.push(dto.reference) }
+		if (dto.notes !== undefined) { sets.push(`notes = $${idx++}`); params.push(dto.notes) }
+
+		params.push(paymentId)
+		await this.prisma.executeTenant(tenantSlug, `UPDATE payments SET ${sets.join(', ')} WHERE id = $${idx}`, params)
+		await this.audit.log({ tenantSlug, eventType: 'PAYMENT_UPDATED', actorUserId: userId, entityType: 'Payment', entityId: paymentId, payload: dto })
+		const updated = await this.prisma.queryTenant(tenantSlug, `SELECT * FROM payments WHERE id = $1`, [paymentId])
+		return updated[0]
 	}
 }

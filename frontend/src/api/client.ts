@@ -33,6 +33,48 @@ function getToken(): string | null {
   return localStorage.getItem('loma_token');
 }
 
+function getRefreshToken(): string | null {
+  if (typeof window === 'undefined') return null;
+  return localStorage.getItem('loma_refresh_token');
+}
+
+let refreshPromise: Promise<string | null> | null = null;
+
+async function tryRefreshToken(): Promise<string | null> {
+  const refreshToken = getRefreshToken();
+  if (!refreshToken) return null;
+
+  // Deduplicate concurrent refresh attempts
+  if (refreshPromise) return refreshPromise;
+
+  refreshPromise = (async () => {
+    try {
+      const url = `${API_BASE}${API_PREFIX}/auth/refresh`;
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refreshToken }),
+      });
+      if (!res.ok) return null;
+      const data = await res.json();
+      if (data?.accessToken) {
+        localStorage.setItem('loma_token', data.accessToken);
+        if (data.refreshToken) {
+          localStorage.setItem('loma_refresh_token', data.refreshToken);
+        }
+        return data.accessToken as string;
+      }
+      return null;
+    } catch {
+      return null;
+    } finally {
+      refreshPromise = null;
+    }
+  })();
+
+  return refreshPromise;
+}
+
 async function request<T>(
   path: string,
   options: RequestInit = {},
@@ -73,6 +115,20 @@ async function request<T>(
   const data = await res.json().catch(() => null);
 
   if (!res.ok) {
+    // On 401, try refreshing the token and retry once
+    if (res.status === 401 && getRefreshToken()) {
+      const newToken = await tryRefreshToken();
+      if (newToken) {
+        headers['Authorization'] = `Bearer ${newToken}`;
+        const retryRes = await fetch(url, { ...options, headers });
+        if (retryRes.status === 204) return undefined as T;
+        const retryData = await retryRes.json().catch(() => null);
+        if (!retryRes.ok) {
+          throw new ApiError(retryRes.status, retryData?.message || retryRes.statusText, retryData?.error);
+        }
+        return unwrapResponseEnvelope<T>(retryData);
+      }
+    }
     throw new ApiError(
       res.status,
       data?.message || res.statusText,

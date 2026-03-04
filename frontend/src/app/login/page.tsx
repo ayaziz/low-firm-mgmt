@@ -21,32 +21,32 @@ const DEV_USERS = [
 	{
 		label: 'admin@demo.com',
 		email: 'admin@demo.com',
-		password: 'admin',
-		roles: 'SystemAdmin, TenantAdmin',
+		password: 'Password1!',
+		roles: 'TenantAdmin',
 	},
 	{
-		label: 'lawyer1@demo.com',
-		email: 'lawyer1@demo.com',
-		password: 'password',
+		label: 'lawyer@demo.com',
+		email: 'lawyer@demo.com',
+		password: 'Password1!',
 		roles: 'Lawyer',
 	},
 	{
 		label: 'lawyer2@demo.com',
 		email: 'lawyer2@demo.com',
-		password: 'password',
+		password: 'Password1!',
 		roles: 'Lawyer',
 	},
 	{
 		label: 'accountant@demo.com',
 		email: 'accountant@demo.com',
-		password: 'password',
+		password: 'Password1!',
 		roles: 'Accountant',
 	},
 	{
-		label: 'manager@demo.com',
-		email: 'manager@demo.com',
-		password: 'password',
-		roles: 'TenantAdmin',
+		label: 'sysadmin@demo.com',
+		email: 'sysadmin@demo.com',
+		password: 'Password1!',
+		roles: 'SystemAdmin',
 	},
 ]
 

@@ -1,7 +1,7 @@
-import { IsString, IsOptional, IsEnum, IsDateString, IsNumber, IsBoolean, Min } from 'class-validator';
+import { IsString, IsOptional, IsEnum, IsDateString, IsNumber, IsBoolean, Min, IsUUID } from 'class-validator';
 
 export class CreateTimeEntryDto {
-  @IsString()
+  @IsUUID()
   caseId: string;
 
   @IsDateString()
@@ -11,8 +11,8 @@ export class CreateTimeEntryDto {
   @Min(0.01)
   hours: number;
 
-  @IsString()
-  description: string;
+  @IsOptional() @IsString()
+  description?: string;
 
   @IsOptional() @IsString()
   activityType?: string;
@@ -21,8 +21,11 @@ export class CreateTimeEntryDto {
   @Min(0)
   ratePerHour?: number;
 
-  @IsOptional() @IsString()
+  @IsOptional() @IsUUID()
   hearingId?: string;
+
+  @IsOptional() @IsUUID()
+  taskId?: string;
 
   @IsOptional() @IsBoolean()
   billable?: boolean;
@@ -48,6 +51,9 @@ export class UpdateTimeEntryDto {
 
   @IsOptional() @IsBoolean()
   billable?: boolean;
+
+  @IsOptional() @IsUUID()
+  taskId?: string;
 }
 
 export class TransitionTimeEntryDto {

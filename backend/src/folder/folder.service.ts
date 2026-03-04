@@ -23,7 +23,7 @@ export class FolderService {
       // Check for duplicate at same level
       const dupes: any[] = await this.prisma.queryTenant(
         tenantSlug,
-        `SELECT id FROM folders WHERE parent_id = $1 AND name = $2`,
+        `SELECT id FROM folders WHERE parent_folder_id = $1 AND name = $2`,
         [dto.parentId, dto.name],
       );
       if (dupes.length > 0) throw new ConflictException('Folder with this name already exists at this level');
@@ -31,7 +31,7 @@ export class FolderService {
       // Root-level for case — check no duplicate
       const dupes: any[] = await this.prisma.queryTenant(
         tenantSlug,
-        `SELECT id FROM folders WHERE case_id = $1 AND parent_id IS NULL AND name = $2`,
+        `SELECT id FROM folders WHERE scope_id = $1 AND parent_folder_id IS NULL AND name = $2`,
         [dto.caseId, dto.name],
       );
       if (dupes.length > 0) throw new ConflictException('Root folder with this name already exists for this case');
@@ -39,10 +39,10 @@ export class FolderService {
 
     await this.prisma.executeTenant(
       tenantSlug,
-      `INSERT INTO folders (id, name, case_id, parent_id, scope, path, description, created_by, created_at, updated_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW(), NOW())`,
+      `INSERT INTO folders (id, name, scope_id, parent_folder_id, scope, path, created_by, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), NOW())`,
       [folderId, dto.name, dto.caseId || null, dto.parentId || null,
-       dto.scope || 'Case', path, dto.description || null, userId],
+       dto.scope || 'Case', path, userId],
     );
 
     await this.audit.log({
@@ -59,9 +59,9 @@ export class FolderService {
       tenantSlug,
       `SELECT f.*,
          (SELECT COUNT(*) FROM documents d WHERE d.folder_id = f.id)::int AS document_count,
-         (SELECT COUNT(*) FROM folders c WHERE c.parent_id = f.id)::int AS child_count
+         (SELECT COUNT(*) FROM folders c WHERE c.parent_folder_id = f.id)::int AS child_count
        FROM folders f
-       WHERE f.case_id = $1
+       WHERE f.scope_id = $1
        ORDER BY f.path ASC`,
       [caseId],
     );
@@ -72,10 +72,10 @@ export class FolderService {
     // Return all folders for a case as a flat list with parent_id; frontend builds the tree
     const rows: any[] = await this.prisma.queryTenant(
       tenantSlug,
-      `SELECT f.id, f.name, f.parent_id, f.path, f.scope, f.description,
+      `SELECT f.id, f.name, f.parent_folder_id, f.path, f.scope,
          (SELECT COUNT(*) FROM documents d WHERE d.folder_id = f.id)::int AS document_count
        FROM folders f
-       WHERE f.case_id = $1
+       WHERE f.scope_id = $1
        ORDER BY f.path ASC`,
       [caseId],
     );
@@ -87,7 +87,7 @@ export class FolderService {
       tenantSlug,
       `SELECT f.*,
          (SELECT COUNT(*) FROM documents d WHERE d.folder_id = f.id)::int AS document_count,
-         (SELECT COUNT(*) FROM folders c WHERE c.parent_id = f.id)::int AS child_count
+         (SELECT COUNT(*) FROM folders c WHERE c.parent_folder_id = f.id)::int AS child_count
        FROM folders f
        WHERE f.id = $1`,
       [folderId],
@@ -131,8 +131,6 @@ export class FolderService {
       setClauses.push(`path = $${idx++}`);
       params.push(newPath);
     }
-    if (dto.description !== undefined) { setClauses.push(`description = $${idx++}`); params.push(dto.description); }
-
     params.push(folderId);
     await this.prisma.executeTenant(
       tenantSlug,
@@ -161,7 +159,7 @@ export class FolderService {
       const newPath = `${parent.path}/${folder.name}`;
       await this.prisma.executeTenant(
         tenantSlug,
-        `UPDATE folders SET parent_id = $1, path = $2, updated_at = NOW() WHERE id = $3`,
+        `UPDATE folders SET parent_folder_id = $1, path = $2, updated_at = NOW() WHERE id = $3`,
         [dto.newParentId, newPath, folderId],
       );
     } else {
@@ -169,7 +167,7 @@ export class FolderService {
       const newPath = `/${folder.name}`;
       await this.prisma.executeTenant(
         tenantSlug,
-        `UPDATE folders SET parent_id = NULL, path = $1, updated_at = NOW() WHERE id = $2`,
+        `UPDATE folders SET parent_folder_id = NULL, path = $1, updated_at = NOW() WHERE id = $2`,
         [newPath, folderId],
       );
     }

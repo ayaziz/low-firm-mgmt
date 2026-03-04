@@ -13,11 +13,11 @@ export class CustomerService {
 
   async create(tenantSlug: string, dto: CreateCustomerDto, userId: string) {
     // Validate identity requirements
-    if (dto.customer_type === 'Organization') {
-      if (!dto.registration_id) throw new BadRequestException('registrationId is required for Organization');
-      if (!dto.tax_id) throw new BadRequestException('taxId is required for Organization');
+    if (dto.customerType === 'Organization') {
+      if (!dto.registrationId) throw new BadRequestException('registrationId is required for Organization');
+      if (!dto.taxId) throw new BadRequestException('taxId is required for Organization');
     } else {
-      if (!dto.national_id && !dto.passport_number) {
+      if (!dto.nationalId && !dto.passportNumber) {
         throw new BadRequestException('At least one of nationalId or passportNumber is required for Individual');
       }
     }
@@ -31,8 +31,8 @@ export class CustomerService {
       tenantSlug,
       `INSERT INTO customers (id, customer_type, name, status, notes, national_id, passport_number, registration_id, tax_id, created_at, updated_at)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW(), NOW())`,
-      [customerId, dto.customer_type, dto.name, dto.status || 'Active', dto.notes || null,
-       dto.national_id || null, dto.passport_number || null, dto.registration_id || null, dto.tax_id || null],
+      [customerId, dto.customerType, dto.name, dto.status || 'Active', dto.notes || null,
+       dto.nationalId || null, dto.passportNumber || null, dto.registrationId || null, dto.taxId || null],
     );
 
     // Create contacts if provided
@@ -58,7 +58,7 @@ export class CustomerService {
       actorUserId: userId,
       entityType: 'Customer',
       entityId: customerId,
-      payload: { customerType: dto.customer_type, name: dto.name },
+      payload: { customerType: dto.customerType, name: dto.name },
     });
 
     return this.getById(tenantSlug, customerId);
@@ -268,10 +268,10 @@ export class CustomerService {
     const addressId = uuidv4();
     await this.prisma.executeTenant(
       tenantSlug,
-      `INSERT INTO addresses (id, customer_id, address_type, is_primary, line1, city, state, postal_code, country, created_at, updated_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW(), NOW())`,
+      `INSERT INTO addresses (id, customer_id, address_type, is_primary, line1, line2, city, state, postal_code, country, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW(), NOW())`,
       [addressId, customerId, dto.type || 'Other', dto.isPrimary || false,
-       dto.lines || null, dto.city || null, dto.state || null, dto.postalCode || null, dto.country || null],
+       dto.line1 || null, dto.line2 || null, dto.city || null, dto.state || null, dto.postalCode || null, dto.country || null],
     );
 
     await this.audit.log({
@@ -293,7 +293,8 @@ export class CustomerService {
 
     if (dto.type !== undefined) { setClauses.push(`address_type = $${paramIdx++}`); params.push(dto.type); }
     if (dto.isPrimary !== undefined) { setClauses.push(`is_primary = $${paramIdx++}`); params.push(dto.isPrimary); }
-    if (dto.lines !== undefined) { setClauses.push(`line1 = $${paramIdx++}`); params.push(dto.lines); }
+    if (dto.line1 !== undefined) { setClauses.push(`line1 = $${paramIdx++}`); params.push(dto.line1); }
+    if (dto.line2 !== undefined) { setClauses.push(`line2 = $${paramIdx++}`); params.push(dto.line2); }
     if (dto.city !== undefined) { setClauses.push(`city = $${paramIdx++}`); params.push(dto.city); }
     if (dto.state !== undefined) { setClauses.push(`state = $${paramIdx++}`); params.push(dto.state); }
     if (dto.postalCode !== undefined) { setClauses.push(`postal_code = $${paramIdx++}`); params.push(dto.postalCode); }

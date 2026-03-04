@@ -2,16 +2,26 @@
 
 import React, { useEffect, useState, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Box, Button, MenuItem, Stack, Tab, Tabs, TextField } from '@mui/material';
-import { Add as AddIcon } from '@mui/icons-material';
-import { calendarApi } from '@/api';
-import type { CalendarEvent, CalendarEventType } from '@/types';
+import { Box, Button, IconButton, MenuItem, Stack, Tab, Tabs, TextField, Tooltip } from '@mui/material';
+import { Add as AddIcon, Edit as EditIcon } from '@mui/icons-material';
+import { calendarApi, caseApi } from '@/api';
+import type { CalendarEvent, CalendarEventType, Case } from '@/types';
 import PageHeader from '@/components/common/PageHeader';
 import DataGrid, { type Column } from '@/components/common/DataGrid';
 import DrawerForm from '@/components/common/DrawerForm';
 import StatusBadge from '@/components/common/StatusBadge';
 
-const EVENT_TYPES: CalendarEventType[] = ['Meeting', 'Deadline', 'Task', 'Reminder', 'Other'];
+const EVENT_TYPES: CalendarEventType[] = ['Hearing', 'Meeting', 'Deadline', 'Task', 'Reminder', 'Other'];
+
+const emptyForm = {
+  title: '',
+  event_type: 'Meeting' as CalendarEventType,
+  start_at: '',
+  end_at: '',
+  location: '',
+  description: '',
+  case_id: '',
+};
 
 export default function CalendarPage() {
   const { t } = useTranslation();
@@ -22,14 +32,9 @@ export default function CalendarPage() {
   const [tab, setTab] = useState(0);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [form, setForm] = useState({
-    title: '',
-    event_type: 'Meeting' as CalendarEventType,
-    start_at: '',
-    end_at: '',
-    location: '',
-    description: '',
-  });
+  const [editEvent, setEditEvent] = useState<CalendarEvent | null>(null);
+  const [cases, setCases] = useState<Case[]>([]);
+  const [form, setForm] = useState({ ...emptyForm });
 
   const load = useCallback(
 		async (c?: string | null) => {
@@ -55,19 +60,53 @@ export default function CalendarPage() {
 
   useEffect(() => { load(); }, [load]);
 
-  const handleCreate = async () => {
+  const loadDropdowns = async () => {
+    const res = await caseApi.list({ limit: 200 }).catch(() => ({ data: [] as Case[] }));
+    setCases((res as any).data || []);
+  };
+
+  const openCreate = async () => {
+    setEditEvent(null);
+    setForm({ ...emptyForm });
+    setDrawerOpen(true);
+    await loadDropdowns();
+  };
+
+  const openEdit = async (ev: CalendarEvent) => {
+    setEditEvent(ev);
+    setForm({
+      title: ev.title || '',
+      event_type: ev.event_type || 'Meeting',
+      start_at: ev.start_at ? new Date(ev.start_at).toISOString().slice(0, 16) : '',
+      end_at: ev.end_at ? new Date(ev.end_at).toISOString().slice(0, 16) : '',
+      location: ev.location || '',
+      description: (ev as any).description || '',
+      case_id: (ev as any).case_id || '',
+    });
+    setDrawerOpen(true);
+    await loadDropdowns();
+  };
+
+  const handleSave = async () => {
     setSaving(true);
     try {
-      await calendarApi.create({
+      const payload: Partial<CalendarEvent> = {
         title: form.title,
         event_type: form.event_type,
         start_at: form.start_at,
-        end_at: form.end_at,
+        end_at: form.end_at || undefined,
         location: form.location || undefined,
         description: form.description || undefined,
-      });
+        case_id: form.case_id || undefined,
+      } as any;
+      if (editEvent) {
+        await calendarApi.update(editEvent.id, payload);
+      } else {
+        await calendarApi.create(payload);
+      }
       setDrawerOpen(false);
-      setForm({ title: '', event_type: 'Meeting', start_at: '', end_at: '', location: '', description: '' });
+      setForm({ ...emptyForm });
+      setEditEvent(null);
       load();
     } finally {
       setSaving(false);
@@ -122,6 +161,18 @@ export default function CalendarPage() {
       flex: 1,
       renderCell: (row) => row.location || '—',
     },
+    {
+      field: '_actions',
+      headerName: '',
+      width: 60,
+      renderCell: (row) => (
+        <Tooltip title={t('common.edit', 'Edit')}>
+          <IconButton size="small" onClick={(e) => { e.stopPropagation(); openEdit(row); }}>
+            <EditIcon fontSize="small" />
+          </IconButton>
+        </Tooltip>
+      ),
+    },
   ];
 
   return (
@@ -131,7 +182,7 @@ export default function CalendarPage() {
         subtitle={t('calendar.subtitle', 'Schedule and track events, deadlines, and meetings')}
         breadcrumbs={[{ label: t('nav.calendar', 'Calendar') }]}
         actions={
-          <Button variant="contained" startIcon={<AddIcon />} onClick={() => setDrawerOpen(true)}>
+          <Button variant="contained" startIcon={<AddIcon />} onClick={openCreate}>
             {t('calendar.addEvent', 'New Event')}
           </Button>
         }
@@ -151,18 +202,18 @@ export default function CalendarPage() {
         onRefresh={load}
         emptyMessage={t('calendar.empty', 'No events found')}
         emptyAction={
-          <Button variant="contained" startIcon={<AddIcon />} onClick={() => setDrawerOpen(true)}>
+          <Button variant="contained" startIcon={<AddIcon />} onClick={openCreate}>
             {t('calendar.addEvent', 'New Event')}
           </Button>
         }
       />
 
-      {/* ----- Create Event Drawer ----- */}
+      {/* ----- Create/Edit Event Drawer ----- */}
       <DrawerForm
         open={drawerOpen}
-        title={t('calendar.addEvent', 'New Event')}
+        title={editEvent ? t('calendar.editEvent', 'Edit Event') : t('calendar.addEvent', 'New Event')}
         onClose={() => setDrawerOpen(false)}
-        onSubmit={handleCreate}
+        onSubmit={handleSave}
         loading={saving}
         submitLabel={t('common.save', 'Save')}
       >
@@ -182,6 +233,15 @@ export default function CalendarPage() {
             {EVENT_TYPES.map(et => <MenuItem key={et} value={et}>{et}</MenuItem>)}
           </TextField>
           <TextField
+            label={t('calendar.case', 'Case')}
+            select fullWidth
+            value={form.case_id}
+            onChange={e => setForm(f => ({ ...f, case_id: e.target.value }))}
+          >
+            <MenuItem value="">— {t('common.none', 'None')} —</MenuItem>
+            {cases.map(c => <MenuItem key={c.id} value={c.id}>{c.title} ({c.system_case_ref})</MenuItem>)}
+          </TextField>
+          <TextField
             label={t('calendar.startTime', 'Start')}
             type="datetime-local"
             fullWidth required
@@ -192,7 +252,7 @@ export default function CalendarPage() {
           <TextField
             label={t('calendar.endTime', 'End')}
             type="datetime-local"
-            fullWidth required
+            fullWidth
             InputLabelProps={{ shrink: true }}
             value={form.end_at}
             onChange={e => setForm(f => ({ ...f, end_at: e.target.value }))}

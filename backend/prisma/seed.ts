@@ -1,4 +1,5 @@
 import { PrismaClient } from '@prisma/client';
+import * as bcrypt from 'bcryptjs';
 import * as crypto from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -39,11 +40,14 @@ async function main() {
     { id: '31a9c68e-67d7-4c7b-9c17-8fd4dc41237d', email: 'sysadmin@demo.com', displayName: 'System Admin', roles: ['SystemAdmin'], tenantId: tenant.id },
   ];
 
+  // Hash a default dev password for all seed users
+  const devPasswordHash = await bcrypt.hash('Password1!', 12);
+
   for (const u of users) {
     await prisma.user.upsert({
       where: { tenantId_email: { tenantId: u.tenantId, email: u.email } },
-      update: { id: u.id, roles: u.roles },
-      create: { ...u, passwordHash: 'dev' },
+      update: { id: u.id, roles: u.roles, passwordHash: devPasswordHash },
+      create: { ...u, passwordHash: devPasswordHash },
     });
   }
 
@@ -299,6 +303,400 @@ async function main() {
   }
 
   console.log('Phase 2 seed data completed');
+
+  // ─── Enriched Seed Data (Customers, Cases, Tasks, etc.) ──────
+
+  // --- Customers ---
+  const customerIds = {
+    individual: 'd1000000-0000-4000-a000-000000000001',
+    org:        'd1000000-0000-4000-a000-000000000002',
+    prospect:   'd1000000-0000-4000-a000-000000000003',
+  };
+
+  const customersData = [
+    { id: customerIds.individual, customer_type: 'Individual', name: 'Khalid Al-Mansouri', status: 'Active', national_id: '1088765432' },
+    { id: customerIds.org,        customer_type: 'Organization', name: 'Al-Noor Trading Co.', status: 'Active', registration_id: 'CR-12345678', tax_id: 'TAX-9876543' },
+    { id: customerIds.prospect,   customer_type: 'Individual', name: 'Layla Hassan', status: 'Prospect', national_id: '1099876543' },
+  ];
+
+  for (const c of customersData) {
+    await execTenant(
+      `INSERT INTO customers (id, customer_type, name, status, national_id, registration_id, tax_id)
+       VALUES ($1::uuid, $2, $3, $4, $5, $6, $7)
+       ON CONFLICT (id) DO UPDATE SET name = $3, status = $4`,
+      c.id, c.customer_type, c.name, c.status,
+      (c as any).national_id || null, (c as any).registration_id || null, (c as any).tax_id || null
+    );
+  }
+
+  // --- Contacts ---
+  const contactsData = [
+    { customer_id: customerIds.individual, name: 'Khalid Al-Mansouri', email: 'khalid@email.com', phone: '+966-55-1234567', is_primary: true },
+    { customer_id: customerIds.org, name: 'Fahad Al-Noor', email: 'fahad@alnoor.com', phone: '+966-55-2345678', is_primary: true },
+    { customer_id: customerIds.org, name: 'Nora Al-Noor', email: 'nora@alnoor.com', phone: '+966-55-3456789', is_primary: false },
+    { customer_id: customerIds.prospect, name: 'Layla Hassan', email: 'layla@email.com', phone: '+966-55-4567890', is_primary: true },
+  ];
+
+  for (const ct of contactsData) {
+    await execTenant(
+      `INSERT INTO contacts (id, customer_id, name, email, phone, is_primary)
+       VALUES (gen_random_uuid(), $1::uuid, $2, $3, $4, $5)
+       ON CONFLICT DO NOTHING`,
+      ct.customer_id, ct.name, ct.email, ct.phone, ct.is_primary
+    );
+  }
+
+  // --- Addresses ---
+  const addressesData = [
+    { customer_id: customerIds.individual, address_type: 'Home', is_primary: true, line1: '123 King Fahd Road', city: 'Riyadh', state: 'Riyadh', postal_code: '11564', country: 'Saudi Arabia' },
+    { customer_id: customerIds.org, address_type: 'Office', is_primary: true, line1: '456 Olaya Street, Suite 200', city: 'Riyadh', state: 'Riyadh', postal_code: '11432', country: 'Saudi Arabia' },
+    { customer_id: customerIds.org, address_type: 'Billing', is_primary: false, line1: 'PO Box 54321', city: 'Riyadh', state: 'Riyadh', postal_code: '11432', country: 'Saudi Arabia' },
+    { customer_id: customerIds.prospect, address_type: 'Home', is_primary: true, line1: '789 Al Madinah Road', city: 'Jeddah', state: 'Makkah', postal_code: '21589', country: 'Saudi Arabia' },
+  ];
+
+  for (const a of addressesData) {
+    await execTenant(
+      `INSERT INTO addresses (id, customer_id, address_type, is_primary, line1, city, state, postal_code, country)
+       VALUES (gen_random_uuid(), $1::uuid, $2, $3, $4, $5, $6, $7, $8)
+       ON CONFLICT DO NOTHING`,
+      a.customer_id, a.address_type, a.is_primary, a.line1, a.city, a.state, a.postal_code, a.country
+    );
+  }
+
+  // --- Cases ---
+  const caseIds = {
+    civil1:   'd2000000-0000-4000-a000-000000000001',
+    criminal1:'d2000000-0000-4000-a000-000000000002',
+    family1:  'd2000000-0000-4000-a000-000000000003',
+    labor1:   'd2000000-0000-4000-a000-000000000004',
+  };
+
+  // Insert case sequence counter so system_case_ref generation works
+  await execTenant(
+    `INSERT INTO case_sequences (year, last_seq) VALUES ($1, 4) ON CONFLICT (year) DO UPDATE SET last_seq = GREATEST(case_sequences.last_seq, 4)`,
+    new Date().getFullYear()
+  );
+
+  const casesData = [
+    { id: caseIds.civil1,    ref: `CASE-${new Date().getFullYear()}-0001`, court_case_number: 'CC-2024-1001', case_type_code: 'civil',    title: 'Al-Mansouri Property Dispute',       state: 'Active',  lawyer_id: users[0].id, court_id: courtIds.civil,   judge_id: judgeIds.judge1 },
+    { id: caseIds.criminal1, ref: `CASE-${new Date().getFullYear()}-0002`, court_case_number: 'CR-2024-2001', case_type_code: 'criminal', title: 'Commercial Fraud Investigation',    state: 'Open',    lawyer_id: users[0].id, court_id: courtIds.criminal,judge_id: judgeIds.judge2 },
+    { id: caseIds.family1,   ref: `CASE-${new Date().getFullYear()}-0003`, court_case_number: 'FM-2024-3001', case_type_code: 'family',   title: 'Hassan Custody Arrangement',        state: 'Pending', lawyer_id: users[1].id, court_id: courtIds.family,  judge_id: judgeIds.judge3 },
+    { id: caseIds.labor1,    ref: `CASE-${new Date().getFullYear()}-0004`, court_case_number: null,           case_type_code: 'labor',    title: 'Al-Noor Employee Dispute',          state: 'Intake',  lawyer_id: users[1].id, court_id: null,             judge_id: null },
+  ];
+
+  for (const cs of casesData) {
+    await execTenant(
+      `INSERT INTO cases (id, system_case_ref, court_case_number, case_type_id, title, state, assigned_lawyer_user_id, primary_court_id, primary_judge_id)
+       VALUES ($1::uuid, $2, $3,
+         (SELECT id FROM case_types WHERE code = $4),
+         $5, $6, $7::uuid, $8::uuid, $9::uuid)
+       ON CONFLICT (id) DO UPDATE SET title = $5, state = $6`,
+      cs.id, cs.ref, cs.court_case_number, cs.case_type_code,
+      cs.title, cs.state, cs.lawyer_id, cs.court_id, cs.judge_id
+    );
+  }
+
+  // --- Case-Customer links ---
+  const caseCustomerLinks = [
+    { case_id: caseIds.civil1,    customer_id: customerIds.individual, role: 'Client' },
+    { case_id: caseIds.criminal1, customer_id: customerIds.org,        role: 'Client' },
+    { case_id: caseIds.family1,   customer_id: customerIds.prospect,   role: 'Client' },
+    { case_id: caseIds.labor1,    customer_id: customerIds.org,        role: 'Client' },
+  ];
+
+  for (const link of caseCustomerLinks) {
+    await execTenant(
+      `INSERT INTO case_customers (id, case_id, customer_id, role)
+       VALUES (gen_random_uuid(), $1::uuid, $2::uuid, $3)
+       ON CONFLICT (case_id, customer_id) DO NOTHING`,
+      link.case_id, link.customer_id, link.role
+    );
+  }
+
+  // --- Case Memberships ---
+  const caseMemberships = [
+    { case_id: caseIds.civil1,    user_id: users[0].id, role: 'CaseOwner' },
+    { case_id: caseIds.civil1,    user_id: users[1].id, role: 'CaseMember' },
+    { case_id: caseIds.criminal1, user_id: users[0].id, role: 'CaseOwner' },
+    { case_id: caseIds.family1,   user_id: users[1].id, role: 'CaseOwner' },
+    { case_id: caseIds.labor1,    user_id: users[1].id, role: 'CaseOwner' },
+  ];
+
+  for (const cm of caseMemberships) {
+    await execTenant(
+      `INSERT INTO case_memberships (id, case_id, user_id, role)
+       VALUES (gen_random_uuid(), $1::uuid, $2::uuid, $3)
+       ON CONFLICT (case_id, user_id) DO NOTHING`,
+      cm.case_id, cm.user_id, cm.role
+    );
+  }
+
+  // --- Tasks ---
+  const tasksData = [
+    { case_id: caseIds.civil1,    title: 'Draft property valuation request',    assignee: users[0].id, priority: 'High',   status: 'InProgress', due_days: 7 },
+    { case_id: caseIds.civil1,    title: 'Prepare witness statement',           assignee: users[1].id, priority: 'Medium', status: 'Open',       due_days: 14 },
+    { case_id: caseIds.criminal1, title: 'Review financial documents',          assignee: users[0].id, priority: 'High',   status: 'Open',       due_days: 5 },
+    { case_id: caseIds.criminal1, title: 'File motion to compel discovery',     assignee: users[0].id, priority: 'High',   status: 'Done',       due_days: -3 },
+    { case_id: caseIds.family1,   title: 'Prepare custody evaluation report',   assignee: users[1].id, priority: 'High',   status: 'InProgress', due_days: 10 },
+    { case_id: caseIds.labor1,    title: 'Collect employment contracts',        assignee: users[1].id, priority: 'Medium', status: 'Open',       due_days: 21 },
+  ];
+
+  for (const t of tasksData) {
+    const dueDate = new Date();
+    dueDate.setDate(dueDate.getDate() + t.due_days);
+    await execTenant(
+      `INSERT INTO tasks (id, case_id, title, assignee_user_id, priority, status, due_date, created_by)
+       VALUES (gen_random_uuid(), $1::uuid, $2, $3::uuid, $4, $5, $6::date, $7::uuid)
+       ON CONFLICT DO NOTHING`,
+      t.case_id, t.title, t.assignee, t.priority, t.status,
+      dueDate.toISOString().split('T')[0], users[3].id
+    );
+  }
+
+  // --- Sessions ---
+  const sessionsData = [
+    { case_id: caseIds.civil1,    title: 'Initial Case Review',      court_id: courtIds.civil,   status: 'Completed', days_offset: -14, type_code: 'hearing' },
+    { case_id: caseIds.civil1,    title: 'Evidence Submission',      court_id: courtIds.civil,   status: 'Planned',   days_offset: 7,   type_code: 'session' },
+    { case_id: caseIds.criminal1, title: 'Preliminary Hearing',      court_id: courtIds.criminal,status: 'Planned',   days_offset: 10,  type_code: 'hearing' },
+    { case_id: caseIds.family1,   title: 'Mediation Session',        court_id: courtIds.family,  status: 'Planned',   days_offset: 5,   type_code: 'meeting_session' },
+  ];
+
+  for (const s of sessionsData) {
+    const dt = new Date();
+    dt.setDate(dt.getDate() + s.days_offset);
+    dt.setHours(10, 0, 0, 0);
+    const endDt = new Date(dt);
+    endDt.setHours(11, 30, 0, 0);
+    await execTenant(
+      `INSERT INTO sessions (id, case_id, type_id, title, start_date_time, end_date_time, court_id, status, created_by)
+       VALUES (gen_random_uuid(), $1::uuid,
+         (SELECT id FROM master_data WHERE category = 'sessionType' AND code = $2),
+         $3, $4::timestamptz, $5::timestamptz, $6::uuid, $7, $8::uuid)
+       ON CONFLICT DO NOTHING`,
+      s.case_id, s.type_code, s.title, dt.toISOString(), endDt.toISOString(),
+      s.court_id, s.status, users[0].id
+    );
+  }
+
+  // --- Filings ---
+  const filingsData = [
+    { case_id: caseIds.civil1,    type_code: 'complaint', status: 'Filed',    filed_days_ago: 30, notes: 'Initial complaint filed' },
+    { case_id: caseIds.civil1,    type_code: 'motion',    status: 'Draft',    filed_days_ago: null, notes: 'Motion for summary judgment - drafting' },
+    { case_id: caseIds.criminal1, type_code: 'response',  status: 'Filed',    filed_days_ago: 10, notes: 'Defense response submitted' },
+    { case_id: caseIds.family1,   type_code: 'brief',     status: 'Accepted', filed_days_ago: 20, notes: 'Custody brief accepted by court' },
+  ];
+
+  for (const f of filingsData) {
+    const filedDate = f.filed_days_ago != null ? new Date(Date.now() - f.filed_days_ago * 86400000).toISOString().split('T')[0] : null;
+    await execTenant(
+      `INSERT INTO filings (id, case_id, type_id, status, filed_date, notes, created_by)
+       VALUES (gen_random_uuid(), $1::uuid,
+         (SELECT id FROM master_data WHERE category = 'filingType' AND code = $2),
+         $3, $4::date, $5, $6::uuid)
+       ON CONFLICT DO NOTHING`,
+      f.case_id, f.type_code, f.status, filedDate, f.notes, users[0].id
+    );
+  }
+
+  // --- Hearings ---
+  const hearingsData = [
+    { case_id: caseIds.civil1,    court_id: courtIds.civil,    judge_id: judgeIds.judge1, hearing_type: 'Initial',      status: 'Completed',  days_offset: -21 },
+    { case_id: caseIds.civil1,    court_id: courtIds.civil,    judge_id: judgeIds.judge1, hearing_type: 'Continuation', status: 'Scheduled',  days_offset: 14 },
+    { case_id: caseIds.criminal1, court_id: courtIds.criminal, judge_id: judgeIds.judge2, hearing_type: 'Initial',      status: 'Scheduled',  days_offset: 12 },
+    { case_id: caseIds.family1,   court_id: courtIds.family,   judge_id: judgeIds.judge3, hearing_type: 'Procedural',   status: 'Scheduled',  days_offset: 8 },
+  ];
+
+  for (const h of hearingsData) {
+    const dt = new Date();
+    dt.setDate(dt.getDate() + h.days_offset);
+    dt.setHours(9, 0, 0, 0);
+    await execTenant(
+      `INSERT INTO hearings (id, case_id, court_id, judge_id, hearing_date, hearing_type, status, created_by)
+       VALUES (gen_random_uuid(), $1::uuid, $2::uuid, $3::uuid, $4::timestamptz, $5, $6, $7::uuid)
+       ON CONFLICT DO NOTHING`,
+      h.case_id, h.court_id, h.judge_id, dt.toISOString(),
+      h.hearing_type, h.status, users[0].id
+    );
+  }
+
+  // --- Calendar Events ---
+  const calendarEventsData = [
+    { title: 'Property Dispute - Continuation Hearing', event_type: 'Hearing',  case_id: caseIds.civil1,    days_offset: 14, status: 'Scheduled', created_by: users[0].id },
+    { title: 'Team Case Review Meeting',               event_type: 'Meeting',  case_id: null,              days_offset: 3,  status: 'Confirmed', created_by: users[3].id },
+    { title: 'Filing Deadline - Criminal Response',     event_type: 'Deadline', case_id: caseIds.criminal1, days_offset: 5,  status: 'Scheduled', created_by: users[0].id },
+    { title: 'Client Consultation - Layla Hassan',      event_type: 'Meeting',  case_id: caseIds.family1,   days_offset: 2,  status: 'Confirmed', created_by: users[1].id },
+    { title: 'Monthly Staff Meeting',                   event_type: 'Other',    case_id: null,              days_offset: 7,  status: 'Scheduled', created_by: users[3].id },
+    { title: 'Evidence Review Reminder',                event_type: 'Reminder', case_id: caseIds.criminal1, days_offset: 4,  status: 'Scheduled', created_by: users[0].id },
+  ];
+
+  for (const ce of calendarEventsData) {
+    const start = new Date();
+    start.setDate(start.getDate() + ce.days_offset);
+    start.setHours(10, 0, 0, 0);
+    const end = new Date(start);
+    end.setHours(11, 0, 0, 0);
+    await execTenant(
+      `INSERT INTO calendar_events (id, title, start_at, end_at, event_type, case_id, status, created_by)
+       VALUES (gen_random_uuid(), $1, $2::timestamptz, $3::timestamptz, $4, $5::uuid, $6, $7::uuid)
+       ON CONFLICT DO NOTHING`,
+      ce.title, start.toISOString(), end.toISOString(),
+      ce.event_type, ce.case_id, ce.status, ce.created_by
+    );
+  }
+
+  // --- Time Entries ---
+  const timeEntriesData = [
+    { case_id: caseIds.civil1,    user_id: users[0].id, days_ago: 1, hours: 2.5,  activity_type: 'Research',      billable: true,  rate: 500, status: 'Submitted' },
+    { case_id: caseIds.civil1,    user_id: users[0].id, days_ago: 3, hours: 1.0,  activity_type: 'Correspondence',billable: true,  rate: 500, status: 'Draft' },
+    { case_id: caseIds.civil1,    user_id: users[1].id, days_ago: 2, hours: 3.0,  activity_type: 'Drafting',      billable: true,  rate: 450, status: 'Approved' },
+    { case_id: caseIds.criminal1, user_id: users[0].id, days_ago: 0, hours: 4.0,  activity_type: 'Court Appearance', billable: true, rate: 500, status: 'Draft' },
+    { case_id: caseIds.criminal1, user_id: users[0].id, days_ago: 5, hours: 1.5,  activity_type: 'Review',        billable: true,  rate: 500, status: 'Approved' },
+    { case_id: caseIds.family1,   user_id: users[1].id, days_ago: 1, hours: 2.0,  activity_type: 'Consultation',  billable: true,  rate: 450, status: 'Draft' },
+    { case_id: caseIds.family1,   user_id: users[1].id, days_ago: 4, hours: 0.5,  activity_type: 'General',       billable: false, rate: 0,   status: 'Submitted' },
+    { case_id: caseIds.labor1,    user_id: users[1].id, days_ago: 2, hours: 1.0,  activity_type: 'Research',      billable: true,  rate: 450, status: 'Draft' },
+  ];
+
+  for (const te of timeEntriesData) {
+    const entryDate = new Date();
+    entryDate.setDate(entryDate.getDate() - te.days_ago);
+    const totalAmount = te.hours * te.rate;
+    await execTenant(
+      `INSERT INTO time_entries (id, case_id, user_id, entry_date, hours, activity_type, billable, rate_per_hour, total_amount, status)
+       VALUES (gen_random_uuid(), $1::uuid, $2::uuid, $3::date, $4, $5, $6, $7, $8, $9)
+       ON CONFLICT DO NOTHING`,
+      te.case_id, te.user_id, entryDate.toISOString().split('T')[0],
+      te.hours, te.activity_type, te.billable, te.rate, totalAmount, te.status
+    );
+  }
+
+  // --- Expenses ---
+  const expensesData = [
+    { case_id: caseIds.civil1,    customer_id: customerIds.individual, amount: 1500, description: 'Court filing fees', expense_date_ago: 25, submitted_by: users[0].id, category_code: 'filing_fees', status: 'Approved' },
+    { case_id: caseIds.civil1,    customer_id: customerIds.individual, amount: 350,  description: 'Courier service for documents', expense_date_ago: 10, submitted_by: users[0].id, category_code: 'courier', status: 'Pending' },
+    { case_id: caseIds.criminal1, customer_id: customerIds.org,        amount: 2000, description: 'Expert witness consultation fee', expense_date_ago: 7, submitted_by: users[0].id, category_code: 'office', status: 'Submitted' },
+  ];
+
+  for (const exp of expensesData) {
+    const expDate = new Date();
+    expDate.setDate(expDate.getDate() - exp.expense_date_ago);
+    await execTenant(
+      `INSERT INTO expenses (id, case_id, customer_id, category_id, amount, description, expense_date, submitted_by, status)
+       VALUES (gen_random_uuid(), $1::uuid, $2::uuid,
+         (SELECT id FROM master_data WHERE category = 'expenseCategory' AND code = $3),
+         $4, $5, $6::date, $7::uuid, $8)
+       ON CONFLICT DO NOTHING`,
+      exp.case_id, exp.customer_id, exp.category_code,
+      exp.amount, exp.description, expDate.toISOString().split('T')[0],
+      exp.submitted_by, exp.status
+    );
+  }
+
+  // --- Invoices + Line Items ---
+  const invoiceIds = {
+    inv1: 'd3000000-0000-4000-a000-000000000001',
+    inv2: 'd3000000-0000-4000-a000-000000000002',
+    inv3: 'd3000000-0000-4000-a000-000000000003',
+  };
+
+  // Insert invoice sequence counter
+  await execTenant(
+    `INSERT INTO invoice_sequences (year, last_seq) VALUES ($1, 3) ON CONFLICT (year) DO UPDATE SET last_seq = GREATEST(invoice_sequences.last_seq, 3)`,
+    new Date().getFullYear()
+  );
+
+  const invoicesData = [
+    { id: invoiceIds.inv1, number: `INV-${new Date().getFullYear()}-0001`, customer_id: customerIds.individual, case_id: caseIds.civil1,    status: 'Finalized', subtotal: 3750, total: 3750, due_days: 30, created_by: users[2].id },
+    { id: invoiceIds.inv2, number: `INV-${new Date().getFullYear()}-0002`, customer_id: customerIds.org,        case_id: caseIds.criminal1, status: 'Draft',     subtotal: 4500, total: 4500, due_days: 45, created_by: users[2].id },
+    { id: invoiceIds.inv3, number: `INV-${new Date().getFullYear()}-0003`, customer_id: customerIds.individual, case_id: caseIds.family1,   status: 'Sent',      subtotal: 1350, total: 1350, due_days: 15, created_by: users[2].id },
+  ];
+
+  for (const inv of invoicesData) {
+    const dueDate = new Date();
+    dueDate.setDate(dueDate.getDate() + inv.due_days);
+    await execTenant(
+      `INSERT INTO invoices (id, invoice_number, customer_id, case_id, status, subtotal, total_amount, due_date, created_by)
+       VALUES ($1::uuid, $2, $3::uuid, $4::uuid, $5, $6, $7, $8::date, $9::uuid)
+       ON CONFLICT (id) DO UPDATE SET status = $5`,
+      inv.id, inv.number, inv.customer_id, inv.case_id,
+      inv.status, inv.subtotal, inv.total, dueDate.toISOString().split('T')[0], inv.created_by
+    );
+  }
+
+  // Line items for invoices
+  const lineItemsData = [
+    // INV-1 (Finalized): legal services for property dispute
+    { invoice_id: invoiceIds.inv1, description: 'Legal consultation (5 hrs @ 500 SAR)', quantity: 5, unit_price: 500, line_total: 2500, line_number: 1 },
+    { invoice_id: invoiceIds.inv1, description: 'Document preparation',                  quantity: 1, unit_price: 750, line_total: 750,  line_number: 2 },
+    { invoice_id: invoiceIds.inv1, description: 'Court filing fees',                      quantity: 1, unit_price: 500, line_total: 500,  line_number: 3 },
+    // INV-2 (Draft): fraud investigation
+    { invoice_id: invoiceIds.inv2, description: 'Case research & analysis (6 hrs @ 500 SAR)', quantity: 6, unit_price: 500, line_total: 3000, line_number: 1 },
+    { invoice_id: invoiceIds.inv2, description: 'Expert witness coordination',                 quantity: 1, unit_price: 1500,line_total: 1500, line_number: 2 },
+    // INV-3 (Sent): custody arrangement
+    { invoice_id: invoiceIds.inv3, description: 'Custody consultation (3 hrs @ 450 SAR)', quantity: 3, unit_price: 450, line_total: 1350, line_number: 1 },
+  ];
+
+  for (const li of lineItemsData) {
+    await execTenant(
+      `INSERT INTO invoice_line_items (id, invoice_id, description, quantity, unit_price, line_total, line_number)
+       VALUES (gen_random_uuid(), $1::uuid, $2, $3, $4, $5, $6)
+       ON CONFLICT DO NOTHING`,
+      li.invoice_id, li.description, li.quantity, li.unit_price, li.line_total, li.line_number
+    );
+  }
+
+  // --- Payments ---
+  const paymentsData = [
+    { invoice_id: invoiceIds.inv1, amount: 2000, method: 'BankTransfer', days_ago: 5, reference: 'TRF-2024-001', created_by: users[2].id },
+    { invoice_id: invoiceIds.inv3, amount: 1350, method: 'Cash',         days_ago: 1, reference: null,            created_by: users[2].id },
+  ];
+
+  for (const p of paymentsData) {
+    const payDate = new Date();
+    payDate.setDate(payDate.getDate() - p.days_ago);
+    await execTenant(
+      `INSERT INTO payments (id, invoice_id, amount, method, payment_date, reference, created_by)
+       VALUES (gen_random_uuid(), $1::uuid, $2, $3, $4::timestamptz, $5, $6::uuid)
+       ON CONFLICT DO NOTHING`,
+      p.invoice_id, p.amount, p.method, payDate.toISOString(), p.reference, p.created_by
+    );
+  }
+
+  // Update paid_amount on invoices that have payments
+  await execTenant(
+    `UPDATE invoices SET paid_amount = (SELECT COALESCE(SUM(amount), 0) FROM payments WHERE payments.invoice_id = invoices.id)
+     WHERE id IN ($1::uuid, $2::uuid, $3::uuid)`,
+    invoiceIds.inv1, invoiceIds.inv2, invoiceIds.inv3
+  );
+
+  // --- Wages ---
+  const currentMonth = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`;
+  const lastMonth = (() => {
+    const d = new Date();
+    d.setMonth(d.getMonth() - 1);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+  })();
+
+  const wagesData = [
+    { user_id: users[0].id, staff_name: 'Ahmed Lawyer',     period: lastMonth,    amount: 15000, deductions: 1500, payment_status: 'Paid',    created_by: users[2].id },
+    { user_id: users[1].id, staff_name: 'Sara Lawyer',      period: lastMonth,    amount: 14000, deductions: 1400, payment_status: 'Paid',    created_by: users[2].id },
+    { user_id: users[2].id, staff_name: 'Omar Accountant',  period: lastMonth,    amount: 12000, deductions: 1200, payment_status: 'Paid',    created_by: users[3].id },
+    { user_id: users[0].id, staff_name: 'Ahmed Lawyer',     period: currentMonth, amount: 15000, deductions: 1500, payment_status: 'Planned', created_by: users[2].id },
+    { user_id: users[1].id, staff_name: 'Sara Lawyer',      period: currentMonth, amount: 14000, deductions: 1400, payment_status: 'Planned', created_by: users[2].id },
+  ];
+
+  for (const w of wagesData) {
+    const grossAmount = w.amount;
+    const netAmount = w.amount - w.deductions;
+    await execTenant(
+      `INSERT INTO wages (id, user_id, staff_name, period, amount, deductions, gross_amount, net_amount, payment_status, created_by)
+       VALUES (gen_random_uuid(), $1::uuid, $2, $3, $4, $5, $6, $7, $8, $9::uuid)
+       ON CONFLICT DO NOTHING`,
+      w.user_id, w.staff_name, w.period, w.amount, w.deductions,
+      grossAmount, netAmount, w.payment_status, w.created_by
+    );
+  }
+
+  console.log('Enriched seed data completed (customers, cases, tasks, sessions, filings, hearings, calendar, time entries, expenses, invoices, payments, wages)');
   console.log('Seed completed successfully');
 }
 

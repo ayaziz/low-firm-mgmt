@@ -1,39 +1,33 @@
-import { IsString, IsOptional, IsEnum } from 'class-validator';
+import { IsString, IsOptional, IsEnum, IsUUID } from 'class-validator';
 
 export class CreateFolderDto {
   @IsString()
   name: string;
 
-  @IsOptional() @IsString()
+  @IsOptional() @IsUUID()
   caseId?: string;
 
-  @IsOptional() @IsString()
+  @IsOptional() @IsUUID()
   parentId?: string;
 
-  @IsOptional() @IsEnum(['Case', 'Global', 'Template'])
+  @IsOptional() @IsEnum(['Customer', 'Case', 'Tenant'])
   scope?: string;
-
-  @IsOptional() @IsString()
-  description?: string;
 }
 
 export class UpdateFolderDto {
   @IsOptional() @IsString()
   name?: string;
-
-  @IsOptional() @IsString()
-  description?: string;
 }
 
 export class MoveFolderDto {
-  @IsOptional() @IsString()
+  @IsOptional() @IsUUID()
   newParentId?: string;
 }
 
 export class MoveDocumentToFolderDto {
-  @IsString()
+  @IsUUID()
   documentId: string;
 
-  @IsOptional() @IsString()
+  @IsOptional() @IsUUID()
   folderId?: string;
 }

@@ -74,13 +74,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const login = useCallback(async (email: string, password: string) => {
-    const res = await authApi.devLogin(email, password);
+    // Production login via JWT
+    const res = await authApi.login(email, password);
     const accessToken = res.accessToken || res.access_token;
     if (!accessToken) {
       throw new Error('Authentication response missing access token');
     }
     localStorage.setItem('loma_token', accessToken);
     localStorage.setItem('loma_user', JSON.stringify(res.user));
+    if (res.refreshToken) {
+      localStorage.setItem('loma_refresh_token', res.refreshToken);
+    }
     setState({
       user: res.user,
       token: accessToken,
@@ -93,6 +97,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const logout = useCallback(() => {
     localStorage.removeItem('loma_token');
     localStorage.removeItem('loma_user');
+    localStorage.removeItem('loma_refresh_token');
     setState({
       user: null,
       token: null,

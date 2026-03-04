@@ -1,15 +1,15 @@
-import { IsString, IsOptional, IsEnum, IsDateString } from 'class-validator';
+import { IsString, IsOptional, IsEnum, IsDateString, IsUUID } from 'class-validator';
 
 export class CreateHearingDto {
-  @IsString()
+  @IsUUID()
   caseId: string;
 
   @IsOptional()
-  @IsString()
+  @IsUUID()
   courtId?: string;
 
   @IsOptional()
-  @IsString()
+  @IsUUID()
   judgeId?: string;
 
   @IsDateString()
@@ -30,11 +30,11 @@ export class CreateHearingDto {
 
 export class UpdateHearingDto {
   @IsOptional()
-  @IsString()
+  @IsUUID()
   courtId?: string;
 
   @IsOptional()
-  @IsString()
+  @IsUUID()
   judgeId?: string;
 
   @IsOptional()

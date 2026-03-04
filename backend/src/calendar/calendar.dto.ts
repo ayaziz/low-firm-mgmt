@@ -1,4 +1,4 @@
-import { IsString, IsOptional, IsEnum, IsDateString, IsArray, IsNumber, IsBoolean } from 'class-validator';
+import { IsString, IsOptional, IsEnum, IsDateString, IsArray, IsNumber, IsBoolean, IsUUID } from 'class-validator';
 
 export class CreateCalendarEventDto {
   @IsString()
@@ -7,16 +7,17 @@ export class CreateCalendarEventDto {
   @IsDateString()
   startAt: string;
 
+  @IsOptional()
   @IsDateString()
-  endAt: string;
+  endAt?: string;
 
   @IsEnum(['Hearing', 'Meeting', 'Deadline', 'Task', 'Reminder', 'Other'])
   eventType: string;
 
-  @IsOptional() @IsString()
+  @IsOptional() @IsUUID()
   caseId?: string;
 
-  @IsOptional() @IsString()
+  @IsOptional() @IsUUID()
   hearingId?: string;
 
   @IsOptional() @IsString()
@@ -31,7 +32,13 @@ export class CreateCalendarEventDto {
   @IsOptional() @IsDateString()
   recurrenceEndDate?: string;
 
-  @IsOptional() @IsArray() @IsString({ each: true })
+  @IsOptional() @IsString()
+  recurrenceRule?: string;
+
+  @IsOptional() @IsBoolean()
+  allDay?: boolean;
+
+  @IsOptional() @IsArray() @IsUUID('4', { each: true })
   attendeeUserIds?: string[];
 
   @IsOptional() @IsArray()
@@ -65,10 +72,16 @@ export class UpdateCalendarEventDto {
 
   @IsOptional() @IsDateString()
   recurrenceEndDate?: string;
+
+  @IsOptional() @IsString()
+  recurrenceRule?: string;
+
+  @IsOptional() @IsBoolean()
+  allDay?: boolean;
 }
 
 export class AddAttendeeDto {
-  @IsString()
+  @IsUUID()
   userId: string;
 
   @IsOptional() @IsEnum(['Pending', 'Accepted', 'Declined', 'Tentative'])
@@ -84,6 +97,6 @@ export class AddReminderDto {
   @IsNumber()
   minutesBefore: number;
 
-  @IsOptional() @IsEnum(['InApp', 'Email', 'SMS'])
+  @IsOptional() @IsEnum(['InApp', 'Email', 'Both'])
   channel?: string;
 }

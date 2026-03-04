@@ -10,6 +10,7 @@ export interface AuditLogParams {
   entityId: string;
   payload?: Record<string, any>;
   correlationId?: string;
+  ipAddress?: string;
 }
 
 @Injectable()
@@ -17,12 +18,12 @@ export class AuditService {
   constructor(private readonly prisma: PrismaService) {}
 
   async log(params: AuditLogParams): Promise<void> {
-    const { tenantSlug, eventType, actorUserId, entityType, entityId, payload, correlationId } = params;
+    const { tenantSlug, eventType, actorUserId, entityType, entityId, payload, correlationId, ipAddress } = params;
     await this.prisma.executeTenant(
       tenantSlug,
-      `INSERT INTO audit_events (id, event_type, actor_user_id, entity_type, entity_id, payload, correlation_id, created_at)
-       VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, NOW())`,
-      [uuidv4(), eventType, actorUserId, entityType, entityId, JSON.stringify(payload || {}), correlationId || uuidv4()],
+      `INSERT INTO audit_events (id, event_type, actor_user_id, entity_type, entity_id, payload, correlation_id, ip_address, created_at)
+       VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8, NOW())`,
+      [uuidv4(), eventType, actorUserId, entityType, entityId, JSON.stringify(payload || {}), correlationId || uuidv4(), ipAddress || null],
     );
   }
 

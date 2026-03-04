@@ -3,7 +3,7 @@ import {
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
-import { Roles, CurrentUser } from '../common/decorators';
+import { Roles, CurrentUser, AuditAction } from '../common/decorators';
 import { JwtPayload } from '../common/types';
 import { TemplateService } from './template.service';
 import { CreateTemplateDto, UpdateTemplateDto, RenderTemplateDto } from './template.dto';
@@ -15,6 +15,7 @@ export class TemplateController {
 
   @Post()
   @Roles('Lawyer', 'TenantAdmin', 'SystemAdmin')
+  @AuditAction({ eventType: 'TEMPLATE_CREATED', entityType: 'Template' })
   create(@CurrentUser() user: JwtPayload, @Body() dto: CreateTemplateDto) {
     return this.service.create(user.tenantSlug, dto, user.sub);
   }

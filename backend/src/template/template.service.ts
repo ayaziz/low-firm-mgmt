@@ -18,7 +18,7 @@ export class TemplateService {
 
     // Validate Handlebars syntax
     try {
-      Handlebars.compile(dto.template_body);
+      Handlebars.compile(dto.templateBody);
     } catch (err) {
       throw new BadRequestException(`Invalid template syntax: ${err.message}`);
     }
@@ -27,8 +27,8 @@ export class TemplateService {
       tenantSlug,
       `INSERT INTO document_templates (id, name, description, category, template_body, variable_schema, is_active, created_by, created_at, updated_at)
        VALUES ($1, $2, $3, $4, $5, $6::jsonb, true, $7, NOW(), NOW())`,
-      [id, dto.name, dto.description || null, dto.category, dto.template_body,
-       JSON.stringify(dto.variable_schema || {}), userId],
+      [id, dto.name, dto.description || null, dto.category, dto.templateBody,
+       JSON.stringify(dto.variableSchema || {}), userId],
     );
 
     await this.audit.log({
@@ -96,10 +96,10 @@ export class TemplateService {
     // Verify exists
     await this.getById(tenantSlug, id);
 
-    // Validate template_body if provided
-    if (dto.template_body) {
+    // Validate templateBody if provided
+    if (dto.templateBody) {
       try {
-        Handlebars.compile(dto.template_body);
+        Handlebars.compile(dto.templateBody);
       } catch (err) {
         throw new BadRequestException(`Invalid template syntax: ${err.message}`);
       }
@@ -113,8 +113,8 @@ export class TemplateService {
       name: dto.name,
       description: dto.description,
       category: dto.category,
-      template_body: dto.template_body,
-      is_active: dto.is_active,
+      template_body: dto.templateBody,
+      is_active: dto.isActive,
     };
 
     for (const [col, val] of Object.entries(fieldMap)) {
@@ -124,9 +124,9 @@ export class TemplateService {
       }
     }
 
-    if (dto.variable_schema !== undefined) {
+    if (dto.variableSchema !== undefined) {
       setClauses.push(`variable_schema = $${idx++}::jsonb`);
-      params.push(JSON.stringify(dto.variable_schema));
+      params.push(JSON.stringify(dto.variableSchema));
     }
 
     if (!setClauses.length) throw new BadRequestException('No fields to update');

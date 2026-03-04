@@ -3,7 +3,7 @@ import { DocumentService } from './document.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
 import { StepUpGuard } from '../auth/step-up.guard';
-import { Roles, RequireStepUp, CurrentUser } from '../common/decorators';
+import { Roles, RequireStepUp, CurrentUser, AuditAction } from '../common/decorators';
 import { CreateDocumentDto, CheckinDocumentDto, ShareDocumentDto } from './document.dto';
 
 @Controller('documents')
@@ -12,8 +12,8 @@ export class DocumentController {
   constructor(private readonly documentService: DocumentService) {}
 
   @Post()
-  @Post()
   @Roles('Lawyer', 'TenantAdmin', 'SystemAdmin')
+  @AuditAction({ eventType: 'DOCUMENT_CREATED', entityType: 'Document' })
   create(@CurrentUser() user: any, @Body() dto: CreateDocumentDto) {
     return this.documentService.create(user.tenantSlug, user.tenantId, dto, user.sub);
   }

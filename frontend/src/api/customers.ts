@@ -15,7 +15,15 @@ export const customerApi = {
 	},
 
 	create(data: Partial<Customer>): Promise<Customer> {
-		return post<Customer>('/customers', data)
+		// Map snake_case Customer fields → camelCase CreateCustomerDto
+		const { customer_type, national_id, passport_number, registration_id, tax_id, ...rest } = data as any;
+		const payload: Record<string, unknown> = { ...rest };
+		if (customer_type !== undefined) payload.customerType = customer_type;
+		if (national_id !== undefined) payload.nationalId = national_id;
+		if (passport_number !== undefined) payload.passportNumber = passport_number;
+		if (registration_id !== undefined) payload.registrationId = registration_id;
+		if (tax_id !== undefined) payload.taxId = tax_id;
+		return post<Customer>('/customers', payload)
 	},
 
 	update(id: string, data: Partial<Customer>): Promise<Customer> {

@@ -4,8 +4,7 @@ import {
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
-import { Roles } from '../common/decorators';
-import { CurrentUser } from '../common/decorators';
+import { Roles, CurrentUser, AuditAction } from '../common/decorators';
 import { TimeEntryService } from './time-entry.service';
 import { CreateTimeEntryDto, UpdateTimeEntryDto, TransitionTimeEntryDto } from './time-entry.dto';
 
@@ -16,6 +15,7 @@ export class TimeEntryController {
 
   @Post()
   @Roles('Lawyer', 'TenantAdmin', 'SystemAdmin')
+  @AuditAction({ eventType: 'TIME_ENTRY_CREATED', entityType: 'TimeEntry' })
   @HttpCode(HttpStatus.CREATED)
   async create(@CurrentUser() user: any, @Body() dto: CreateTimeEntryDto) {
     const data = await this.timeEntryService.create(user.tenantSlug, dto, user.sub);

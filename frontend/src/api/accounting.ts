@@ -1,4 +1,4 @@
-import { get, post, downloadBlob } from './client';
+import { get, post, patch, downloadBlob } from './client';
 import type { Invoice, Payment, Expense, Wage, PaginatedResult } from '@/types';
 
 export const accountingApi = {
@@ -86,6 +86,11 @@ export const accountingApi = {
     period: string;
     amount: number;
     notes?: string;
+    staffName?: string;
+    deductions?: number;
+    grossAmount?: number;
+    netAmount?: number;
+    paymentStatus?: string;
   }): Promise<Wage> {
     return post<Wage>('/wages', data);
   },
@@ -93,5 +98,35 @@ export const accountingApi = {
   exportWagesCsv(period?: string): Promise<void> {
     const params = period ? `?period=${period}` : '';
     return downloadBlob(`/wages/export${params}`, `wages-${period || 'all'}.csv`);
+  },
+
+  // Update methods
+  updateWage(id: string, data: Partial<{
+    amount: number; period: string; notes: string;
+    staffName: string; deductions: number; grossAmount: number;
+    netAmount: number; paymentStatus: string;
+  }>): Promise<Wage> {
+    return patch<Wage>(`/wages/${id}`, data);
+  },
+
+  updateExpense(id: string, data: Partial<{
+    caseId: string; categoryId: string; customerId: string;
+    amount: number; description: string; expenseDate: string;
+  }>): Promise<Expense> {
+    return patch<Expense>(`/expenses/${id}`, data);
+  },
+
+  updateInvoice(id: string, data: Partial<{
+    currency: string; dueDate: string; notes: string; discountRatePct: number;
+    lineItems: Array<{ description: string; quantity: number; unitPrice: number }>;
+  }>): Promise<Invoice> {
+    return patch<Invoice>(`/invoices/${id}`, data);
+  },
+
+  updatePayment(id: string, data: Partial<{
+    amount: number; method: string; paymentDate: string;
+    reference: string; notes: string;
+  }>): Promise<Payment> {
+    return patch<Payment>(`/payments/${id}`, data);
   },
 };

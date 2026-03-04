@@ -1,24 +1,26 @@
-import { IsString, IsOptional, IsEnum, IsUUID, IsDateString } from 'class-validator';
+import { IsString, IsOptional, IsEnum, IsUUID, IsDateString, IsArray } from 'class-validator';
 
 export class CreateDocumentDto {
   @IsString() title: string;
-  @IsString() docTypeId: string;
+  @IsUUID() docTypeId: string;
   @IsString() fileName: string;
   @IsString() mimeType: string;
-  @IsOptional() @IsString() customerId?: string;
-  @IsOptional() @IsString() caseId?: string;
+  @IsOptional() @IsUUID() customerId?: string;
+  @IsOptional() @IsUUID() caseId?: string;
   @IsOptional() @IsEnum(['Normal', 'Confidential', 'HighlyConfidential'])
   confidentialityLevel?: string;
+  @IsOptional() @IsString() description?: string;
+  @IsOptional() @IsArray() tags?: string[];
+  @IsOptional() @IsUUID() folderId?: string;
 }
 
 export class CheckinDocumentDto {
   @IsString() fileName: string;
   @IsString() mimeType: string;
-  @IsOptional() @IsString() changeNote?: string;
 }
 
 export class ShareDocumentDto {
-  @IsString() userId: string;
+  @IsUUID() userId: string;
   @IsOptional() @IsEnum(['View', 'Download', 'UploadNewVersion', 'Share', 'Admin']) permission?: string;
   @IsOptional() @IsDateString() expiresAt?: string;
 }

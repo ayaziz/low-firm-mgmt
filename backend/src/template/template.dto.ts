@@ -1,4 +1,4 @@
-import { IsString, IsOptional, IsEnum, IsBoolean, IsObject, MaxLength } from 'class-validator';
+import { IsString, IsOptional, IsEnum, IsBoolean, IsObject, MaxLength, IsUUID } from 'class-validator';
 import { DocumentTemplateCategory } from '../common/types';
 
 export class CreateTemplateDto {
@@ -14,11 +14,11 @@ export class CreateTemplateDto {
   category: DocumentTemplateCategory;
 
   @IsString()
-  template_body: string;
+  templateBody: string;
 
   @IsOptional()
   @IsObject()
-  variable_schema?: Record<string, string>;
+  variableSchema?: Record<string, string>;
 }
 
 export class UpdateTemplateDto {
@@ -37,19 +37,19 @@ export class UpdateTemplateDto {
 
   @IsOptional()
   @IsString()
-  template_body?: string;
+  templateBody?: string;
 
   @IsOptional()
   @IsObject()
-  variable_schema?: Record<string, string>;
+  variableSchema?: Record<string, string>;
 
   @IsOptional()
   @IsBoolean()
-  is_active?: boolean;
+  isActive?: boolean;
 }
 
 export class RenderTemplateDto {
-  @IsString()
+  @IsUUID()
   templateId: string;
 
   @IsObject()
@@ -57,7 +57,7 @@ export class RenderTemplateDto {
 
   /** If caseId is provided, a document will be created from the rendered output */
   @IsOptional()
-  @IsString()
+  @IsUUID()
   caseId?: string;
 
   /** Document title when generating a document (defaults to template name) */

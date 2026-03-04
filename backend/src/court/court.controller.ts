@@ -2,7 +2,7 @@ import { Controller, Post, Get, Patch, Param, Body, Query, UseGuards } from '@ne
 import { CourtService } from './court.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
-import { Roles, CurrentUser } from '../common/decorators';
+import { Roles, CurrentUser, AuditAction } from '../common/decorators';
 import { CreateCourtDto, UpdateCourtDto, CreateJudgeDto, UpdateJudgeDto } from './court.dto';
 
 @Controller('courts')
@@ -14,6 +14,7 @@ export class CourtController {
 
   @Post()
   @Roles('Lawyer', 'TenantAdmin', 'SystemAdmin')
+  @AuditAction({ eventType: 'COURT_CREATED', entityType: 'Court' })
   createCourt(@CurrentUser() user: any, @Body() dto: CreateCourtDto) {
     return this.courtService.createCourt(user.tenantSlug, dto, user.sub);
   }
@@ -31,21 +32,11 @@ export class CourtController {
     return this.courtService.listCourts(user.tenantSlug, active, city, jurisdictionLevel, cursor, limit ? parseInt(limit) : undefined);
   }
 
-  @Get(':id')
-  getCourtById(@CurrentUser() user: any, @Param('id') id: string) {
-    return this.courtService.getCourtById(user.tenantSlug, id);
-  }
-
-  @Patch(':id')
-  @Roles('TenantAdmin', 'SystemAdmin')
-  updateCourt(@CurrentUser() user: any, @Param('id') id: string, @Body() dto: UpdateCourtDto) {
-    return this.courtService.updateCourt(user.tenantSlug, id, dto, user.sub);
-  }
-
-  // ── Judges ─────────────────────────────────────────────────────
+  // ── Judges must come before :id to avoid route shadowing ───────
 
   @Post('judges')
   @Roles('Lawyer', 'TenantAdmin', 'SystemAdmin')
+  @AuditAction({ eventType: 'JUDGE_CREATED', entityType: 'Judge' })
   createJudge(@CurrentUser() user: any, @Body() dto: CreateJudgeDto) {
     return this.courtService.createJudge(user.tenantSlug, dto, user.sub);
   }
@@ -69,7 +60,22 @@ export class CourtController {
 
   @Patch('judges/:id')
   @Roles('TenantAdmin', 'SystemAdmin')
+  @AuditAction({ eventType: 'JUDGE_UPDATED', entityType: 'Judge', entityIdParam: 'id' })
   updateJudge(@CurrentUser() user: any, @Param('id') id: string, @Body() dto: UpdateJudgeDto) {
     return this.courtService.updateJudge(user.tenantSlug, id, dto, user.sub);
+  }
+
+  // ── Courts by id ────────────────────────────────────────────────
+
+  @Get(':id')
+  getCourtById(@CurrentUser() user: any, @Param('id') id: string) {
+    return this.courtService.getCourtById(user.tenantSlug, id);
+  }
+
+  @Patch(':id')
+  @Roles('TenantAdmin', 'SystemAdmin')
+  @AuditAction({ eventType: 'COURT_UPDATED', entityType: 'Court', entityIdParam: 'id' })
+  updateCourt(@CurrentUser() user: any, @Param('id') id: string, @Body() dto: UpdateCourtDto) {
+    return this.courtService.updateCourt(user.tenantSlug, id, dto, user.sub);
   }
 }

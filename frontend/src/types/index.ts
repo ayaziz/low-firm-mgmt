@@ -37,6 +37,7 @@ export interface PaginatedResult<T> {
 export interface AuthResponse {
   accessToken?: string;
   access_token?: string;
+  refreshToken?: string;
   user: UserInfo;
 }
 
@@ -61,7 +62,7 @@ export interface Customer {
 	notes?: string
 	created_at: string
 	updated_at: string
-	row_version: string
+	rowVersion: string
 }
 
 export interface Contact {
@@ -370,17 +371,17 @@ export interface Court {
 }
 
 export interface Judge {
-  id: string;
-  court_id: string;
-  name: string;
-  title?: string;
-  chamber?: string;
-  phone?: string;
-  email?: string;
-  notes?: string;
-  is_active: boolean;
-  created_at: string;
-  court_name?: string;
+	id: string
+	court_id: string
+	name: string
+	title?: string
+	specialization?: string
+	phone?: string
+	email?: string
+	notes?: string
+	is_active: boolean
+	created_at: string
+	court_name?: string
 }
 
 // ── Phase 2: Hearings ──

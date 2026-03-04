@@ -34,7 +34,7 @@ export default function DocumentListPage() {
   const [totalCount, setTotalCount] = useState(0);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [cases, setCases] = useState<Case[]>([]);
-  const [form, setForm] = useState({ title: '', caseId: '', docTypeId: '', confidentiality: 'Normal' });
+  const [form, setForm] = useState({ title: '', caseId: '', docTypeId: '', confidentiality: 'Normal', description: '', tags: '' });
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [saving, setSaving] = useState(false);
   const [dragOver, setDragOver] = useState(false);
@@ -78,12 +78,13 @@ export default function DocumentListPage() {
     try {
       const result = await documentApi.create({
         title: form.title,
-        caseId: form.caseId,
-        customerId: '',
+        caseId: form.caseId || undefined,
         fileName: selectedFile.name,
         mimeType: selectedFile.type || 'application/octet-stream',
         docTypeId: form.docTypeId,
         confidentialityLevel: form.confidentiality,
+        description: form.description || undefined,
+        tags: form.tags ? form.tags.split(',').map(t => t.trim()).filter(Boolean) : undefined,
       });
       if (result.uploadUrl) {
         await fetch(result.uploadUrl, {
@@ -101,7 +102,7 @@ export default function DocumentListPage() {
   };
 
   const resetForm = () => {
-    setForm({ title: '', caseId: '', docTypeId: '', confidentiality: 'Normal' });
+    setForm({ title: '', caseId: '', docTypeId: '', confidentiality: 'Normal', description: '', tags: '' });
     setSelectedFile(null);
   };
 
@@ -271,10 +272,25 @@ export default function DocumentListPage() {
             value={form.confidentiality}
             onChange={(e) => setForm(f => ({ ...f, confidentiality: e.target.value }))}
           >
-            <MenuItem value="Standard">Standard</MenuItem>
+            <MenuItem value="Normal">Normal</MenuItem>
             <MenuItem value="Confidential">Confidential</MenuItem>
             <MenuItem value="HighlyConfidential">Highly Confidential</MenuItem>
           </TextField>
+          <TextField
+            label={t('document.description', 'Description')}
+            fullWidth
+            multiline
+            rows={2}
+            value={form.description}
+            onChange={(e) => setForm(f => ({ ...f, description: e.target.value }))}
+          />
+          <TextField
+            label={t('document.tags', 'Tags (comma-separated)')}
+            fullWidth
+            value={form.tags}
+            onChange={(e) => setForm(f => ({ ...f, tags: e.target.value }))}
+            helperText={t('document.tagsHelp', 'Enter tags separated by commas')}
+          />
         </Stack>
       </DrawerForm>
     </Box>

@@ -2,15 +2,17 @@
 
 import React, { useEffect, useState, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Box, Button, MenuItem, Stack, TextField } from '@mui/material';
-import { Add as AddIcon } from '@mui/icons-material';
-import { hearingApi, courtApi } from '@/api';
-import type { Hearing, Court } from '@/types';
+import { Box, Button, IconButton, MenuItem, Stack, TextField, Tooltip } from '@mui/material';
+import { Add as AddIcon, Edit as EditIcon } from '@mui/icons-material';
+import { hearingApi, courtApi, caseApi } from '@/api';
+import type { Hearing, Court, Case } from '@/types';
 import { useAuth } from '@/context/AuthContext';
 import PageHeader from '@/components/common/PageHeader';
 import DataGrid, { type Column } from '@/components/common/DataGrid';
 import StatusBadge from '@/components/common/StatusBadge';
 import DrawerForm from '@/components/common/DrawerForm';
+
+const HEARING_TYPES = ['Initial', 'Continuation', 'Ruling', 'Appeal', 'Procedural'];
 
 const HEARING_TRANSITIONS: Record<string, string[]> = {
   Scheduled: ['Confirmed', 'Cancelled'],
@@ -19,6 +21,8 @@ const HEARING_TRANSITIONS: Record<string, string[]> = {
   Adjourned: ['Scheduled', 'Cancelled'],
 };
 
+const emptyForm = { case_id: '', court_id: '', hearing_date: '', hearing_type: 'Initial', location: '', notes: '' };
+
 export default function HearingsPage() {
   const { t } = useTranslation();
   const { hasAnyRole } = useAuth();
@@ -26,14 +30,9 @@ export default function HearingsPage() {
   const [loading, setLoading] = useState(true);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [courts, setCourts] = useState<Court[]>([]);
-  const [form, setForm] = useState({
-    case_id: '',
-    court_id: '',
-    hearing_date: '',
-    hearing_type: 'Regular',
-    location: '',
-    notes: '',
-  });
+  const [cases, setCases] = useState<Case[]>([]);
+  const [editHearing, setEditHearing] = useState<Hearing | null>(null);
+  const [form, setForm] = useState({ ...emptyForm });
   const [saving, setSaving] = useState(false);
 
   const load = useCallback(async () => {
@@ -49,25 +48,55 @@ export default function HearingsPage() {
 
   useEffect(() => { load(); }, [load]);
 
-  const openDrawer = async () => {
-    setDrawerOpen(true);
-    const res = await courtApi.list({ limit: 100 }).catch(() => ({ data: [] as Court[] }));
-    setCourts((res as any).data || []);
+  const loadDropdowns = async () => {
+    const [courtRes, caseRes] = await Promise.all([
+      courtApi.list({ limit: 100 }).catch(() => ({ data: [] as Court[] })),
+      caseApi.list({ limit: 200 }).catch(() => ({ data: [] as Case[] })),
+    ]);
+    setCourts((courtRes as any).data || []);
+    setCases((caseRes as any).data || []);
   };
 
-  const handleCreate = async () => {
+  const openCreate = async () => {
+    setEditHearing(null);
+    setForm({ ...emptyForm });
+    setDrawerOpen(true);
+    await loadDropdowns();
+  };
+
+  const openEdit = async (h: Hearing) => {
+    setEditHearing(h);
+    setForm({
+      case_id: h.case_id || '',
+      court_id: h.court_id || '',
+      hearing_date: h.hearing_date ? new Date(h.hearing_date).toISOString().slice(0, 16) : '',
+      hearing_type: h.hearing_type || 'Initial',
+      location: (h as any).location || '',
+      notes: (h as any).notes || '',
+    });
+    setDrawerOpen(true);
+    await loadDropdowns();
+  };
+
+  const handleSave = async () => {
     setSaving(true);
     try {
-      await hearingApi.create({
+      const payload = {
         case_id: form.case_id,
         court_id: form.court_id,
         hearing_date: form.hearing_date,
         hearing_type: form.hearing_type,
         location: form.location || undefined,
         notes: form.notes || undefined,
-      });
+      };
+      if (editHearing) {
+        await hearingApi.update(editHearing.id, payload);
+      } else {
+        await hearingApi.create(payload);
+      }
       setDrawerOpen(false);
-      setForm({ case_id: '', court_id: '', hearing_date: '', hearing_type: 'Regular', location: '', notes: '' });
+      setForm({ ...emptyForm });
+      setEditHearing(null);
       load();
     } finally {
       setSaving(false);
@@ -120,24 +149,34 @@ export default function HearingsPage() {
     {
       field: '_actions',
       headerName: t('common.actions', 'Actions'),
-      width: 140,
+      width: 180,
       renderCell: (row) => {
         const transitions = HEARING_TRANSITIONS[row.status] || [];
-        if (!canManage || transitions.length === 0) return null;
         return (
-          <TextField
-            select
-            size="small"
-            value=""
-            label="→"
-            sx={{ minWidth: 110 }}
-            onClick={(e) => e.stopPropagation()}
-            onChange={(e) => handleTransition(row.id, e.target.value)}
-          >
-            {transitions.map((s) => (
-              <MenuItem key={s} value={s}>{s}</MenuItem>
-            ))}
-          </TextField>
+          <Stack direction="row" spacing={0.5} alignItems="center">
+            {canManage && (
+              <Tooltip title={t('common.edit', 'Edit')}>
+                <IconButton size="small" onClick={(e) => { e.stopPropagation(); openEdit(row); }}>
+                  <EditIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
+            )}
+            {canManage && transitions.length > 0 && (
+              <TextField
+                select
+                size="small"
+                value=""
+                label="→"
+                sx={{ minWidth: 110 }}
+                onClick={(e) => e.stopPropagation()}
+                onChange={(e) => handleTransition(row.id, e.target.value)}
+              >
+                {transitions.map((s) => (
+                  <MenuItem key={s} value={s}>{s}</MenuItem>
+                ))}
+              </TextField>
+            )}
+          </Stack>
         );
       },
     },
@@ -149,7 +188,7 @@ export default function HearingsPage() {
         title={t('nav.hearings', 'Hearings')}
         actions={
           canManage ? (
-            <Button variant="contained" startIcon={<AddIcon />} onClick={openDrawer}>
+            <Button variant="contained" startIcon={<AddIcon />} onClick={openCreate}>
               {t('hearing.add', 'New Hearing')}
             </Button>
           ) : undefined
@@ -168,19 +207,26 @@ export default function HearingsPage() {
       <DrawerForm
         open={drawerOpen}
         onClose={() => setDrawerOpen(false)}
-        title={t('hearing.add', 'New Hearing')}
-        onSubmit={handleCreate}
+        title={editHearing ? t('hearing.edit', 'Edit Hearing') : t('hearing.add', 'New Hearing')}
+        onSubmit={handleSave}
         loading={saving}
       >
         <Stack spacing={2}>
           <TextField
-            label={t('hearing.caseId', 'Case ID')}
+            label={t('hearing.case', 'Case')}
+            select
             fullWidth
             required
             value={form.case_id}
             onChange={(e) => setForm((f) => ({ ...f, case_id: e.target.value }))}
-            helperText={t('hearing.caseIdHelp', 'Enter the case ID')}
-          />
+          >
+            <MenuItem value="">— {t('common.select', 'Select')} —</MenuItem>
+            {cases.map((c) => (
+              <MenuItem key={c.id} value={c.id}>
+                {c.title} ({c.system_case_ref})
+              </MenuItem>
+            ))}
+          </TextField>
           <TextField
             label={t('hearing.court', 'Court')}
             select
@@ -204,10 +250,16 @@ export default function HearingsPage() {
           />
           <TextField
             label={t('hearing.type', 'Type')}
+            select
             fullWidth
+            required
             value={form.hearing_type}
             onChange={(e) => setForm((f) => ({ ...f, hearing_type: e.target.value }))}
-          />
+          >
+            {HEARING_TYPES.map((ht) => (
+              <MenuItem key={ht} value={ht}>{ht}</MenuItem>
+            ))}
+          </TextField>
           <TextField
             label={t('hearing.location', 'Location')}
             fullWidth

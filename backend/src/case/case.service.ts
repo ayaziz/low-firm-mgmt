@@ -6,7 +6,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { VALID_STATE_TRANSITIONS } from '../common/types';
 import {
   CreateCaseDto, TransitionCaseDto, SetOnHoldDto, ReopenCaseDto,
-  CreateMembershipDto, CreateTaskDto, UpdateTaskDto,
+  CreateMembershipDto, AddCaseCustomerDto, CreateTaskDto, UpdateTaskDto,
   CreateSessionDto, UpdateSessionDto, RescheduleSessionDto,
   CreateNoteDto, CreateFilingDto, UpdateFilingDto,
   CreateCommunicationDto, AddCasePartyDto,
@@ -48,16 +48,16 @@ export class CaseService {
 
     await this.prisma.executeTenant(
       tenantSlug,
-      `INSERT INTO cases (id, system_case_ref, court_case_number, title, description, case_type_id, state, is_on_hold, assigned_lawyer_user_id, row_version, created_at, updated_at)
-       VALUES ($1, $2, $3, $4, $5, $6, 'Intake', false, $7, $8, NOW(), NOW())`,
-      [caseId, systemCaseRef, dto.courtCaseNumber || null, dto.title, dto.description || null, dto.caseTypeId, assignedLawyer, rowVersion],
+      `INSERT INTO cases (id, system_case_ref, court_case_number, title, description, case_type_id, state, is_on_hold, assigned_lawyer_user_id, primary_court_id, primary_judge_id, row_version, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, 'Intake', false, $7, $8, $9, $10, NOW(), NOW())`,
+      [caseId, systemCaseRef, dto.courtCaseNumber || null, dto.title, dto.description || null, dto.caseTypeId, assignedLawyer, dto.primaryCourtId || null, dto.primaryJudgeId || null, rowVersion],
     );
 
     // Link customers
     for (const custId of dto.customerIds) {
       await this.prisma.executeTenant(
         tenantSlug,
-        `INSERT INTO case_customers (id, case_id, customer_id, created_at) VALUES ($1, $2, $3, NOW())`,
+        `INSERT INTO case_customers (id, case_id, customer_id, role, created_at) VALUES ($1, $2, $3, 'Client', NOW())`,
         [uuidv4(), caseId, custId],
       );
     }
@@ -252,16 +252,29 @@ export class CaseService {
     await this.audit.log({ tenantSlug, eventType: 'CASE_MEMBERSHIP_ROLE_CHANGED', actorUserId: userId, entityType: 'CaseMembership', entityId: membershipId, payload: { caseId, newRole: role } });
   }
 
+  // --- Case Customers ---
+  async addCaseCustomer(tenantSlug: string, caseId: string, dto: AddCaseCustomerDto, userId: string) {
+    await this.ensureNotArchived(tenantSlug, caseId);
+    const linkId = uuidv4();
+    await this.prisma.executeTenant(
+      tenantSlug,
+      `INSERT INTO case_customers (id, case_id, customer_id, role, created_at) VALUES ($1, $2, $3, $4, NOW())`,
+      [linkId, caseId, dto.customerId, dto.role || 'Client'],
+    );
+    await this.audit.log({ tenantSlug, eventType: 'CASE_CUSTOMER_ADDED', actorUserId: userId, entityType: 'CaseCustomer', entityId: linkId, payload: { caseId, customerId: dto.customerId, role: dto.role || 'Client' } });
+    return { id: linkId };
+  }
+
   // --- Tasks ---
   async createTask(tenantSlug: string, caseId: string, dto: CreateTaskDto, userId: string) {
     await this.ensureNotArchived(tenantSlug, caseId);
     const taskId = uuidv4();
     await this.prisma.executeTenant(
       tenantSlug,
-      `INSERT INTO tasks (id, case_id, customer_id, title, description, assignee_user_id, reviewer_user_id, priority, status, due_date, start_date, tags, created_at, updated_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'Open', $9, $10, $11, NOW(), NOW())`,
+      `INSERT INTO tasks (id, case_id, customer_id, title, description, assignee_user_id, reviewer_user_id, priority, status, due_date, start_date, tags, linked_document_ids, estimated_hours, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'Open', $9, $10, $11, $12, $13, NOW(), NOW())`,
       [taskId, caseId, dto.customerId || null, dto.title, dto.description || null, dto.assigneeUserId, dto.reviewerUserId || null,
-       dto.priority || 'Medium', dto.dueDate || null, dto.startDate || null, dto.tags || []],
+       dto.priority || 'Medium', dto.dueDate || null, dto.startDate || null, dto.tags || [], dto.linkedDocumentIds || [], dto.estimatedHours || null],
     );
     await this.audit.log({ tenantSlug, eventType: 'TASK_CREATED', actorUserId: userId, entityType: 'Task', entityId: taskId, payload: { caseId, title: dto.title } });
 
@@ -307,6 +320,8 @@ export class CaseService {
     if (dto.priority) { setClauses.push(`priority = $${idx++}`); params.push(dto.priority); }
     if (dto.status) { setClauses.push(`status = $${idx++}`); params.push(dto.status); }
     if (dto.dueDate) { setClauses.push(`due_date = $${idx++}`); params.push(dto.dueDate); }
+    if (dto.linkedDocumentIds !== undefined) { setClauses.push(`linked_document_ids = $${idx++}`); params.push(dto.linkedDocumentIds); }
+    if (dto.estimatedHours !== undefined) { setClauses.push(`estimated_hours = $${idx++}`); params.push(dto.estimatedHours); }
 
     if (setClauses.length === 0) return;
     setClauses.push(`updated_at = NOW()`);
@@ -334,9 +349,9 @@ export class CaseService {
     const sessionId = uuidv4();
     await this.prisma.executeTenant(
       tenantSlug,
-      `INSERT INTO sessions (id, case_id, type_id, title, start_date_time, end_date_time, location, court_id, status, created_at, updated_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'Planned', NOW(), NOW())`,
-      [sessionId, caseId, dto.typeId, dto.title, dto.startDateTime, dto.endDateTime, dto.location || null, dto.courtId || null],
+      `INSERT INTO sessions (id, case_id, type_id, title, start_date_time, end_date_time, location, court_id, linked_document_ids, status, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'Planned', NOW(), NOW())`,
+      [sessionId, caseId, dto.typeId, dto.title, dto.startDateTime, dto.endDateTime, dto.location || null, dto.courtId || null, dto.linkedDocumentIds || []],
     );
     await this.audit.log({ tenantSlug, eventType: 'SESSION_CREATED', actorUserId: userId, entityType: 'Session', entityId: sessionId, payload: { caseId, title: dto.title } });
 
@@ -375,6 +390,7 @@ export class CaseService {
     if (dto.status) { setClauses.push(`status = $${idx++}`); params.push(dto.status); }
     if (dto.outcomeNotes) { setClauses.push(`outcome_notes = $${idx++}`); params.push(dto.outcomeNotes); }
     if (dto.location) { setClauses.push(`location = $${idx++}`); params.push(dto.location); }
+    if (dto.linkedDocumentIds !== undefined) { setClauses.push(`linked_document_ids = $${idx++}`); params.push(dto.linkedDocumentIds); }
 
     if (setClauses.length === 0) return;
     setClauses.push(`updated_at = NOW()`);
@@ -441,6 +457,30 @@ export class CaseService {
     return this.prisma.queryTenant(tenantSlug, `SELECT * FROM notes WHERE case_id = $1 ORDER BY created_at DESC`, [caseId]);
   }
 
+  async updateNote(tenantSlug: string, caseId: string, noteId: string, dto: any, userId: string) {
+    await this.ensureNotArchived(tenantSlug, caseId);
+    const sets: string[] = [];
+    const params: any[] = [];
+    let idx = 1;
+
+    if (dto.body !== undefined) { sets.push(`body = $${idx++}`); params.push(dto.body); }
+    if (dto.title !== undefined) { sets.push(`title = $${idx++}`); params.push(dto.title); }
+    if (dto.tags !== undefined) { sets.push(`tags = $${idx++}`); params.push(dto.tags); }
+
+    if (sets.length === 0) return;
+
+    params.push(noteId);
+    params.push(caseId);
+
+    await this.prisma.executeTenant(
+      tenantSlug,
+      `UPDATE notes SET ${sets.join(', ')} WHERE id = $${idx} AND case_id = $${idx + 1}`,
+      params,
+    );
+
+    await this.audit.log({ tenantSlug, eventType: 'NOTE_UPDATED', actorUserId: userId, entityType: 'Note', entityId: noteId, payload: { caseId, changes: dto } });
+  }
+
   // --- Filings ---
   async createFiling(tenantSlug: string, caseId: string, dto: CreateFilingDto, userId: string) {
     await this.ensureNotArchived(tenantSlug, caseId);
@@ -504,6 +544,38 @@ export class CaseService {
 
   async listCommunications(tenantSlug: string, caseId: string) {
     return this.prisma.queryTenant(tenantSlug, `SELECT * FROM communications WHERE case_id = $1 ORDER BY date_time DESC`, [caseId]);
+  }
+
+  async updateCommunication(tenantSlug: string, caseId: string, commId: string, dto: any, userId: string) {
+    await this.ensureNotArchived(tenantSlug, caseId);
+    const fieldMap: Record<string, string> = {
+      typeId: 'type_id', dateTime: 'date_time', direction: 'direction',
+      summary: 'summary', nextSteps: 'next_steps', participants: 'participants',
+    };
+    const sets: string[] = [];
+    const params: any[] = [];
+    let idx = 1;
+
+    for (const [dtoKey, col] of Object.entries(fieldMap)) {
+      if (dto[dtoKey] !== undefined) {
+        sets.push(`${col} = $${idx++}`);
+        params.push(dto[dtoKey]);
+      }
+    }
+
+    if (sets.length === 0) return;
+    sets.push(`updated_at = NOW()`);
+
+    params.push(commId);
+    params.push(caseId);
+
+    await this.prisma.executeTenant(
+      tenantSlug,
+      `UPDATE communications SET ${sets.join(', ')} WHERE id = $${idx} AND case_id = $${idx + 1}`,
+      params,
+    );
+
+    await this.audit.log({ tenantSlug, eventType: 'COMM_UPDATED', actorUserId: userId, entityType: 'Communication', entityId: commId, payload: { caseId, changes: dto } });
   }
 
   // --- Case Parties ---

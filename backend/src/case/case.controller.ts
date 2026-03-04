@@ -3,14 +3,13 @@ import { CaseService } from './case.service';
 import { CompletenessService } from './completeness.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
-import { Roles } from '../common/decorators';
-import { CurrentUser } from '../common/decorators';
+import { Roles, CurrentUser, AuditAction } from '../common/decorators';
 import {
   CreateCaseDto, TransitionCaseDto, SetOnHoldDto, ReopenCaseDto,
-  CreateMembershipDto, CreateTaskDto, UpdateTaskDto,
+  CreateMembershipDto, AddCaseCustomerDto, CreateTaskDto, UpdateTaskDto,
   CreateSessionDto, UpdateSessionDto, RescheduleSessionDto,
-  CreateNoteDto, CreateFilingDto, UpdateFilingDto,
-  CreateCommunicationDto, AddCasePartyDto,
+  CreateNoteDto, UpdateNoteDto, CreateFilingDto, UpdateFilingDto,
+  CreateCommunicationDto, UpdateCommunicationDto, AddCasePartyDto,
 } from './case.dto';
 
 @Controller('cases')
@@ -23,6 +22,7 @@ export class CaseController {
 
   @Post()
   @Roles('Lawyer', 'TenantAdmin', 'SystemAdmin')
+  @AuditAction({ eventType: 'CASE_CREATED', entityType: 'Case' })
   create(@CurrentUser() user: any, @Body() dto: CreateCaseDto) {
     return this.caseService.create(user.tenantSlug, dto, user.sub);
   }
@@ -46,6 +46,7 @@ export class CaseController {
 
   @Post(':id/transition')
   @Roles('Lawyer', 'TenantAdmin', 'SystemAdmin')
+  @AuditAction({ eventType: 'CASE_TRANSITIONED', entityType: 'Case', entityIdParam: 'id' })
   transition(@CurrentUser() user: any, @Param('id') id: string, @Body() dto: TransitionCaseDto) {
     return this.caseService.transition(user.tenantSlug, id, dto, user.sub);
   }
@@ -89,6 +90,13 @@ export class CaseController {
   @Roles('TenantAdmin', 'SystemAdmin')
   removeMembership(@CurrentUser() user: any, @Param('id') id: string, @Param('userId') membershipUserId: string) {
     return this.caseService.removeMembershipByUser(user.tenantSlug, id, membershipUserId, user.sub);
+  }
+
+  // --- Case Customers ---
+  @Post(':id/customers')
+  @Roles('Lawyer', 'TenantAdmin', 'SystemAdmin')
+  addCaseCustomer(@CurrentUser() user: any, @Param('id') id: string, @Body() dto: AddCaseCustomerDto) {
+    return this.caseService.addCaseCustomer(user.tenantSlug, id, dto, user.sub);
   }
 
   // --- Tasks ---
@@ -145,6 +153,12 @@ export class CaseController {
     return this.caseService.listNotes(user.tenantSlug, id);
   }
 
+  @Patch(':id/notes/:noteId')
+  @Roles('Lawyer', 'TenantAdmin', 'SystemAdmin')
+  updateNote(@CurrentUser() user: any, @Param('id') id: string, @Param('noteId') noteId: string, @Body() dto: UpdateNoteDto) {
+    return this.caseService.updateNote(user.tenantSlug, id, noteId, dto, user.sub);
+  }
+
   // --- Filings ---
   @Post(':id/filings')
   @Roles('Lawyer', 'TenantAdmin', 'SystemAdmin')
@@ -173,6 +187,12 @@ export class CaseController {
   @Get(':id/communications')
   listCommunications(@CurrentUser() user: any, @Param('id') id: string) {
     return this.caseService.listCommunications(user.tenantSlug, id);
+  }
+
+  @Patch(':id/communications/:commId')
+  @Roles('Lawyer', 'TenantAdmin', 'SystemAdmin')
+  updateCommunication(@CurrentUser() user: any, @Param('id') id: string, @Param('commId') commId: string, @Body() dto: UpdateCommunicationDto) {
+    return this.caseService.updateCommunication(user.tenantSlug, id, commId, dto, user.sub);
   }
 
   // --- Case Parties ---

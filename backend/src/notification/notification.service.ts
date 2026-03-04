@@ -1,10 +1,16 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { EmailService } from './email.service';
 import { v4 as uuidv4 } from 'uuid';
 
 @Injectable()
 export class NotificationService {
-  constructor(private readonly prisma: PrismaService) {}
+  private readonly logger = new Logger(NotificationService.name);
+
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly email: EmailService,
+  ) {}
 
   async create(tenantSlug: string, data: {
     userId: string;
@@ -13,12 +19,22 @@ export class NotificationService {
     type: 'task' | 'session' | 'approval' | 'system';
     entityType?: string;
     entityId?: string;
+    /** Set true to also send an email notification. Requires user email lookup. */
+    sendEmail?: boolean;
   }) {
     const id = uuidv4();
     await this.prisma.executeTenant(tenantSlug,
       `INSERT INTO notifications (id, user_id, title, body, type, entity_type, entity_id, is_read, created_at)
        VALUES ($1, $2, $3, $4, $5, $6, $7, false, NOW())`,
       [id, data.userId, data.title, data.body || null, data.type, data.entityType || null, data.entityId || null]);
+
+    // Optionally send email
+    if (data.sendEmail) {
+      this.sendEmailForUser(tenantSlug, data.userId, data.title, data.body || data.title).catch((err) =>
+        this.logger.warn(`Email send failed for notification ${id}: ${err.message}`),
+      );
+    }
+
     return { id, ...data, isRead: false };
   }
 
@@ -63,5 +79,17 @@ export class NotificationService {
     const result = await this.prisma.executeTenant(tenantSlug,
       `UPDATE notifications SET is_read = true WHERE user_id = $1 AND is_read = false`, [userId]);
     return { updated: true };
+  }
+
+  // ── Email helper ──────────────────────────────────────────
+
+  private async sendEmailForUser(tenantSlug: string, userId: string, title: string, body: string): Promise<void> {
+    const rows = await this.prisma.queryTenant(tenantSlug,
+      `SELECT email FROM users WHERE id = $1`, [userId]);
+    if (rows.length === 0 || !rows[0].email) {
+      this.logger.warn(`Cannot send email — user ${userId} has no email`);
+      return;
+    }
+    await this.email.sendNotificationEmail(rows[0].email, title, body);
   }
 }

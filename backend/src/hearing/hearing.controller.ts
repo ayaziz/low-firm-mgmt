@@ -4,8 +4,7 @@ import {
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
-import { Roles } from '../common/decorators';
-import { CurrentUser } from '../common/decorators';
+import { Roles, CurrentUser, AuditAction } from '../common/decorators';
 import { HearingService } from './hearing.service';
 import { CreateHearingDto, UpdateHearingDto, TransitionHearingDto } from './hearing.dto';
 
@@ -16,6 +15,7 @@ export class HearingController {
 
   @Post()
   @Roles('Lawyer', 'TenantAdmin', 'SystemAdmin')
+  @AuditAction({ eventType: 'HEARING_CREATED', entityType: 'Hearing' })
   @HttpCode(HttpStatus.CREATED)
   async create(@CurrentUser() user: any, @Body() dto: CreateHearingDto) {
     const data = await this.hearingService.create(user.tenantSlug, dto, user.sub);

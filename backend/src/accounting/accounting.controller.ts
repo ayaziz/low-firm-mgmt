@@ -9,6 +9,7 @@ import {
   CreateInvoiceDto, VoidInvoiceDto,
   CreatePaymentDto, CreateExpenseDto,
   ApproveExpenseDto, RejectExpenseDto, CreateWageDto,
+  UpdateWageDto, UpdateExpenseDto, UpdateInvoiceDto, UpdatePaymentDto,
 } from './accounting.dto';
 
 @Controller()
@@ -118,5 +119,30 @@ export class AccountingController {
     const csv = await this.accountingService.exportWagesCsv(user.tenantSlug, period);
     res.set({ 'Content-Type': 'text/csv', 'Content-Disposition': `attachment; filename="wages-${period || 'all'}.csv"` });
     res.send(csv);
+  }
+
+  // --- Update routes ---
+  @Patch('wages/:id')
+  @Roles('Accountant', 'TenantAdmin', 'SystemAdmin')
+  updateWage(@CurrentUser() user: any, @Param('id') id: string, @Body() dto: UpdateWageDto) {
+    return this.accountingService.updateWage(user.tenantSlug, id, dto, user.sub);
+  }
+
+  @Patch('expenses/:id')
+  @Roles('Lawyer', 'Accountant', 'TenantAdmin', 'SystemAdmin')
+  updateExpense(@CurrentUser() user: any, @Param('id') id: string, @Body() dto: UpdateExpenseDto) {
+    return this.accountingService.updateExpense(user.tenantSlug, id, dto, user.sub);
+  }
+
+  @Patch('invoices/:id')
+  @Roles('Accountant', 'TenantAdmin', 'SystemAdmin')
+  updateInvoice(@CurrentUser() user: any, @Param('id') id: string, @Body() dto: UpdateInvoiceDto) {
+    return this.accountingService.updateInvoice(user.tenantSlug, id, dto, user.sub);
+  }
+
+  @Patch('payments/:id')
+  @Roles('Accountant', 'TenantAdmin', 'SystemAdmin')
+  updatePayment(@CurrentUser() user: any, @Param('id') id: string, @Body() dto: UpdatePaymentDto) {
+    return this.accountingService.updatePayment(user.tenantSlug, id, dto, user.sub);
   }
 }

@@ -4,8 +4,7 @@ import {
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
-import { Roles } from '../common/decorators';
-import { CurrentUser } from '../common/decorators';
+import { Roles, CurrentUser, AuditAction } from '../common/decorators';
 import { CalendarService } from './calendar.service';
 import { CreateCalendarEventDto, UpdateCalendarEventDto, AddAttendeeDto, UpdateRsvpDto, AddReminderDto } from './calendar.dto';
 
@@ -16,6 +15,7 @@ export class CalendarController {
 
   @Post('events')
   @Roles('Lawyer', 'Accountant', 'TenantAdmin', 'SystemAdmin')
+  @AuditAction({ eventType: 'CALENDAR_EVENT_CREATED', entityType: 'CalendarEvent' })
   @HttpCode(HttpStatus.CREATED)
   async create(@CurrentUser() user: any, @Body() dto: CreateCalendarEventDto) {
     const data = await this.calendarService.create(user.tenantSlug, dto, user.sub);

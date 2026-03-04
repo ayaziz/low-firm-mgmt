@@ -63,10 +63,10 @@ export class DocumentService {
     // Create document record
     await this.prisma.executeTenant(
       tenantSlug,
-      `INSERT INTO documents (id, title, doc_type_id, customer_id, case_id, confidentiality_level, current_version_id, is_checked_out, is_deleted, has_legal_hold, row_version, created_by, created_at, updated_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, false, false, false, $8, $9, NOW(), NOW())`,
+      `INSERT INTO documents (id, title, doc_type_id, customer_id, case_id, confidentiality_level, description, tags, folder_id, current_version_id, is_checked_out, is_deleted, has_legal_hold, row_version, created_by, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, false, false, false, $11, $12, NOW(), NOW())`,
       [docId, dto.title, dto.docTypeId, dto.customerId || null, dto.caseId || null,
-       dto.confidentialityLevel || 'Normal', versionId, rowVersion, userId],
+       dto.confidentialityLevel || 'Normal', dto.description || null, dto.tags || [], dto.folderId || null, versionId, rowVersion, userId],
     );
 
     // Create pending version

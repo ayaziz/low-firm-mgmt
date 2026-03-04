@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
 import { AuthController } from './auth.controller';
@@ -11,9 +12,12 @@ import { StepUpGuard } from './step-up.guard';
 @Module({
   imports: [
     PassportModule.register({ defaultStrategy: 'jwt' }),
-    JwtModule.register({
-      secret: process.env.JWT_SECRET || 'loma-dev-secret-key-change-in-production',
-      signOptions: { expiresIn: '8h' },
+    JwtModule.registerAsync({
+      useFactory: (config: ConfigService) => ({
+        secret: config.get<string>('JWT_SECRET', 'loma-dev-secret-key-change-in-production'),
+        signOptions: { expiresIn: '15m' },
+      }),
+      inject: [ConfigService],
     }),
   ],
   controllers: [AuthController],

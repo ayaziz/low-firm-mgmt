@@ -7,7 +7,7 @@ import {
   Box, Button, IconButton, Stack, Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
   TextField, MenuItem, Typography, Paper,
 } from '@mui/material';
-import { Add as AddIcon, Delete as DeleteIcon, Refresh as RefreshIcon } from '@mui/icons-material';
+import { Add as AddIcon, Delete as DeleteIcon, Refresh as RefreshIcon, Edit as EditIcon } from '@mui/icons-material';
 import { accountingApi, caseApi, customerApi } from '@/api';
 import DrawerForm from '@/components/common/DrawerForm';
 import EmptyState from '@/components/common/EmptyState';
@@ -29,6 +29,7 @@ export default function InvoicesTab() {
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({ caseId: '', customerId: '', dueDate: '' });
   const [lineItems, setLineItems] = useState<LineItem[]>([{ description: '', quantity: 1, unitPrice: 0 }]);
+  const [editInvoice, setEditInvoice] = useState<any | null>(null);
 
   const load = useCallback(async (c?: string | null) => {
     setLoading(true);
@@ -52,8 +53,25 @@ export default function InvoicesTab() {
   }, []);
 
   const openDrawer = () => {
+    setEditInvoice(null);
     setForm({ caseId: '', customerId: '', dueDate: '' });
     setLineItems([{ description: '', quantity: 1, unitPrice: 0 }]);
+    setDrawerOpen(true);
+  };
+
+  const openEdit = (inv: any) => {
+    setEditInvoice(inv);
+    setForm({
+      caseId: inv.case_id || inv.caseId || '',
+      customerId: inv.customer_id || inv.customerId || '',
+      dueDate: inv.due_date ? inv.due_date.slice(0, 10) : '',
+    });
+    const items = (inv.line_items || inv.lineItems || []).map((li: any) => ({
+      description: li.description || '',
+      quantity: Number(li.quantity ?? 1),
+      unitPrice: Number(li.unit_price ?? li.unitPrice ?? 0),
+    }));
+    setLineItems(items.length > 0 ? items : [{ description: '', quantity: 1, unitPrice: 0 }]);
     setDrawerOpen(true);
   };
 
@@ -66,11 +84,16 @@ export default function InvoicesTab() {
 
   const total = lineItems.reduce((s, l) => s + l.quantity * l.unitPrice, 0);
 
-  const handleCreate = async () => {
+  const handleSave = async () => {
     setSaving(true);
     try {
-      await accountingApi.createInvoice({ caseId: form.caseId, customerId: form.customerId, dueDate: form.dueDate, lineItems });
+      if (editInvoice) {
+        await accountingApi.updateInvoice(editInvoice.id, { dueDate: form.dueDate, lineItems });
+      } else {
+        await accountingApi.createInvoice({ caseId: form.caseId, customerId: form.customerId, dueDate: form.dueDate, lineItems });
+      }
       setDrawerOpen(false);
+      setEditInvoice(null);
       load();
     } finally { setSaving(false); }
   };
@@ -93,6 +116,7 @@ export default function InvoicesTab() {
                   <TableCell>{t('accounting.amount', 'Amount')}</TableCell>
                   <TableCell>{t('common.status', 'Status')}</TableCell>
                   <TableCell>{t('accounting.dueDate', 'Due Date')}</TableCell>
+                  <TableCell>{t('common.actions', 'Actions')}</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -103,6 +127,11 @@ export default function InvoicesTab() {
                     <TableCell>{Number(inv.total_amount ?? inv.total ?? 0).toFixed(2)}</TableCell>
                     <TableCell><StatusBadge status={inv.status ?? 'Draft'} /></TableCell>
                     <TableCell>{inv.due_date ? new Date(inv.due_date).toLocaleDateString() : '—'}</TableCell>
+                    <TableCell onClick={(e) => e.stopPropagation()}>
+                      {(inv.status === 'Draft') && (
+                        <IconButton size="small" onClick={() => openEdit(inv)}><EditIcon fontSize="small" /></IconButton>
+                      )}
+                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -118,7 +147,7 @@ export default function InvoicesTab() {
         <EmptyState icon={<AddIcon />} title={t('accounting.noInvoices', 'No invoices')} message={t('accounting.noInvoicesMsg', 'Create your first invoice to get started')} />
       )}
 
-      <DrawerForm open={drawerOpen} title={t('accounting.createInvoice', 'Create Invoice')} width={560} onClose={() => setDrawerOpen(false)} onSubmit={handleCreate} loading={saving}>
+      <DrawerForm open={drawerOpen} title={editInvoice ? t('accounting.editInvoice', 'Edit Invoice') : t('accounting.createInvoice', 'Create Invoice')} width={560} onClose={() => { setDrawerOpen(false); setEditInvoice(null); }} onSubmit={handleSave} loading={saving}>
         <Stack spacing={2.5}>
           <TextField select label={t('accounting.case', 'Case')} fullWidth value={form.caseId} onChange={e => setForm(f => ({ ...f, caseId: e.target.value }))}>
             {cases.map(c => <MenuItem key={c.id} value={c.id}>{c.title ?? c.case_number}</MenuItem>)}

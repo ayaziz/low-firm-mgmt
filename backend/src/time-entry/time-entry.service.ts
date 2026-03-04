@@ -23,12 +23,15 @@ export class TimeEntryService {
     );
     if (!caseRows || caseRows.length === 0) throw new NotFoundException('Case not found');
 
+    const ratePerHour = dto.ratePerHour || 0;
+    const totalAmount = dto.hours * ratePerHour;
+
     await this.prisma.executeTenant(
       tenantSlug,
-      `INSERT INTO time_entries (id, case_id, user_id, entry_date, hours, description, hourly_rate, billable, status, created_at, updated_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'Draft', NOW(), NOW())`,
+      `INSERT INTO time_entries (id, case_id, user_id, entry_date, hours, description, activity_type, rate_per_hour, total_amount, hearing_id, task_id, billable, status, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 'Draft', NOW(), NOW())`,
       [entryId, dto.caseId, userId, dto.entryDate, dto.hours, dto.description,
-       dto.ratePerHour || 0, dto.billable !== false],
+       dto.activityType || null, ratePerHour, totalAmount, dto.hearingId || null, dto.taskId || null, dto.billable !== false],
     );
 
     await this.audit.log({
@@ -70,9 +73,9 @@ export class TimeEntryService {
     let sql = `SELECT
                  COUNT(*)::int AS total_entries,
                  COALESCE(SUM(hours), 0)::float AS total_hours,
-                 COALESCE(SUM(hours * hourly_rate), 0)::float AS total_amount,
+                 COALESCE(SUM(hours * rate_per_hour), 0)::float AS total_amount,
                  COALESCE(SUM(CASE WHEN billable THEN hours ELSE 0 END), 0)::float AS billable_hours,
-                 COALESCE(SUM(CASE WHEN billable THEN hours * hourly_rate ELSE 0 END), 0)::float AS billable_amount,
+                 COALESCE(SUM(CASE WHEN billable THEN hours * rate_per_hour ELSE 0 END), 0)::float AS billable_amount,
                  COALESCE(SUM(CASE WHEN NOT billable THEN hours ELSE 0 END), 0)::float AS non_billable_hours
                FROM time_entries WHERE 1=1`;
     const params: any[] = [];
@@ -117,8 +120,15 @@ export class TimeEntryService {
     if (dto.entryDate !== undefined) { setClauses.push(`entry_date = $${idx++}`); params.push(dto.entryDate); }
     if (dto.hours !== undefined) { setClauses.push(`hours = $${idx++}`); params.push(dto.hours); }
     if (dto.description !== undefined) { setClauses.push(`description = $${idx++}`); params.push(dto.description); }
-    if (dto.ratePerHour !== undefined) { setClauses.push(`hourly_rate = $${idx++}`); params.push(dto.ratePerHour); }
+    if (dto.ratePerHour !== undefined) { setClauses.push(`rate_per_hour = $${idx++}`); params.push(dto.ratePerHour); }
     if (dto.billable !== undefined) { setClauses.push(`billable = $${idx++}`); params.push(dto.billable); }
+    if (dto.activityType !== undefined) { setClauses.push(`activity_type = $${idx++}`); params.push(dto.activityType); }
+    if (dto.taskId !== undefined) { setClauses.push(`task_id = $${idx++}`); params.push(dto.taskId); }
+
+    // Recompute total_amount if hours or rate changed
+    const newHours = dto.hours ?? entry.hours;
+    const newRate = dto.ratePerHour ?? entry.rate_per_hour ?? 0;
+    setClauses.push(`total_amount = $${idx++}`); params.push(newHours * newRate);
 
     params.push(entryId);
     await this.prisma.executeTenant(

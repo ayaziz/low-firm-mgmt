@@ -21,6 +21,7 @@ import { TelemetryModule } from './telemetry/telemetry.module';
 import { TenantGuard } from './auth/tenant.guard';
 import { LoggingModule } from './common/logging.module';
 import { LoggingInterceptor } from './common/logging.interceptor';
+import { AuditInterceptor } from './common/audit.interceptor';
 import { CorrelationMiddleware } from './common/correlation.middleware';
 // ── Phase 2 modules ──
 import { CourtModule } from './court/court.module';
@@ -96,6 +97,12 @@ const isTestRuntime = !!process.env.JEST_WORKER_ID;
     {
       provide: APP_INTERCEPTOR,
       useClass: LoggingInterceptor,
+    },
+    // Global audit interceptor — logs mutations annotated with @AuditAction()
+    // to audit_events table (fire-and-forget, never blocks response).
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: AuditInterceptor,
     },
   ],
 })

@@ -11,14 +11,15 @@ export const documentApi = {
   },
 
   create(data: {
-    caseId: string;
-    customerId: string;
+    caseId?: string;
+    customerId?: string;
     title: string;
     fileName: string;
     mimeType: string;
     docTypeId: string;
     confidentialityLevel: string;
     tags?: string[];
+    description?: string;
   }): Promise<{ document: Doc; uploadUrl: string }> {
     return post('/documents', data);
   },

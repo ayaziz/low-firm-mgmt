@@ -7,12 +7,12 @@ import {
   FormControlLabel,
 } from '@mui/material';
 import {
-  Add as AddIcon, Delete as DeleteIcon,
+  Add as AddIcon, Delete as DeleteIcon, Edit as EditIcon,
   AccessTime as TimeIcon, AttachMoney as MoneyIcon,
   Receipt as EntryIcon, Timer as BillableIcon,
 } from '@mui/icons-material';
 import { timeEntryApi, caseApi } from '@/api'
-import type { TimeEntry,Case } from '@/types';
+import type { TimeEntry, Case, Task } from '@/types';
 import { useAuth } from '@/context/AuthContext';
 import PageHeader from '@/components/common/PageHeader';
 import DataGrid, { type Column } from '@/components/common/DataGrid';
@@ -31,6 +31,8 @@ const TIME_ENTRY_TRANSITIONS: Record<TEStatus, TEStatus[]> = {
 
 const STATUS_OPTIONS: TEStatus[] = ['Draft', 'Submitted', 'Approved', 'Rejected'];
 
+const ACTIVITY_TYPES = ['Research', 'Drafting', 'Court Appearance', 'Client Meeting', 'Filing', 'Review', 'Travel', 'Other'];
+
 const formatHours = (h: number) => {
   const hrs = Math.floor(h);
   const mins = Math.round((h - hrs) * 60);
@@ -42,6 +44,7 @@ export default function TimeEntriesPage() {
   const { user, hasAnyRole } = useAuth();
   const canApprove = hasAnyRole('TenantAdmin', 'SystemAdmin', 'Accountant');
   const [cases, setCases] = useState<Case[]>([]);
+  const [tasks, setTasks] = useState<Task[]>([]);
 
   const [entries, setEntries] = useState<TimeEntry[]>([]);
   const [loading, setLoading] = useState(true);
@@ -58,6 +61,7 @@ export default function TimeEntriesPage() {
   // Drawer
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [saving, setSaving] = useState(false);
+  const [editEntry, setEditEntry] = useState<TimeEntry | null>(null);
   const [form, setForm] = useState({
     case_id: '',
     date: '',
@@ -66,6 +70,7 @@ export default function TimeEntriesPage() {
     activity_type: '',
     description: '',
     billable: true,
+    task_id: '',
   });
 
   const load = useCallback(async () => {
@@ -89,17 +94,47 @@ export default function TimeEntriesPage() {
   useEffect(() => { load(); }, [load]);
 
   const openDrawer = async () => {
+    setEditEntry(null);
+    setForm({ case_id: '', date: '', hours: '1', rate: '', activity_type: '', description: '', billable: true, task_id: '' });
     setDrawerOpen(true);
+    setTasks([]);
     const [caseRes] = await Promise.all([
       caseApi.list({ limit: 100 }).catch(() => ({ data: [], cursor: null })),
-      //adminApi.listMasterData('docType').catch(() => []),
     ]);
     setCases(caseRes.data);
   };
-  const handleCreate = async () => {
+
+  const openEdit = async (entry: TimeEntry) => {
+    setEditEntry(entry);
+    setForm({
+      case_id: (entry as any).case_id || '',
+      date: (entry as any).entry_date ? new Date((entry as any).entry_date).toISOString().slice(0, 10) : '',
+      hours: String(entry.hours ?? '1'),
+      rate: String((entry as any).rate_per_hour ?? (entry as any).rate ?? ''),
+      activity_type: (entry as any).activity_type || '',
+      description: (entry as any).description || '',
+      billable: entry.billable ?? true,
+      task_id: (entry as any).task_id || '',
+    });
+    setDrawerOpen(true);
+    // Load tasks for the entry's case
+    if ((entry as any).case_id) {
+      caseApi.listTasks((entry as any).case_id).then(res => {
+        setTasks(Array.isArray(res) ? res : res.data ?? []);
+      }).catch(() => setTasks([]));
+    } else {
+      setTasks([]);
+    }
+    const [caseRes] = await Promise.all([
+      caseApi.list({ limit: 100 }).catch(() => ({ data: [], cursor: null })),
+    ]);
+    setCases(caseRes.data);
+  };
+
+  const handleSave = async () => {
     setSaving(true);
     try {
-      await timeEntryApi.create({
+      const payload = {
 				case_id: form.case_id,
 				entry_date: form.date,
 				hours: parseFloat(form.hours),
@@ -107,9 +142,16 @@ export default function TimeEntriesPage() {
 				activity_type: form.activity_type,
 				description: form.description || undefined,
 				billable: form.billable,
-			} as any)
+				taskId: form.task_id || undefined,
+			} as any;
+      if (editEntry) {
+        await timeEntryApi.update(editEntry.id, payload);
+      } else {
+        await timeEntryApi.create(payload);
+      }
       setDrawerOpen(false);
-      setForm({ case_id: '', date: '', hours: '1', rate: '', activity_type: '', description: '', billable: true });
+      setForm({ case_id: '', date: '', hours: '1', rate: '', activity_type: '', description: '', billable: true, task_id: '' });
+      setEditEntry(null);
       load();
     } finally {
       setSaving(false);
@@ -189,6 +231,13 @@ export default function TimeEntriesPage() {
         });
         return (
           <Stack direction="row" spacing={0.5} alignItems="center">
+            {isOwner(row) && status === 'Draft' && (
+              <Tooltip title={t('common.edit', 'Edit')}>
+                <IconButton size="small" onClick={(e) => { e.stopPropagation(); openEdit(row); }}>
+                  <EditIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
+            )}
             {allowed.length > 0 && (
               <TextField
                 select size="small"
@@ -306,12 +355,12 @@ export default function TimeEntriesPage() {
 				}
 			/>
 
-			{/* ----- Create Entry Drawer ----- */}
+			{/* ----- Create/Edit Entry Drawer ----- */}
 			<DrawerForm
 				open={drawerOpen}
-				title={t('timeEntries.create', 'New Entry')}
+				title={editEntry ? t('timeEntries.edit', 'Edit Entry') : t('timeEntries.create', 'New Entry')}
 				onClose={() => setDrawerOpen(false)}
-				onSubmit={handleCreate}
+				onSubmit={handleSave}
 				loading={saving}
 				submitLabel={t('common.save', 'Save')}
 			>
@@ -321,14 +370,37 @@ export default function TimeEntriesPage() {
 						select
 						fullWidth
 						value={form.case_id}
-						onChange={(e) =>
-							setForm((f) => ({ ...f, case_id: e.target.value }))
-						}
+						onChange={(e) => {
+							const cid = e.target.value;
+							setForm((f) => ({ ...f, case_id: cid, task_id: '' }));
+							if (cid) {
+								caseApi.listTasks(cid).then(res => {
+									setTasks(Array.isArray(res) ? res : res.data ?? []);
+								}).catch(() => setTasks([]));
+							} else {
+								setTasks([]);
+							}
+						}}
 					>
 						<MenuItem value="">— {t('common.noData')} —</MenuItem>
 						{cases.map((c) => (
 							<MenuItem key={c.id} value={c.id}>
 								{c.title} ({c.system_case_ref})
+							</MenuItem>
+						))}
+					</TextField>
+					<TextField
+						label={t('timeEntries.task', 'Task')}
+						select
+						fullWidth
+						value={form.task_id}
+						onChange={(e) => setForm((f) => ({ ...f, task_id: e.target.value }))}
+						disabled={!form.case_id || tasks.length === 0}
+					>
+						<MenuItem value="">— {t('common.none', 'None')} —</MenuItem>
+						{tasks.map((tk) => (
+							<MenuItem key={tk.id} value={tk.id}>
+								{tk.title}
 							</MenuItem>
 						))}
 					</TextField>
@@ -359,13 +431,16 @@ export default function TimeEntriesPage() {
 					/>
 					<TextField
 						label={t('timeEntries.activity', 'Activity Type')}
+						select
 						fullWidth
 						required
 						value={form.activity_type}
 						onChange={(e) =>
 							setForm((f) => ({ ...f, activity_type: e.target.value }))
 						}
-					/>
+					>
+						{ACTIVITY_TYPES.map(at => <MenuItem key={at} value={at}>{at}</MenuItem>)}
+					</TextField>
 					<TextField
 						label={t('common.description', 'Description')}
 						fullWidth

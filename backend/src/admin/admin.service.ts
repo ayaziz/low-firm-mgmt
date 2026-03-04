@@ -368,25 +368,39 @@ export class AdminService {
       `SELECT * FROM courts ORDER BY name`);
   }
 
-  async createCourt(tenantSlug: string, body: { name: string; notes?: string; addressText?: string }, actorId: string) {
+  async createCourt(tenantSlug: string, body: any, actorId: string) {
     const id = uuidv4();
     await this.prisma.executeTenant(tenantSlug,
-      `INSERT INTO courts (id, name, notes, address_text) VALUES ($1, $2, $3, $4)`,
-      [id, body.name, body.notes || null, body.addressText || null]);
+      `INSERT INTO courts (id, name, notes, address_text, department, circuit, jurisdiction_level, city, phone)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+      [
+        id, body.name, body.notes || null, body.addressText || null,
+        body.department || null, body.circuit || null,
+        body.jurisdictionLevel || 'District', body.city || null, body.phone || null,
+      ]);
     await this.audit.log({ tenantSlug, eventType: 'COURT_CREATED', actorUserId: actorId, entityType: 'Court', entityId: id, payload: body });
     return { id, ...body };
   }
 
-  async updateCourt(tenantSlug: string, courtId: string, body: { name?: string; notes?: string; addressText?: string }, actorId: string) {
+  async updateCourt(tenantSlug: string, courtId: string, body: any, actorId: string) {
+    const fieldMap: Record<string, string> = {
+      name: 'name', notes: 'notes', addressText: 'address_text',
+      department: 'department', circuit: 'circuit',
+      jurisdictionLevel: 'jurisdiction_level', city: 'city', phone: 'phone',
+    };
     const sets: string[] = [];
     const params: any[] = [];
     let idx = 1;
-    if (body.name !== undefined) { sets.push(`name = $${idx++}`); params.push(body.name); }
-    if (body.notes !== undefined) { sets.push(`notes = $${idx++}`); params.push(body.notes); }
-    if (body.addressText !== undefined) { sets.push(`address_text = $${idx++}`); params.push(body.addressText); }
+    for (const [dtoKey, col] of Object.entries(fieldMap)) {
+      if (body[dtoKey] !== undefined) {
+        sets.push(`${col} = $${idx++}`);
+        params.push(body[dtoKey]);
+      }
+    }
 
     if (sets.length === 0) throw new BadRequestException('No fields to update');
 
+    sets.push(`updated_at = NOW()`);
     params.push(courtId);
     await this.prisma.executeTenant(tenantSlug,
       `UPDATE courts SET ${sets.join(', ')} WHERE id = $${idx}`, params);

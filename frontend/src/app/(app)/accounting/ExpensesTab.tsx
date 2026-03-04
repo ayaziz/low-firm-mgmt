@@ -24,6 +24,7 @@ import {
 	Refresh as RefreshIcon,
 	Check as ApproveIcon,
 	Close as RejectIcon,
+	Edit as EditIcon,
 } from '@mui/icons-material'
 import { accountingApi, caseApi, adminApi } from '@/api'
 import { useAuth } from '@/context/AuthContext'
@@ -55,6 +56,7 @@ export default function ExpensesTab() {
 		customerId: '',
 		date: '',
 	})
+	const [editExpense, setEditExpense] = useState<any | null>(null)
 	const [rejectTarget, setRejectTarget] = useState<any>(null)
 
 	const load = useCallback(async (c?: string | null) => {
@@ -86,18 +88,30 @@ export default function ExpensesTab() {
 			.then((r) => setCategories(Array.isArray(r) ? r : (r ?? [])))
 	}, [])
 
-	const handleCreate = async () => {
+	const handleSave = async () => {
 		setSaving(true)
 		try {
-			await accountingApi.createExpense({
-				caseId: form.caseId,
-				expenseDate: form.date,
-				customerId: form.customerId,
-				categoryId: form.categoryId,
-				description: form.description,
-				amount: Number(form.amount),
-			})
+			if (editExpense) {
+				await accountingApi.updateExpense(editExpense.id, {
+					caseId: form.caseId || undefined,
+					expenseDate: form.date || undefined,
+					customerId: form.customerId || undefined,
+					categoryId: form.categoryId || undefined,
+					description: form.description || undefined,
+					amount: form.amount ? Number(form.amount) : undefined,
+				} as any)
+			} else {
+				await accountingApi.createExpense({
+					caseId: form.caseId,
+					expenseDate: form.date,
+					customerId: form.customerId,
+					categoryId: form.categoryId,
+					description: form.description,
+					amount: Number(form.amount),
+				})
+			}
 			setDrawerOpen(false)
+			setEditExpense(null)
 			setForm({
 				caseId: '',
 				categoryId: '',
@@ -110,6 +124,25 @@ export default function ExpensesTab() {
 		} finally {
 			setSaving(false)
 		}
+	}
+
+	const openCreate = () => {
+		setEditExpense(null)
+		setForm({ caseId: '', categoryId: '', description: '', amount: '', customerId: '', date: '' })
+		setDrawerOpen(true)
+	}
+
+	const openEdit = (exp: any) => {
+		setEditExpense(exp)
+		setForm({
+			caseId: exp.case_id || exp.caseId || '',
+			categoryId: exp.category_id || exp.categoryId || '',
+			description: exp.description || '',
+			amount: String(exp.amount ?? ''),
+			customerId: exp.customer_id || exp.customerId || '',
+			date: exp.expense_date ? exp.expense_date.slice(0, 10) : '',
+		})
+		setDrawerOpen(true)
 	}
 
 	const handleApprove = async (id: string) => {
@@ -140,7 +173,7 @@ export default function ExpensesTab() {
 				<Button
 					variant="contained"
 					startIcon={<AddIcon />}
-					onClick={() => setDrawerOpen(true)}
+					onClick={openCreate}
 				>
 					{t('common.create', 'Create')}
 				</Button>
@@ -161,9 +194,7 @@ export default function ExpensesTab() {
 									<TableCell>{t('accounting.amount', 'Amount')}</TableCell>
 									<TableCell>{t('common.status', 'Status')}</TableCell>
 									<TableCell>{t('common.date', 'Date')}</TableCell>
-									{canApprove && (
-										<TableCell>{t('common.actions', 'Actions')}</TableCell>
-									)}
+									<TableCell>{t('common.actions', 'Actions')}</TableCell>
 								</TableRow>
 							</TableHead>
 							<TableBody>
@@ -180,10 +211,15 @@ export default function ExpensesTab() {
 												? new Date(exp.created_at).toLocaleDateString()
 												: '—'}
 										</TableCell>
-										{canApprove && (
-											<TableCell>
-												{exp.status === 'Submitted' && (
-													<Stack direction="row" spacing={0.5}>
+										<TableCell>
+											<Stack direction="row" spacing={0.5}>
+												{(exp.status === 'Pending' || exp.status === 'Submitted') && (
+													<IconButton size="small" onClick={() => openEdit(exp)}>
+														<EditIcon fontSize="small" />
+													</IconButton>
+												)}
+												{canApprove && exp.status === 'Submitted' && (
+													<>
 														<IconButton
 															size="small"
 															color="success"
@@ -198,10 +234,10 @@ export default function ExpensesTab() {
 														>
 															<RejectIcon fontSize="small" />
 														</IconButton>
-													</Stack>
+													</>
 												)}
-											</TableCell>
-										)}
+											</Stack>
+										</TableCell>
 									</TableRow>
 								))}
 							</TableBody>
@@ -241,9 +277,9 @@ export default function ExpensesTab() {
 
 			<DrawerForm
 				open={drawerOpen}
-				title={t('accounting.createExpense', 'Create Expense')}
-				onClose={() => setDrawerOpen(false)}
-				onSubmit={handleCreate}
+				title={editExpense ? t('accounting.editExpense', 'Edit Expense') : t('accounting.createExpense', 'Create Expense')}
+				onClose={() => { setDrawerOpen(false); setEditExpense(null); }}
+				onSubmit={handleSave}
 				loading={saving}
 			>
 				<Stack spacing={2.5}>
@@ -255,11 +291,6 @@ export default function ExpensesTab() {
 						onChange={(e) => {
 							const caseId = e.target.value
 							const selected = cases.find((c) => c.id === caseId)
-              console.log('Selected case:', caseId)
-              console.log('Selected case object:', selected)
-              console.log('Selected customerId:', selected?.customerId)
-              
-              
 
 							setForm((f) => ({
 								...f,
