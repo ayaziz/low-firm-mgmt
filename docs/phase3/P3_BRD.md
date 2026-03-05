@@ -149,6 +149,21 @@ Every entity with a `status` field must expose a **Status Timeline** panel in it
 
 ---
 
+#### 3.1.9 Rich Document Upload & System-wide Integration
+
+Phase 3 introduces a **single rich upload capability** reusable from all major modules so users do not leave context to attach evidence/files:
+
+- **Context-aware upload entry points** in: Customer, Case, Session/Hearing, Filing, Expense, Invoice, Task, and Communications detail views.
+- **Smart metadata defaults**: `scope_type`, `scope_id`, `document_type`, confidentiality, tags, and expiry prefilled from current module and tenant policy.
+- **Upload profile enforcement** by context:
+  - Hearings/Filings: evidence-first doc types and mandatory case reference.
+  - Finance (Invoice/Expense): finance-attachment whitelist and retention defaults.
+  - Customer KYC: identity-doc checklist and required metadata validation.
+- **Batch upload orchestration**: drag-drop multi-file queue, per-file progress, resumable retry, and post-upload bulk metadata edit.
+- **Cross-module discoverability**: uploaded documents appear in both Document Library and originating module timelines/activity feeds with deep-links.
+
+Business outcome: reduce attachment friction and ensure every critical workflow can capture documents at point-of-work without navigation loss.
+
 ### 3.2 Out of Scope / Deferred to Phase 4
 
 | Item | Rationale |
