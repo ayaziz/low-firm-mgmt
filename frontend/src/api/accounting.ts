@@ -100,6 +100,31 @@ export const accountingApi = {
     return downloadBlob(`/wages/export${params}`, `wages-${period || 'all'}.csv`);
   },
 
+  // Wage approval flow
+  submitWage(id: string, comment?: string): Promise<Wage> {
+    return post<Wage>(`/wages/${id}/submit`, { comment });
+  },
+  approveWage(id: string, comment?: string): Promise<Wage> {
+    return post<Wage>(`/wages/${id}/approve`, { comment });
+  },
+  rejectWage(id: string, reason: string): Promise<Wage> {
+    return post<Wage>(`/wages/${id}/reject`, { reason });
+  },
+  markWagePaid(id: string, comment?: string): Promise<Wage> {
+    return post<Wage>(`/wages/${id}/mark-paid`, { comment });
+  },
+
+  // Invoice review flow
+  submitInvoiceForReview(id: string, comment?: string): Promise<Invoice> {
+    return post<Invoice>(`/invoices/${id}/submit-for-review`, { comment });
+  },
+  approveInvoiceReview(id: string, comment?: string): Promise<Invoice> {
+    return post<Invoice>(`/invoices/${id}/approve-review`, { comment });
+  },
+  rejectInvoiceReview(id: string, reason: string): Promise<Invoice> {
+    return post<Invoice>(`/invoices/${id}/reject-review`, { reason });
+  },
+
   // Update methods
   updateWage(id: string, data: Partial<{
     amount: number; period: string; notes: string;

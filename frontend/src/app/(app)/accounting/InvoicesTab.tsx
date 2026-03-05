@@ -13,6 +13,7 @@ import DrawerForm from '@/components/common/DrawerForm';
 import EmptyState from '@/components/common/EmptyState';
 import LoadingSkeleton from '@/components/common/LoadingSkeleton';
 import StatusBadge from '@/components/common/StatusBadge';
+import ApprovalActions from '@/components/common/ApprovalActions';
 
 interface LineItem { description: string; quantity: number; unitPrice: number; }
 
@@ -84,6 +85,20 @@ export default function InvoicesTab() {
 
   const total = lineItems.reduce((s, l) => s + l.quantity * l.unitPrice, 0);
 
+  /* Approval action handlers */
+  const handleSubmitForReview = (id: string) => async (comment?: string) => {
+    await accountingApi.submitInvoiceForReview(id, comment);
+    load();
+  };
+  const handleApproveReview = (id: string) => async (comment?: string) => {
+    await accountingApi.approveInvoiceReview(id, comment);
+    load();
+  };
+  const handleRejectReview = (id: string) => async (reason: string) => {
+    await accountingApi.rejectInvoiceReview(id, reason);
+    load();
+  };
+
   const handleSave = async () => {
     setSaving(true);
     try {
@@ -128,9 +143,18 @@ export default function InvoicesTab() {
                     <TableCell><StatusBadge status={inv.status ?? 'Draft'} /></TableCell>
                     <TableCell>{inv.due_date ? new Date(inv.due_date).toLocaleDateString() : '—'}</TableCell>
                     <TableCell onClick={(e) => e.stopPropagation()}>
-                      {(inv.status === 'Draft') && (
-                        <IconButton size="small" onClick={() => openEdit(inv)}><EditIcon fontSize="small" /></IconButton>
-                      )}
+                      <Stack direction="row" spacing={0.5} alignItems="center">
+                        {(inv.status === 'Draft') && (
+                          <IconButton size="small" onClick={() => openEdit(inv)}><EditIcon fontSize="small" /></IconButton>
+                        )}
+                        <ApprovalActions
+                          entityType="invoice"
+                          status={inv.status ?? 'Draft'}
+                          onSubmit={handleSubmitForReview(inv.id)}
+                          onApprove={handleApproveReview(inv.id)}
+                          onReject={handleRejectReview(inv.id)}
+                        />
+                      </Stack>
                     </TableCell>
                   </TableRow>
                 ))}

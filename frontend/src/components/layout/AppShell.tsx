@@ -19,7 +19,6 @@ import {
   Typography,
   Menu,
   MenuItem,
-  Badge,
   Tooltip,
   Divider,
   InputBase,
@@ -39,7 +38,6 @@ import {
   Assessment as ReportIcon,
   AdminPanelSettings as AdminIcon,
   Search as SearchIcon,
-  Notifications as NotifIcon,
   Translate as LangIcon,
   Logout as LogoutIcon,
   Event as CalendarIcon,
@@ -53,6 +51,7 @@ import {
   UploadFile as NewDocIcon,
   Add as AddIcon,
 } from '@mui/icons-material';
+import NotificationCenter from '@/components/common/NotificationCenter';
 import { useAuth } from '@/context/AuthContext';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import type { Role } from '@/types';
@@ -331,14 +330,8 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
             <Box sx={{ flexGrow: 1 }} />
 
-            {/* Notification Bell */}
-            <Tooltip title={t('nav.notifications')}>
-              <IconButton onClick={() => router.push('/notifications')}>
-                <Badge badgeContent={0} color="error">
-                  <NotifIcon />
-                </Badge>
-              </IconButton>
-            </Tooltip>
+            {/* Notification Center */}
+            <NotificationCenter />
 
             {/* Language Toggle */}
             <Tooltip title={i18n.language === 'ar' ? 'English' : 'العربية'}>

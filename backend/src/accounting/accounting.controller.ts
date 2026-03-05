@@ -10,6 +10,8 @@ import {
   CreatePaymentDto, CreateExpenseDto,
   ApproveExpenseDto, RejectExpenseDto, CreateWageDto,
   UpdateWageDto, UpdateExpenseDto, UpdateInvoiceDto, UpdatePaymentDto,
+  WageActionDto, RejectWageDto,
+  InvoiceReviewActionDto, RejectInvoiceReviewDto,
 } from './accounting.dto';
 
 @Controller()
@@ -54,6 +56,24 @@ export class AccountingController {
   @Roles('TenantAdmin', 'SystemAdmin')
   voidInvoice(@CurrentUser() user: any, @Param('id') id: string, @Body() dto: VoidInvoiceDto) {
     return this.accountingService.voidInvoice(user.tenantSlug, id, dto, user.sub);
+  }
+
+  @Post('invoices/:id/submit-for-review')
+  @Roles('Accountant', 'TenantAdmin', 'SystemAdmin')
+  submitInvoiceForReview(@CurrentUser() user: any, @Param('id') id: string, @Body() dto: InvoiceReviewActionDto) {
+    return this.accountingService.submitInvoiceForReview(user.tenantSlug, id, dto, user.sub);
+  }
+
+  @Post('invoices/:id/approve-review')
+  @Roles('TenantAdmin', 'SystemAdmin')
+  approveInvoiceReview(@CurrentUser() user: any, @Param('id') id: string, @Body() dto: InvoiceReviewActionDto) {
+    return this.accountingService.approveInvoiceReview(user.tenantSlug, id, dto, user.sub);
+  }
+
+  @Post('invoices/:id/reject-review')
+  @Roles('TenantAdmin', 'SystemAdmin')
+  rejectInvoiceReview(@CurrentUser() user: any, @Param('id') id: string, @Body() dto: RejectInvoiceReviewDto) {
+    return this.accountingService.rejectInvoiceReview(user.tenantSlug, id, dto, user.sub);
   }
 
   @Get('invoices/:id/pdf')
@@ -119,6 +139,30 @@ export class AccountingController {
     const csv = await this.accountingService.exportWagesCsv(user.tenantSlug, period);
     res.set({ 'Content-Type': 'text/csv', 'Content-Disposition': `attachment; filename="wages-${period || 'all'}.csv"` });
     res.send(csv);
+  }
+
+  @Post('wages/:id/submit')
+  @Roles('Accountant', 'TenantAdmin', 'SystemAdmin')
+  submitWage(@CurrentUser() user: any, @Param('id') id: string, @Body() dto: WageActionDto) {
+    return this.accountingService.submitWage(user.tenantSlug, id, dto, user.sub);
+  }
+
+  @Post('wages/:id/approve')
+  @Roles('TenantAdmin', 'SystemAdmin')
+  approveWage(@CurrentUser() user: any, @Param('id') id: string, @Body() dto: WageActionDto) {
+    return this.accountingService.approveWage(user.tenantSlug, id, dto, user.sub);
+  }
+
+  @Post('wages/:id/reject')
+  @Roles('TenantAdmin', 'SystemAdmin')
+  rejectWage(@CurrentUser() user: any, @Param('id') id: string, @Body() dto: RejectWageDto) {
+    return this.accountingService.rejectWage(user.tenantSlug, id, dto, user.sub);
+  }
+
+  @Post('wages/:id/mark-paid')
+  @Roles('Accountant', 'TenantAdmin', 'SystemAdmin')
+  markWagePaid(@CurrentUser() user: any, @Param('id') id: string, @Body() dto: WageActionDto) {
+    return this.accountingService.markWagePaid(user.tenantSlug, id, dto, user.sub);
   }
 
   // --- Update routes ---

@@ -30,6 +30,9 @@ import { CalendarModule } from './calendar/calendar.module';
 import { FolderModule } from './folder/folder.module';
 import { TimeEntryModule } from './time-entry/time-entry.module';
 import { TemplateModule } from './template/template.module';
+// ── Phase 3 modules ──
+import { StatusHistoryModule } from './status-history/status-history.module';
+import { OcrModule } from './ocr/ocr.module';
 
 const isTestRuntime = !!process.env.JEST_WORKER_ID;
 
@@ -78,6 +81,9 @@ const isTestRuntime = !!process.env.JEST_WORKER_ID;
     FolderModule,
     TimeEntryModule,
     TemplateModule,
+    // ── Phase 3 modules ──
+    StatusHistoryModule,
+    OcrModule,
   ],
   providers: [
     // TenantGuard enforces ABAC tenant boundary on every authenticated request.

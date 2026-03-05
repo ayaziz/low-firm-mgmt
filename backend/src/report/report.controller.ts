@@ -11,6 +11,13 @@ import { Roles, RequireStepUp, CurrentUser } from '../common/decorators';
 export class ReportController {
   constructor(private readonly reportService: ReportService) {}
 
+  // --- KPI Dashboard ---
+  @Get('kpi')
+  @Roles('Lawyer', 'Accountant', 'TenantAdmin', 'SystemAdmin')
+  kpiDashboard(@CurrentUser() user: any) {
+    return this.reportService.kpiDashboard(user.tenantSlug);
+  }
+
   // --- Operational ---
   @Get('cases-by-state')
   @Roles('Lawyer', 'Accountant', 'TenantAdmin', 'SystemAdmin')

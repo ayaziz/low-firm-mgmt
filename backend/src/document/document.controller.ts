@@ -4,7 +4,7 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
 import { StepUpGuard } from '../auth/step-up.guard';
 import { Roles, RequireStepUp, CurrentUser, AuditAction } from '../common/decorators';
-import { CreateDocumentDto, CheckinDocumentDto, ShareDocumentDto } from './document.dto';
+import { CreateDocumentDto, CheckinDocumentDto, ShareDocumentDto, BulkDocumentIdsDto, BulkMoveToFolderDto } from './document.dto';
 
 @Controller('documents')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -110,5 +110,40 @@ export class DocumentController {
   @RequireStepUp()
   removeCaseLegalHold(@CurrentUser() user: any, @Param('caseId') caseId: string) {
     return this.documentService.removeCaseLegalHold(user.tenantSlug, caseId, user.sub);
+  }
+
+  /* ── Bulk operations ── */
+
+  @Post('bulk/delete')
+  @Roles('Lawyer', 'TenantAdmin', 'SystemAdmin')
+  bulkDelete(@CurrentUser() user: any, @Body() dto: BulkDocumentIdsDto) {
+    return this.documentService.bulkDelete(user.tenantSlug, dto, user.sub);
+  }
+
+  @Post('bulk/move')
+  @Roles('Lawyer', 'TenantAdmin', 'SystemAdmin')
+  bulkMove(@CurrentUser() user: any, @Body() dto: BulkMoveToFolderDto) {
+    return this.documentService.bulkMoveToFolder(user.tenantSlug, dto, user.sub);
+  }
+
+  @Post('bulk/restore')
+  @Roles('TenantAdmin', 'SystemAdmin')
+  bulkRestore(@CurrentUser() user: any, @Body() dto: BulkDocumentIdsDto) {
+    return this.documentService.bulkRestore(user.tenantSlug, dto, user.sub);
+  }
+
+  /* ── Origin lookup (Rich Upload) ── */
+
+  @Get('by-origin/:entityType/:entityId')
+  listByOrigin(
+    @CurrentUser() user: any,
+    @Param('entityType') entityType: string,
+    @Param('entityId') entityId: string,
+    @Query('cursor') cursor?: string,
+    @Query('limit') limit?: string,
+  ) {
+    return this.documentService.listByOrigin(
+      user.tenantSlug, entityType, entityId, cursor, limit ? parseInt(limit) : undefined,
+    );
   }
 }

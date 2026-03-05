@@ -65,4 +65,21 @@ export const documentApi = {
   restore(id: string): Promise<void> {
     return post(`/documents/${id}/restore`);
   },
+
+  // ── Bulk operations (Phase 3) ──
+  bulkDelete(ids: string[]): Promise<void> {
+    return post('/documents/bulk/delete', { ids });
+  },
+
+  bulkMoveToFolder(ids: string[], folderId: string): Promise<void> {
+    return post('/documents/bulk/move', { ids, folderId });
+  },
+
+  bulkRestore(ids: string[]): Promise<void> {
+    return post('/documents/bulk/restore', { ids });
+  },
+
+  listByOrigin(originType: string, originId: string, params?: Record<string, string | number | boolean | undefined>): Promise<PaginatedResult<Doc>> {
+    return get<PaginatedResult<Doc>>(`/documents/by-origin/${originType}/${originId}`, params);
+  },
 };

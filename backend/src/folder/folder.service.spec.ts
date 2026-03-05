@@ -21,14 +21,14 @@ describe('FolderService', () => {
 
   describe('create', () => {
     it('should create a root folder for a case', async () => {
-      const dto = { name: 'Pleadings', caseId: 'case-1', scope: 'Case' as const };
+      const dto = { name: 'Pleadings', scopeType: 'case', scopeId: 'case-1' };
 
       // Duplicate check at root level
       mockPrisma.queryTenant.mockResolvedValueOnce([]); // no dupes
       mockPrisma.executeTenant.mockResolvedValue(undefined);
       // getById (return)
       mockPrisma.queryTenant.mockResolvedValueOnce([{
-        id: 'f1', name: 'Pleadings', path: '/Pleadings', document_count: 0, child_count: 0,
+        id: 'f1', name: 'Pleadings', scope_type: 'case', scope_id: 'case-1', document_count: 0, child_count: 0,
       }]);
 
       const result = await service.create('test-firm', dto, 'user-1');
@@ -40,7 +40,7 @@ describe('FolderService', () => {
     });
 
     it('should throw ConflictException for duplicate root folder', async () => {
-      const dto = { name: 'Evidence', caseId: 'case-1', scope: 'Case' as const };
+      const dto = { name: 'Evidence', scopeType: 'case', scopeId: 'case-1' };
 
       mockPrisma.queryTenant.mockResolvedValueOnce([{ id: 'existing' }]); // dupe found
 
@@ -49,23 +49,23 @@ describe('FolderService', () => {
       ).rejects.toThrow(ConflictException);
     });
 
-    it('should create a child folder with parent path', async () => {
-      const dto = { name: 'Subfiles', parentId: 'f1' };
+    it('should create a child folder with parent', async () => {
+      const dto = { name: 'Subfiles', scopeType: 'case', scopeId: 'case-1', parentId: 'f1' };
 
       // getById (parent)
       mockPrisma.queryTenant.mockResolvedValueOnce([{
-        id: 'f1', path: '/Pleadings', document_count: 0, child_count: 0,
+        id: 'f1', name: 'Pleadings', scope_type: 'case', scope_id: 'case-1', document_count: 0, child_count: 0,
       }]);
       // Duplicate check at parent level
       mockPrisma.queryTenant.mockResolvedValueOnce([]); // no dupes
       mockPrisma.executeTenant.mockResolvedValue(undefined);
       // getById (return)
       mockPrisma.queryTenant.mockResolvedValueOnce([{
-        id: 'f2', name: 'Subfiles', path: '/Pleadings/Subfiles', document_count: 0, child_count: 0,
+        id: 'f2', name: 'Subfiles', scope_type: 'case', scope_id: 'case-1', document_count: 0, child_count: 0,
       }]);
 
       const result = await service.create('test-firm', dto, 'user-1');
-      expect(result.path).toBe('/Pleadings/Subfiles');
+      expect(result.name).toBe('Subfiles');
     });
   });
 

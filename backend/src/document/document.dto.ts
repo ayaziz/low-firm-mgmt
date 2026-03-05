@@ -12,6 +12,14 @@ export class CreateDocumentDto {
   @IsOptional() @IsString() description?: string;
   @IsOptional() @IsArray() tags?: string[];
   @IsOptional() @IsUUID() folderId?: string;
+
+  // Origin-trace (Rich Upload)
+  @IsOptional() @IsString() originModule?: string;
+  @IsOptional() @IsString() originEntityType?: string;
+  @IsOptional() @IsUUID() originEntityId?: string;
+
+  // Expiry
+  @IsOptional() @IsDateString() expiresAt?: string;
 }
 
 export class CheckinDocumentDto {
@@ -23,4 +31,13 @@ export class ShareDocumentDto {
   @IsUUID() userId: string;
   @IsOptional() @IsEnum(['View', 'Download', 'UploadNewVersion', 'Share', 'Admin']) permission?: string;
   @IsOptional() @IsDateString() expiresAt?: string;
+}
+
+export class BulkDocumentIdsDto {
+  @IsArray() @IsUUID(undefined, { each: true }) documentIds: string[];
+}
+
+export class BulkMoveToFolderDto {
+  @IsArray() @IsUUID(undefined, { each: true }) documentIds: string[];
+  @IsOptional() @IsUUID() folderId?: string;
 }

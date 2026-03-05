@@ -1,5 +1,5 @@
 import { get, post, patch } from './client';
-import type { Notification, PaginatedResult, SearchResult, AuditEvent, ReportResult } from '@/types';
+import type { Notification, PaginatedResult, SearchResult, AuditEvent, ReportResult, StatusHistoryEntry, KpiDashboard } from '@/types';
 import { downloadBlob } from './client';
 
 // ── Search ──
@@ -26,6 +26,20 @@ export const notificationApi = {
   markAllRead(): Promise<void> {
     return post('/notifications/mark-all-read');
   },
+
+  getPreferences(): Promise<Record<string, boolean>> {
+    return get('/notifications/preferences');
+  },
+
+  updatePreferences(prefs: Record<string, boolean>): Promise<void> {
+    return patch('/notifications/preferences', prefs);
+  },
+
+  /** Returns an EventSource for SSE streaming. Caller must close it. */
+  createStream(): EventSource {
+    const token = typeof window !== 'undefined' ? localStorage.getItem('loma_token') : null;
+    return new EventSource(`/api/v1/notifications/stream?token=${encodeURIComponent(token ?? '')}`);
+  },
 };
 
 // ── Audit ──
@@ -51,5 +65,16 @@ export const reportApi = {
       ? '?' + new URLSearchParams(queryEntries.map(([k, v]) => [k, String(v)])).toString()
       : '';
     return downloadBlob(`/reports/${reportType}/export${query}`, `${reportType}.csv`);
+  },
+
+  kpiDashboard(): Promise<KpiDashboard> {
+    return get<KpiDashboard>('/reports/kpi');
+  },
+};
+
+// ── Status History ──
+export const statusHistoryApi = {
+  getTimeline(entityType: string, entityId: string, params?: { cursor?: string; limit?: number }): Promise<PaginatedResult<StatusHistoryEntry>> {
+    return get<PaginatedResult<StatusHistoryEntry>>(`/status-history/${entityType}/${entityId}`, params);
   },
 };

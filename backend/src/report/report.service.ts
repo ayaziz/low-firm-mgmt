@@ -173,6 +173,115 @@ export class ReportService {
     return { categories: rows, total };
   }
 
+  /* ───── KPI Dashboard ───── */
+
+  async kpiDashboard(tenantSlug: string) {
+    // Run all queries in parallel for performance
+    const [
+      caseStats,
+      invoiceStats,
+      paymentStats,
+      expenseStats,
+      wageStats,
+      overdueTaskCount,
+      upcomingSessionCount,
+      recentActivity,
+    ] = await Promise.all([
+      // Cases
+      this.prisma.queryTenant(tenantSlug,
+        `SELECT
+           COUNT(*)::int AS total_cases,
+           COUNT(*) FILTER (WHERE state NOT IN ('Closed', 'Archived'))::int AS open_cases,
+           COUNT(*) FILTER (WHERE state = 'Closed')::int AS closed_cases,
+           COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '30 days')::int AS new_cases_30d
+         FROM cases`),
+      // Invoices
+      this.prisma.queryTenant(tenantSlug,
+        `SELECT
+           COUNT(*)::int AS total_invoices,
+           COALESCE(SUM(total_amount), 0)::numeric AS total_invoiced,
+           COALESCE(SUM(paid_amount), 0)::numeric AS total_collected,
+           COALESCE(SUM(total_amount - paid_amount) FILTER (WHERE status IN ('Sent', 'Finalized', 'Approved')), 0)::numeric AS outstanding,
+           COUNT(*) FILTER (WHERE status = 'Draft')::int AS draft_invoices,
+           COUNT(*) FILTER (WHERE due_date < NOW() AND status IN ('Sent', 'Finalized', 'Approved') AND paid_amount < total_amount)::int AS overdue_invoices
+         FROM invoices`),
+      // Payments (last 30 days)
+      this.prisma.queryTenant(tenantSlug,
+        `SELECT COALESCE(SUM(amount), 0)::numeric AS collected_30d
+         FROM payments WHERE payment_date >= NOW() - INTERVAL '30 days'`),
+      // Expenses
+      this.prisma.queryTenant(tenantSlug,
+        `SELECT
+           COUNT(*)::int AS total_expenses,
+           COALESCE(SUM(amount), 0)::numeric AS total_expense_amount,
+           COALESCE(SUM(amount) FILTER (WHERE status = 'Approved'), 0)::numeric AS approved_expense_amount,
+           COUNT(*) FILTER (WHERE status = 'Pending')::int AS pending_expenses
+         FROM expenses`),
+      // Wages
+      this.prisma.queryTenant(tenantSlug,
+        `SELECT
+           COUNT(*)::int AS total_wages,
+           COALESCE(SUM(net_amount), 0)::numeric AS total_wage_amount,
+           COUNT(*) FILTER (WHERE payment_status IN ('Submitted'))::int AS pending_approval_wages,
+           COUNT(*) FILTER (WHERE payment_status = 'Approved')::int AS approved_wages
+         FROM wages`),
+      // Overdue tasks
+      this.prisma.queryTenant(tenantSlug,
+        `SELECT COUNT(*)::int AS count FROM tasks WHERE status NOT IN ('Done', 'Cancelled') AND due_date < NOW()`),
+      // Upcoming sessions (next 7 days)
+      this.prisma.queryTenant(tenantSlug,
+        `SELECT COUNT(*)::int AS count FROM sessions WHERE status IN ('Planned', 'Postponed') AND start_date_time >= NOW() AND start_date_time <= NOW() + INTERVAL '7 days'`),
+      // Recent activity count (last 24h)
+      this.prisma.queryTenant(tenantSlug,
+        `SELECT COUNT(*)::int AS count FROM audit_events WHERE created_at >= NOW() - INTERVAL '24 hours'`),
+    ]);
+
+    const cases = caseStats[0] || {};
+    const invoices = invoiceStats[0] || {};
+    const payments = paymentStats[0] || {};
+    const expenses = expenseStats[0] || {};
+    const wages = wageStats[0] || {};
+
+    return {
+      cases: {
+        total: cases.total_cases || 0,
+        open: cases.open_cases || 0,
+        closed: cases.closed_cases || 0,
+        newLast30Days: cases.new_cases_30d || 0,
+      },
+      invoices: {
+        total: invoices.total_invoices || 0,
+        totalInvoiced: parseFloat(invoices.total_invoiced || 0),
+        totalCollected: parseFloat(invoices.total_collected || 0),
+        outstanding: parseFloat(invoices.outstanding || 0),
+        draftCount: invoices.draft_invoices || 0,
+        overdueCount: invoices.overdue_invoices || 0,
+        collectedLast30Days: parseFloat(payments.collected_30d || 0),
+      },
+      expenses: {
+        total: expenses.total_expenses || 0,
+        totalAmount: parseFloat(expenses.total_expense_amount || 0),
+        approvedAmount: parseFloat(expenses.approved_expense_amount || 0),
+        pendingCount: expenses.pending_expenses || 0,
+      },
+      wages: {
+        total: wages.total_wages || 0,
+        totalAmount: parseFloat(wages.total_wage_amount || 0),
+        pendingApproval: wages.pending_approval_wages || 0,
+        approved: wages.approved_wages || 0,
+      },
+      tasks: {
+        overdueCount: overdueTaskCount[0]?.count || 0,
+      },
+      sessions: {
+        upcomingCount: upcomingSessionCount[0]?.count || 0,
+      },
+      activity: {
+        last24h: recentActivity[0]?.count || 0,
+      },
+    };
+  }
+
   /* ───── CSV Export ───── */
 
   async exportCsv(tenantSlug: string, reportType: string, filters: any, actorId: string): Promise<string> {

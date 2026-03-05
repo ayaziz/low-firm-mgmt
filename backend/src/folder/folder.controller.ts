@@ -22,6 +22,18 @@ export class FolderController {
     return { success: true, data };
   }
 
+  @Get('scope/:scopeType/:scopeId')
+  @Roles('Lawyer', 'Accountant', 'TenantAdmin', 'SystemAdmin')
+  async listByScope(
+    @CurrentUser() user: any,
+    @Param('scopeType') scopeType: string,
+    @Param('scopeId') scopeId: string,
+  ) {
+    const data = await this.folderService.listByScope(user.tenantSlug, scopeType, scopeId);
+    return { success: true, data };
+  }
+
+  /** Backward-compatible route */
   @Get('case/:caseId')
   @Roles('Lawyer', 'Accountant', 'TenantAdmin', 'SystemAdmin')
   async listByCase(@CurrentUser() user: any, @Param('caseId') caseId: string) {
@@ -29,10 +41,22 @@ export class FolderController {
     return { success: true, data };
   }
 
+  @Get('scope/:scopeType/:scopeId/tree')
+  @Roles('Lawyer', 'Accountant', 'TenantAdmin', 'SystemAdmin')
+  async getTree(
+    @CurrentUser() user: any,
+    @Param('scopeType') scopeType: string,
+    @Param('scopeId') scopeId: string,
+  ) {
+    const data = await this.folderService.getTree(user.tenantSlug, scopeType, scopeId);
+    return { success: true, data };
+  }
+
+  /** Backward-compatible route */
   @Get('case/:caseId/tree')
   @Roles('Lawyer', 'Accountant', 'TenantAdmin', 'SystemAdmin')
-  async getTree(@CurrentUser() user: any, @Param('caseId') caseId: string) {
-    const data = await this.folderService.getTree(user.tenantSlug, caseId);
+  async getCaseTree(@CurrentUser() user: any, @Param('caseId') caseId: string) {
+    const data = await this.folderService.getTree(user.tenantSlug, 'case', caseId);
     return { success: true, data };
   }
 

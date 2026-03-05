@@ -34,10 +34,11 @@ import {
 } from 'recharts';
 import { reportApi } from '@/api';
 import { useAuth } from '@/context/AuthContext';
-import type { ReportResult } from '@/types';
+import type { ReportResult, KpiDashboard } from '@/types';
 import PageHeader from '@/components/common/PageHeader';
 import LoadingSkeleton from '@/components/common/LoadingSkeleton';
 import EmptyState from '@/components/common/EmptyState';
+import KPICard from '@/components/common/KPICard';
 
 const CHART_COLORS = ['#1B3A5C', '#2E7D32', '#ED6C02', '#D32F2F', '#1565C0', '#6A1B9A', '#00897B', '#EF6C00', '#546E7A'];
 
@@ -49,6 +50,7 @@ interface ReportDef {
 }
 
 const REPORTS: ReportDef[] = [
+  { slug: 'kpi-dashboard', label: 'KPI Dashboard', chart: 'table', roles: ['TenantAdmin', 'SystemAdmin'] },
   { slug: 'cases-by-state', label: 'Cases by State', chart: 'bar' },
   { slug: 'cases-by-type', label: 'Cases by Type', chart: 'pie' },
   { slug: 'cases-by-owner', label: 'Cases by Owner', chart: 'bar' },
@@ -65,6 +67,7 @@ export default function ReportsPage() {
   const { hasAnyRole } = useAuth();
   const [selected, setSelected] = useState('cases-by-state');
   const [result, setResult] = useState<ReportResult | null>(null);
+  const [kpi, setKpi] = useState<KpiDashboard | null>(null);
   const [loading, setLoading] = useState(false);
   const [filters, setFilters] = useState<Record<string, string>>({});
 
@@ -74,8 +77,15 @@ export default function ReportsPage() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await reportApi.generate(selected, filters);
-      setResult(res);
+      if (selected === 'kpi-dashboard') {
+        const res = await reportApi.kpiDashboard();
+        setKpi(res);
+        setResult(null);
+      } else {
+        const res = await reportApi.generate(selected, filters);
+        setResult(res);
+        setKpi(null);
+      }
     } finally {
       setLoading(false);
     }
@@ -288,6 +298,23 @@ export default function ReportsPage() {
             <CardContent>
               {loading ? (
                 <LoadingSkeleton variant="cards" columns={1} />
+              ) : selected === 'kpi-dashboard' && kpi ? (
+                <Grid container spacing={2}>
+                  {[
+                    { label: 'Active Cases', value: kpi.cases?.open ?? 0 },
+                    { label: 'Open Invoices', value: kpi.invoices?.outstanding ?? 0 },
+                    { label: 'Total Payments', value: `$${(kpi.invoices?.totalCollected ?? 0).toLocaleString()}` },
+                    { label: 'Total Expenses', value: `$${(kpi.expenses?.totalAmount ?? 0).toLocaleString()}` },
+                    { label: 'Pending Wages', value: kpi.wages?.pendingApproval ?? 0 },
+                    { label: 'Overdue Tasks', value: kpi.tasks?.overdueCount ?? 0 },
+                    { label: 'Upcoming Sessions', value: kpi.sessions?.upcomingCount ?? 0 },
+                    { label: 'Activity (24h)', value: kpi.activity?.last24h ?? 0 },
+                  ].map((item, idx) => (
+                    <Grid item xs={6} sm={4} md={3} key={idx}>
+                      <KPICard title={item.label} value={item.value} color={CHART_COLORS[idx % CHART_COLORS.length]} />
+                    </Grid>
+                  ))}
+                </Grid>
               ) : (
                 renderChart()
               )}
