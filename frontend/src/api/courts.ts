@@ -19,7 +19,7 @@ export const courtApi = {
   },
 
   // Judges
-  listJudges(courtId: string, params?: Record<string, string | number | boolean | undefined>): Promise<PaginatedResult<Judge>> {
+  listJudges(courtId?: string, params?: Record<string, string | number | boolean | undefined>): Promise<PaginatedResult<Judge>> {
     return get<PaginatedResult<Judge>>(`/courts/judges`, { ...params, courtId });
   },
 

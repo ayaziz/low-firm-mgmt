@@ -56,8 +56,10 @@ export default function DocumentDetailPage() {
   const [doc, setDoc] = useState<(DocType & { versions: DocumentVersion[] }) | null>(null);
   const [loading, setLoading] = useState(true);
   const [shareDialogOpen, setShareDialogOpen] = useState(false);
-  const [shareEmail, setShareEmail] = useState('');
+  const [shareUserId, setShareUserId] = useState('');
   const isAdmin = hasAnyRole('TenantAdmin', 'SystemAdmin');
+  const isUuid = (value: string) =>
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value.trim());
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -90,10 +92,17 @@ export default function DocumentDetailPage() {
     input.onchange = async () => {
       const file = input.files?.[0];
       if (!file) return;
-      await documentApi.checkin(id, {
+      const result = await documentApi.checkin(id, {
         fileName: file.name,
         mimeType: file.type || 'application/octet-stream'
       });
+      if (result.uploadUrl) {
+        await fetch(result.uploadUrl, {
+          method: 'PUT',
+          body: file,
+          headers: { 'Content-Type': file.type || 'application/octet-stream' },
+        });
+      }
       load();
     };
     input.click();
@@ -105,10 +114,10 @@ export default function DocumentDetailPage() {
   };
 
   const handleShare = async () => {
-    if (!shareEmail) return;
-    await documentApi.share(id, { targetUserId: shareEmail, permission: 'view' });
+    if (!isUuid(shareUserId)) return;
+    await documentApi.share(id, { targetUserId: shareUserId.trim(), permission: 'View' });
     setShareDialogOpen(false);
-    setShareEmail('');
+    setShareUserId('');
   };
 
   const handleLegalHoldToggle = async () => {
@@ -325,17 +334,17 @@ export default function DocumentDetailPage() {
         <DialogContent>
           <Box mt={1}>
             <input
-              type="email"
-              placeholder="Email"
-              value={shareEmail}
-              onChange={e => setShareEmail(e.target.value)}
+              type="text"
+              placeholder="User ID (UUID)"
+              value={shareUserId}
+              onChange={e => setShareUserId(e.target.value)}
               style={{ width: '100%', padding: 8, fontSize: 14, borderRadius: 4, border: '1px solid #ccc' }}
             />
           </Box>
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setShareDialogOpen(false)}>{t('common.cancel')}</Button>
-          <Button variant="contained" onClick={handleShare} disabled={!shareEmail}>{t('document.share')}</Button>
+          <Button variant="contained" onClick={handleShare} disabled={!isUuid(shareUserId)}>{t('document.share')}</Button>
         </DialogActions>
       </Dialog>
     </Box>

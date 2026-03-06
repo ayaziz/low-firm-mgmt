@@ -58,6 +58,7 @@ export interface Customer {
 	customer_type: CustomerType
 	status: CustomerStatus
 	national_id?: string
+  passport_number?: string
 	registration_id?: string
 	tax_id?: string
 	notes?: string
@@ -348,14 +349,14 @@ export interface SearchResult {
 
 // ── Audit ──
 export interface AuditEvent {
-  id: string;
-  entity_type: string;
-  entity_id: string;
-  action: string;
-  actor_id: string;
-  actor_name?: string;
-  details?: Record<string, unknown>;
-  created_at: string;
+	id: string
+	entity_type: string
+	entity_id: string
+	action: string
+	actor_id: string
+	actor_name?: string
+	details?: Record<string, unknown>
+	created_at: string
 }
 
 // ── Report ──
@@ -369,25 +370,31 @@ export interface ReportResult {
 }
 
 // ── Phase 2: Courts & Judges ──
-export type CourtType = 'Civil' | 'Criminal' | 'Family' | 'Commercial' | 'Administrative' | 'Labor' | 'Constitutional' | 'Appeal' | 'Cassation' | 'Other';
+export type JurisdictionLevel = 'District' | 'Appeal' | 'Supreme' | 'Specialized';
 
 export interface Court {
   id: string;
   name: string;
-  court_type: CourtType;
-  jurisdiction?: string;
-  address?: string;
+  department?: string;
+  circuit?: string;
+  jurisdiction_level?: JurisdictionLevel;
+  city?: string;
+  address_text?: string;
   phone?: string;
-  email?: string;
+  notes?: string;
   is_active: boolean;
   created_at: string;
   updated_at: string;
+  activeJudgeCount?: number;
+  court_type?: string;
+  jurisdiction?: string;
+  address?: string;
 }
 
 export interface Judge {
 	id: string
 	court_id: string
-	name: string
+	full_name: string
 	title?: string
 	specialization?: string
 	phone?: string
@@ -395,11 +402,13 @@ export interface Judge {
 	notes?: string
 	is_active: boolean
 	created_at: string
+	updated_at?: string
 	court_name?: string
+	name?: string
 }
 
 // ── Phase 2: Hearings ──
-export type HearingStatus = 'Scheduled' | 'Postponed' | 'Completed' | 'Cancelled';
+export type HearingStatus = 'Scheduled' | 'Confirmed' | 'InProgress' | 'Adjourned' | 'Completed' | 'Postponed' | 'Cancelled';
 
 export interface Hearing {
   id: string;

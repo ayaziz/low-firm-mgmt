@@ -5,7 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { Box, Button, IconButton, MenuItem, Stack, TextField, Tooltip } from '@mui/material';
 import { Add as AddIcon, Edit as EditIcon } from '@mui/icons-material';
 import { hearingApi, courtApi, caseApi } from '@/api';
-import type { Hearing, Court, Case } from '@/types';
+import type { Hearing, Court, Case, Judge } from '@/types';
 import { useAuth } from '@/context/AuthContext';
 import PageHeader from '@/components/common/PageHeader';
 import DataGrid, { type Column } from '@/components/common/DataGrid';
@@ -15,13 +15,14 @@ import DrawerForm from '@/components/common/DrawerForm';
 const HEARING_TYPES = ['Initial', 'Continuation', 'Ruling', 'Appeal', 'Procedural'];
 
 const HEARING_TRANSITIONS: Record<string, string[]> = {
-  Scheduled: ['Confirmed', 'Cancelled'],
-  Confirmed: ['InProgress', 'Adjourned', 'Cancelled'],
-  InProgress: ['Adjourned', 'Completed'],
+  Scheduled: ['Confirmed', 'Postponed', 'Cancelled'],
+  Confirmed: ['InProgress', 'Adjourned', 'Postponed', 'Cancelled'],
+  InProgress: ['Adjourned', 'Completed', 'Postponed', 'Cancelled'],
   Adjourned: ['Scheduled', 'Cancelled'],
+  Postponed: ['Scheduled', 'Cancelled'],
 };
 
-const emptyForm = { case_id: '', court_id: '', hearing_date: '', hearing_type: 'Initial', location: '', notes: '' };
+const emptyForm = { case_id: '', court_id: '', judge_id: '', hearing_date: '', hearing_type: 'Initial', location: '', notes: '' };
 
 export default function HearingsPage() {
   const { t } = useTranslation();
@@ -31,6 +32,7 @@ export default function HearingsPage() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [courts, setCourts] = useState<Court[]>([]);
   const [cases, setCases] = useState<Case[]>([]);
+  const [judges, setJudges] = useState<Judge[]>([]);
   const [editHearing, setEditHearing] = useState<Hearing | null>(null);
   const [form, setForm] = useState({ ...emptyForm });
   const [saving, setSaving] = useState(false);
@@ -49,12 +51,14 @@ export default function HearingsPage() {
   useEffect(() => { load(); }, [load]);
 
   const loadDropdowns = async () => {
-    const [courtRes, caseRes] = await Promise.all([
+    const [courtRes, caseRes, judgeRes] = await Promise.all([
       courtApi.list({ limit: 100 }).catch(() => ({ data: [] as Court[] })),
       caseApi.list({ limit: 200 }).catch(() => ({ data: [] as Case[] })),
+      courtApi.listJudges(undefined, { limit: 200 }).catch(() => ({ data: [] as Judge[] })),
     ]);
     setCourts((courtRes as any).data || []);
     setCases((caseRes as any).data || []);
+    setJudges((judgeRes as any).data || []);
   };
 
   const openCreate = async () => {
@@ -69,6 +73,7 @@ export default function HearingsPage() {
     setForm({
       case_id: h.case_id || '',
       court_id: h.court_id || '',
+      judge_id: h.judge_id || '',
       hearing_date: h.hearing_date ? new Date(h.hearing_date).toISOString().slice(0, 16) : '',
       hearing_type: h.hearing_type || 'Initial',
       location: (h as any).location || '',
@@ -83,7 +88,8 @@ export default function HearingsPage() {
     try {
       const payload = {
         case_id: form.case_id,
-        court_id: form.court_id,
+        court_id: form.court_id || undefined,
+        judge_id: form.judge_id || undefined,
         hearing_date: form.hearing_date,
         hearing_type: form.hearing_type,
         location: form.location || undefined,
@@ -113,24 +119,28 @@ export default function HearingsPage() {
   };
 
   const canManage = hasAnyRole('Lawyer', 'TenantAdmin', 'SystemAdmin');
+  const caseLookup = new Map(cases.map((item) => [item.id, item.title]));
+  const courtLookup = new Map(courts.map((item) => [item.id, item.name]));
+  const judgeLookup = new Map(judges.map((item) => [item.id, item.full_name || item.name || '']));
+  const visibleJudges = form.court_id ? judges.filter((j) => j.court_id === form.court_id) : judges;
 
   const columns: Column<Hearing>[] = [
     {
       field: 'case_title',
       headerName: t('hearing.case', 'Case'),
       sortable: true,
-      renderCell: (row) => row.case_title || row.case_id,
+      renderCell: (row) => row.case_title || caseLookup.get(row.case_id) || '—',
     },
     {
       field: 'court_name',
       headerName: t('hearing.court', 'Court'),
-      renderCell: (row) => row.court_name || row.court_id,
+      renderCell: (row) => row.court_name || (row.court_id ? courtLookup.get(row.court_id) || '—' : '—'),
     },
     {
       field: 'judge_name',
       headerName: t('hearing.judge', 'Judge'),
       width: 140,
-      renderCell: (row) => row.judge_name || '—',
+      renderCell: (row) => row.judge_name || (row.judge_id ? judgeLookup.get(row.judge_id) || '—' : '—'),
     },
     { field: 'hearing_type', headerName: t('hearing.type', 'Type'), width: 120 },
     {
@@ -233,10 +243,23 @@ export default function HearingsPage() {
             fullWidth
             required
             value={form.court_id}
-            onChange={(e) => setForm((f) => ({ ...f, court_id: e.target.value }))}
+            onChange={(e) => setForm((f) => ({ ...f, court_id: e.target.value, judge_id: '' }))}
           >
+            <MenuItem value="">— {t('common.none', 'None')} —</MenuItem>
             {courts.map((c) => (
               <MenuItem key={c.id} value={c.id}>{c.name}</MenuItem>
+            ))}
+          </TextField>
+          <TextField
+            label={t('hearing.judge', 'Judge')}
+            select
+            fullWidth
+            value={form.judge_id}
+            onChange={(e) => setForm((f) => ({ ...f, judge_id: e.target.value }))}
+          >
+            <MenuItem value="">— {t('common.none', 'None')} —</MenuItem>
+            {visibleJudges.map((j) => (
+              <MenuItem key={j.id} value={j.id}>{j.full_name || j.name}</MenuItem>
             ))}
           </TextField>
           <TextField

@@ -13,6 +13,9 @@ export const documentApi = {
   create(data: {
     caseId?: string;
     customerId?: string;
+    originModule?: string;
+    originEntityType?: string;
+    originEntityId?: string;
     title: string;
     fileName: string;
     mimeType: string;
@@ -36,7 +39,7 @@ export const documentApi = {
   checkin(id: string, data: {
     fileName: string;
     mimeType: string;
-  }): Promise<{ version: DocumentVersion; uploadUrl: string }> {
+  }): Promise<{ versionId: string; uploadUrl: string }> {
     return post(`/documents/${id}/checkin`, data);
   },
 
@@ -69,15 +72,15 @@ export const documentApi = {
 
   // ── Bulk operations (Phase 3) ──
   bulkDelete(ids: string[]): Promise<void> {
-    return post('/documents/bulk/delete', { ids });
+    return post('/documents/bulk/delete', { documentIds: ids });
   },
 
   bulkMoveToFolder(ids: string[], folderId: string): Promise<void> {
-    return post('/documents/bulk/move', { ids, folderId });
+    return post('/documents/bulk/move', { documentIds: ids, folderId });
   },
 
   bulkRestore(ids: string[]): Promise<void> {
-    return post('/documents/bulk/restore', { ids });
+    return post('/documents/bulk/restore', { documentIds: ids });
   },
 
   listByOrigin(originType: string, originId: string, params?: Record<string, string | number | boolean | undefined>): Promise<PaginatedResult<Doc>> {

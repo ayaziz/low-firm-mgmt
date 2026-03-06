@@ -364,3 +364,21 @@ export class AddCasePartyDto {
   @IsString()
   notes?: string;
 }
+
+export class UpdateCasePartyDto {
+  @IsOptional()
+  @IsEnum(['Customer', 'Opposing', 'ExternalCounsel', 'Other'])
+  partyRoleType?: string;
+
+  @IsOptional()
+  @IsUUID()
+  participantRoleId?: string;
+
+  @IsOptional()
+  @IsEnum(['LegalOnly', 'FinanceAllowed'])
+  visibilityScope?: string;
+
+  @IsOptional()
+  @IsString()
+  notes?: string;
+}

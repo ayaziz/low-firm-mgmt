@@ -81,8 +81,8 @@ export const adminApi = {
     return get('/admin/expense-approval-workflow');
   },
 
-  saveExpenseWorkflow(steps: Array<{ stepOrder: number; approverRole: string }>): Promise<void> {
-    return post('/admin/expense-approval-workflow', { steps });
+  saveExpenseWorkflow(data: { name?: string; steps: Array<{ stepOrder: number; approverRole: string }> }): Promise<void> {
+    return post('/admin/expense-approval-workflow', data);
   },
 
   // Tenant Settings
@@ -91,6 +91,13 @@ export const adminApi = {
   },
 
   updateTenantSettings(data: Partial<TenantSettings>): Promise<TenantSettings> {
-    return patch<TenantSettings>('/admin/settings', data);
+    const payload: Partial<TenantSettings> = {
+      currency: data.currency,
+      timezone: data.timezone,
+      locale: data.locale,
+      planTier: data.planTier,
+      lawyerCanDraft: data.lawyerCanDraft,
+    };
+    return patch<TenantSettings>('/admin/settings', payload);
   },
 };

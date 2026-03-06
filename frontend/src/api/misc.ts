@@ -4,8 +4,8 @@ import { downloadBlob } from './client';
 
 // ── Search ──
 export const searchApi = {
-  search(params: { q: string; type?: string; cursor?: string; limit?: number }): Promise<PaginatedResult<SearchResult>> {
-    return get<PaginatedResult<SearchResult>>('/search', params);
+  search(params: { q: string; type?: string; cursor?: string; limit?: number }): Promise<{ results: SearchResult[]; cursor: string | null; totalEstimate?: number }> {
+    return get<{ results: SearchResult[]; cursor: string | null; totalEstimate?: number }>('/search', params);
   },
 };
 

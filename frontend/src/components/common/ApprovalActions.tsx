@@ -18,6 +18,7 @@ import {
   AttachMoney as PaidIcon,
 } from '@mui/icons-material';
 import { useAuth } from '@/context/AuthContext';
+import { useTranslation } from 'react-i18next';
 
 export interface ApprovalActionsProps {
   entityType: 'wage' | 'invoice';
@@ -40,6 +41,7 @@ export default function ApprovalActions({
   onMarkPaid,
   disabled = false,
 }: ApprovalActionsProps) {
+  const { t } = useTranslation();
   const { hasAnyRole } = useAuth();
   const [dialogMode, setDialogMode] = useState<DialogMode>(null);
   const [comment, setComment] = useState('');
@@ -87,10 +89,10 @@ export default function ApprovalActions({
   };
 
   const dialogTitles: Record<string, string> = {
-    submit: 'Submit for Approval',
-    approve: 'Approve',
-    reject: 'Reject',
-    markPaid: 'Mark as Paid',
+    submit: t('approval.submitForApproval', 'Submit for Approval'),
+    approve: t('approval.approve', 'Approve'),
+    reject: t('approval.reject', 'Reject'),
+    markPaid: t('approval.markPaid', 'Mark as Paid'),
   };
 
   return (
@@ -105,7 +107,7 @@ export default function ApprovalActions({
             disabled={disabled}
             onClick={() => setDialogMode('submit')}
           >
-            Submit
+            {t('approval.submit', 'Submit')}
           </Button>
         )}
         {canApprove && onApprove && (
@@ -117,7 +119,7 @@ export default function ApprovalActions({
             disabled={disabled}
             onClick={() => setDialogMode('approve')}
           >
-            Approve
+            {t('approval.approve', 'Approve')}
           </Button>
         )}
         {canReject && onReject && (
@@ -129,7 +131,7 @@ export default function ApprovalActions({
             disabled={disabled}
             onClick={() => setDialogMode('reject')}
           >
-            Reject
+            {t('approval.reject', 'Reject')}
           </Button>
         )}
         {canMarkPaid && onMarkPaid && (
@@ -141,7 +143,7 @@ export default function ApprovalActions({
             disabled={disabled}
             onClick={() => setDialogMode('markPaid')}
           >
-            Mark Paid
+            {t('approval.markPaid', 'Mark Paid')}
           </Button>
         )}
       </Stack>
@@ -151,15 +153,15 @@ export default function ApprovalActions({
         <DialogContent>
           <Typography variant="body2" color="text.secondary" mb={2}>
             {dialogMode === 'reject'
-              ? 'Please provide a reason for rejection.'
-              : 'Optionally add a comment.'}
+              ? t('approval.rejectionReasonPrompt', 'Please provide a reason for rejection.')
+              : t('approval.commentOptional', 'Optionally add a comment.')}
           </Typography>
           <TextField
             autoFocus
             fullWidth
             multiline
             rows={3}
-            label={dialogMode === 'reject' ? 'Reason (required)' : 'Comment (optional)'}
+            label={dialogMode === 'reject' ? t('approval.reasonRequired', 'Reason (required)') : t('approval.commentOptionalLabel', 'Comment (optional)')}
             value={comment}
             onChange={(e) => setComment(e.target.value)}
             required={dialogMode === 'reject'}
@@ -167,7 +169,7 @@ export default function ApprovalActions({
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setDialogMode(null)} disabled={loading}>
-            Cancel
+            {t('common.cancel', 'Cancel')}
           </Button>
           <Button
             variant="contained"
@@ -175,7 +177,7 @@ export default function ApprovalActions({
             disabled={loading || (dialogMode === 'reject' && !comment.trim())}
             color={dialogMode === 'reject' ? 'error' : 'primary'}
           >
-            {loading ? 'Processing...' : 'Confirm'}
+            {loading ? t('common.processing', 'Processing...') : t('common.confirm', 'Confirm')}
           </Button>
         </DialogActions>
       </Dialog>

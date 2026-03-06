@@ -69,7 +69,7 @@ export default function CaseDetailPage() {
   const [filings, setFilings] = useState<Filing[]>([]);
   const [notes, setNotes] = useState<Note[]>([]);
   const [comms, setComms] = useState<Communication[]>([]);
-  const [memberships, setMemberships] = useState<Array<{ userId: string; role: string; displayName: string }>>([]);
+  const [memberships, setMemberships] = useState<Array<{ id: string; userId: string; role: string; displayName: string }>>([]);
   const [parties, setParties] = useState<Array<{ id: string; party_id: string; role_in_case: string; party_name: string }>>([]);
   const [documents, setDocuments] = useState<Doc[]>([]);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
@@ -83,11 +83,13 @@ export default function CaseDetailPage() {
   const [commOpen, setCommOpen] = useState(false);
   const [membershipOpen, setMembershipOpen] = useState(false);
   const [partyOpen, setPartyOpen] = useState(false);
+  const [editMembership, setEditMembership] = useState<{ id: string; userId: string; role: string; displayName: string } | null>(null);
+  const [editParty, setEditParty] = useState<{ id: string; party_id: string; role_in_case: string; party_name: string } | null>(null);
   const [saving, setSaving] = useState(false);
 
   /* ---- forms ---- */
   const [taskForm, setTaskForm] = useState({ title: '', description: '', dueDate: '', assigneeUserId: '', linkedDocumentIds: [] as string[], estimatedHours: '' });
-  const [sessionForm, setSessionForm] = useState({ title: '', typeId: '', startDateTime: '', endDateTime: '', location: '', courtId: '', linkedDocumentIds: [] as string[], is_billable: true, actual_outcome: '', judge_id: '' });
+  const [sessionForm, setSessionForm] = useState({ title: '', typeId: '', startDateTime: '', endDateTime: '', location: '', courtId: '', linkedDocumentIds: [] as string[], isBillable: true, outcomeNotes: '' });
   const [filingForm, setFilingForm] = useState({ typeId: '', filedDate: '', notes: '' });
   const [noteForm, setNoteForm] = useState({ content: '', referencedNoteId: '' });
   const [commForm, setCommForm] = useState({ direction: 'Inbound' as 'Inbound' | 'Outbound', typeId: '', dateTime: '', summary: '' });
@@ -186,20 +188,19 @@ export default function CaseDetailPage() {
     setTaskForm({ title: tk.title, description: tk.description || '', dueDate: tk.due_date ? tk.due_date.slice(0, 10) : '', assigneeUserId: (tk as any).assignee_user_id || '', linkedDocumentIds: (tk as any).linked_document_ids || [], estimatedHours: (tk as any).estimated_hours ?? '' });
     setTaskOpen(true);
   };
-  const openCreateSession = () => { setEditSession(null); setSessionForm({ title: '', typeId: '', startDateTime: '', endDateTime: '', location: '', courtId: '', linkedDocumentIds: [], is_billable: true, actual_outcome: '', judge_id: '' }); setSessionOpen(true); };
+  const openCreateSession = () => { setEditSession(null); setSessionForm({ title: '', typeId: '', startDateTime: '', endDateTime: '', location: '', courtId: '', linkedDocumentIds: [], isBillable: true, outcomeNotes: '' }); setSessionOpen(true); };
   const openEditSession = (s: Session) => {
     setEditSession(s);
     setSessionForm({
       title: (s as any).title || '',
       typeId: (s as any).type_id || (s as any).typeId || '',
-      startDateTime: s.session_date ? s.session_date.slice(0, 16) : '',
+      startDateTime: ((s as any).start_date_time || s.session_date || '').slice(0, 16),
       endDateTime: (s as any).end_date_time ? (s as any).end_date_time.slice(0, 16) : '',
       location: s.location || '',
       courtId: (s as any).court_id || '',
       linkedDocumentIds: (s as any).linked_document_ids || [],
-      is_billable: (s as any).is_billable !== false,
-      actual_outcome: (s as any).actual_outcome || '',
-      judge_id: (s as any).judge_id || '',
+      isBillable: (s as any).is_billable !== false,
+      outcomeNotes: (s as any).outcome_notes || '',
     });
     setSessionOpen(true);
   };
@@ -229,8 +230,18 @@ export default function CaseDetailPage() {
     setCommOpen(true);
   };
 
-  const openCreateMembership = () => { setMembershipForm({ userId: '', role: 'CaseMember' }); setMembershipOpen(true); };
-  const openCreateParty = () => { setPartyForm({ partyId: '', partyRoleType: 'Customer', notes: '' }); setPartyOpen(true); };
+  const openCreateMembership = () => { setEditMembership(null); setMembershipForm({ userId: '', role: 'CaseMember' }); setMembershipOpen(true); };
+  const openEditMembership = (membership: { id: string; userId: string; role: string; displayName: string }) => {
+    setEditMembership(membership);
+    setMembershipForm({ userId: membership.userId, role: membership.role });
+    setMembershipOpen(true);
+  };
+  const openCreateParty = () => { setEditParty(null); setPartyForm({ partyId: '', partyRoleType: 'Customer', notes: '' }); setPartyOpen(true); };
+  const openEditParty = (party: { id: string; party_id: string; role_in_case: string; party_name: string }) => {
+    setEditParty(party);
+    setPartyForm({ partyId: party.party_id, partyRoleType: party.role_in_case || 'Customer', notes: '' });
+    setPartyOpen(true);
+  };
 
   const handleCreateTask = async () => {
     setSaving(true);
@@ -266,9 +277,18 @@ export default function CaseDetailPage() {
     setSaving(true);
     try {
       if (editSession) {
-        await caseApi.rescheduleSession(id, editSession.id, {
-          newDateTime: sessionForm.startDateTime ? new Date(sessionForm.startDateTime).toISOString() : new Date().toISOString(),
-          reason: 'Rescheduled via edit',
+        const originalStart = ((editSession as any).start_date_time || editSession.session_date || '').slice(0, 16);
+        if (sessionForm.startDateTime && sessionForm.startDateTime !== originalStart) {
+          await caseApi.rescheduleSession(id, editSession.id, {
+            newDateTime: new Date(sessionForm.startDateTime).toISOString(),
+            reason: 'Rescheduled via session update',
+          });
+        }
+        await caseApi.updateSession(id, editSession.id, {
+          title: sessionForm.title || undefined,
+          location: sessionForm.location || undefined,
+          linkedDocumentIds: sessionForm.linkedDocumentIds.length ? sessionForm.linkedDocumentIds : undefined,
+          outcomeNotes: sessionForm.outcomeNotes || undefined,
         });
       } else {
         await caseApi.createSession(id, { 
@@ -279,13 +299,11 @@ export default function CaseDetailPage() {
           location: sessionForm.location || undefined,
           courtId: sessionForm.courtId || undefined,
           linkedDocumentIds: sessionForm.linkedDocumentIds.length ? sessionForm.linkedDocumentIds : undefined,
-          is_billable: sessionForm.is_billable,
-          actual_outcome: sessionForm.actual_outcome || undefined,
-          judge_id: sessionForm.judge_id || undefined,
+          isBillable: sessionForm.isBillable,
         } as any);
       }
       setSessionOpen(false);
-      setSessionForm({ title: '', typeId: '', startDateTime: '', endDateTime: '', location: '', courtId: '', linkedDocumentIds: [], is_billable: true, actual_outcome: '', judge_id: '' });
+      setSessionForm({ title: '', typeId: '', startDateTime: '', endDateTime: '', location: '', courtId: '', linkedDocumentIds: [], isBillable: true, outcomeNotes: '' });
       setEditSession(null);
       const res = await caseApi.listSessions(id);
       setSessions(Array.isArray(res) ? res : res.data ?? []);
@@ -363,8 +381,13 @@ export default function CaseDetailPage() {
   const handleCreateMembership = async () => {
     setSaving(true);
     try {
-      await caseApi.addMembership(id, membershipForm.userId, membershipForm.role);
+      if (editMembership) {
+        await caseApi.updateMembership(id, editMembership.id, membershipForm.role);
+      } else {
+        await caseApi.addMembership(id, membershipForm.userId, membershipForm.role);
+      }
       setMembershipOpen(false);
+      setEditMembership(null);
       setMembershipForm({ userId: '', role: 'CaseMember' });
       const res = await caseApi.listMemberships(id);
       setMemberships(Array.isArray(res) ? res : (res as any).data ?? []);
@@ -374,12 +397,29 @@ export default function CaseDetailPage() {
   const handleCreateParty = async () => {
     setSaving(true);
     try {
-      await caseApi.addParty(id, { partyId: partyForm.partyId, partyRoleType: partyForm.partyRoleType });
+      if (editParty) {
+        await caseApi.updateParty(id, editParty.id, { partyRoleType: partyForm.partyRoleType, notes: partyForm.notes || undefined });
+      } else {
+        await caseApi.addParty(id, { partyId: partyForm.partyId, partyRoleType: partyForm.partyRoleType });
+      }
       setPartyOpen(false);
+      setEditParty(null);
       setPartyForm({ partyId: '', partyRoleType: 'Customer', notes: '' });
       const res = await caseApi.listParties(id);
       setParties(Array.isArray(res) ? res : (res as any).data ?? []);
     } finally { setSaving(false); }
+  };
+
+  const handleRemoveMembership = async (membershipUserId: string) => {
+    await caseApi.removeMembership(id, membershipUserId);
+    const res = await caseApi.listMemberships(id);
+    setMemberships(Array.isArray(res) ? res : (res as any).data ?? []);
+  };
+
+  const handleRemoveParty = async (partyLinkId: string) => {
+    await caseApi.removeParty(id, partyLinkId);
+    const res = await caseApi.listParties(id);
+    setParties(Array.isArray(res) ? res : (res as any).data ?? []);
   };
 
   /* ---- loading ---- */
@@ -497,7 +537,7 @@ export default function CaseDetailPage() {
                   </Card>
                 </Grid>
                 <Grid item xs={12} md={6}>
-                  <StatusTimeline entityType="case" entityId={id} />
+                  <StatusTimeline entityType="Case" entityId={id} />
                 </Grid>
               </Grid>
             </TabPanel>
@@ -546,7 +586,7 @@ export default function CaseDetailPage() {
                           <IconButton edge="end" size="small" onClick={() => openEditSession(s)}><EditIcon fontSize="small" /></IconButton>
                         }>
                           <ListItemText
-                            primary={`${s.session_type} — ${new Date(s.session_date).toLocaleString()}`}
+                            primary={`${(s as any).title || s.session_type || 'Session'} — ${new Date((s as any).start_date_time || s.session_date).toLocaleString()}`}
                             secondary={s.location || s.notes}
                           />
                           <StatusBadge status={s.status} size="small" />
@@ -653,7 +693,12 @@ export default function CaseDetailPage() {
                       {memberships.map((m, i) => (
                         <React.Fragment key={m.userId}>
                           {i > 0 && <Divider />}
-                          <ListItem>
+                          <ListItem secondaryAction={
+                            <Stack direction="row" spacing={0.5}>
+                              <IconButton size="small" onClick={() => openEditMembership(m)}><EditIcon fontSize="small" /></IconButton>
+                              <IconButton size="small" color="error" onClick={() => handleRemoveMembership(m.userId)}><AddIcon fontSize="small" sx={{ transform: 'rotate(45deg)' }} /></IconButton>
+                            </Stack>
+                          }>
                             <ListItemText primary={m.displayName} secondary={m.role} />
                           </ListItem>
                         </React.Fragment>
@@ -670,7 +715,12 @@ export default function CaseDetailPage() {
                       {parties.map((p, i) => (
                         <React.Fragment key={p.id}>
                           {i > 0 && <Divider />}
-                          <ListItem>
+                          <ListItem secondaryAction={
+                            <Stack direction="row" spacing={0.5}>
+                              <IconButton size="small" onClick={() => openEditParty(p)}><EditIcon fontSize="small" /></IconButton>
+                              <IconButton size="small" color="error" onClick={() => handleRemoveParty(p.id)}><AddIcon fontSize="small" sx={{ transform: 'rotate(45deg)' }} /></IconButton>
+                            </Stack>
+                          }>
                             <ListItemText primary={p.party_name} secondary={p.role_in_case} />
                           </ListItem>
                         </React.Fragment>
@@ -743,7 +793,7 @@ export default function CaseDetailPage() {
             {/* ── Status History ─────────────────────────────── */}
             <TabPanel value={tab} index={10}>
               <Typography variant="h6" mb={2}>{t('case.statusHistory', 'Status History')}</Typography>
-              <StatusTimeline entityType="case" entityId={id} />
+              <StatusTimeline entityType="Case" entityId={id} />
             </TabPanel>
 
             {/* ── Financial Summary ─────────────────────────── */}
@@ -848,11 +898,10 @@ export default function CaseDetailPage() {
               renderInput={(params) => <TextField {...params} label={t('case.linkedDocuments', 'Linked Documents')} />}
             />
             <FormControlLabel
-              control={<Switch checked={sessionForm.is_billable} onChange={e => setSessionForm(f => ({ ...f, is_billable: e.target.checked }))} />}
+              control={<Switch checked={sessionForm.isBillable} onChange={e => setSessionForm(f => ({ ...f, isBillable: e.target.checked }))} />}
               label={t('case.isBillable', 'Billable Session')}
             />
-            <TextField label={t('case.actualOutcome', 'Actual Outcome')} fullWidth multiline rows={2} value={sessionForm.actual_outcome} onChange={e => setSessionForm(f => ({ ...f, actual_outcome: e.target.value }))} />
-            <TextField label={t('case.judgeId', 'Judge ID / Reference')} fullWidth value={sessionForm.judge_id} onChange={e => setSessionForm(f => ({ ...f, judge_id: e.target.value }))} />
+            <TextField label={t('case.actualOutcome', 'Actual Outcome')} fullWidth multiline rows={2} value={sessionForm.outcomeNotes} onChange={e => setSessionForm(f => ({ ...f, outcomeNotes: e.target.value }))} />
           </Stack>
         </DrawerForm>
 
@@ -894,9 +943,9 @@ export default function CaseDetailPage() {
         </DrawerForm>
 
         {/* Membership */}
-        <DrawerForm open={membershipOpen} title={`${t('common.add', 'Add')} ${t('case.teamMember', 'Team Member')}`} onClose={() => setMembershipOpen(false)} onSubmit={handleCreateMembership} loading={saving}>
+        <DrawerForm open={membershipOpen} title={editMembership ? `${t('common.edit', 'Edit')} ${t('case.teamMember', 'Team Member')}` : `${t('common.add', 'Add')} ${t('case.teamMember', 'Team Member')}`} onClose={() => { setMembershipOpen(false); setEditMembership(null); }} onSubmit={handleCreateMembership} loading={saving}>
           <Stack spacing={2.5}>
-            <TextField label={t('case.user', 'User')} select fullWidth required value={membershipForm.userId} onChange={e => setMembershipForm(f => ({ ...f, userId: e.target.value }))}>
+            <TextField label={t('case.user', 'User')} select fullWidth required disabled={!!editMembership} value={membershipForm.userId} onChange={e => setMembershipForm(f => ({ ...f, userId: e.target.value }))}>
               {users.map(u => <MenuItem key={u.id} value={u.id}>{u.displayName || u.email}</MenuItem>)}
             </TextField>
             <TextField label={t('case.role', 'Role')} select fullWidth required value={membershipForm.role} onChange={e => setMembershipForm(f => ({ ...f, role: e.target.value }))}>
@@ -908,9 +957,9 @@ export default function CaseDetailPage() {
         </DrawerForm>
 
         {/* Case Party */}
-        <DrawerForm open={partyOpen} title={`${t('common.add', 'Add')} ${t('case.caseParty', 'Case Party')}`} onClose={() => setPartyOpen(false)} onSubmit={handleCreateParty} loading={saving}>
+        <DrawerForm open={partyOpen} title={editParty ? `${t('common.edit', 'Edit')} ${t('case.caseParty', 'Case Party')}` : `${t('common.add', 'Add')} ${t('case.caseParty', 'Case Party')}`} onClose={() => { setPartyOpen(false); setEditParty(null); }} onSubmit={handleCreateParty} loading={saving}>
           <Stack spacing={2.5}>
-            <TextField label={t('case.party', 'Party (Customer)')} select fullWidth required value={partyForm.partyId} onChange={e => setPartyForm(f => ({ ...f, partyId: e.target.value }))}>
+            <TextField label={t('case.party', 'Party (Customer)')} select fullWidth required disabled={!!editParty} value={partyForm.partyId} onChange={e => setPartyForm(f => ({ ...f, partyId: e.target.value }))}>
               {customers.map(c => <MenuItem key={c.id} value={c.id}>{c.name}</MenuItem>)}
             </TextField>
             <TextField label={t('case.partyRole', 'Party Role')} select fullWidth required value={partyForm.partyRoleType} onChange={e => setPartyForm(f => ({ ...f, partyRoleType: e.target.value }))}>

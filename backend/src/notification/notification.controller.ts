@@ -1,35 +1,12 @@
-import { Controller, Get, Patch, Post, Body, Param, Query, Sse, UseGuards, Req, MessageEvent } from '@nestjs/common';
-import { Observable } from 'rxjs';
-import { Request } from 'express';
+import { Controller, Get, Patch, Post, Param, Query, UseGuards } from '@nestjs/common';
 import { NotificationService } from './notification.service';
-import { SseService } from './sse.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CurrentUser } from '../common/decorators';
-import { IsBoolean, IsOptional, IsString, IsInt, Min } from 'class-validator';
-
-class UpdatePreferencesDto {
-  @IsOptional() @IsBoolean() emailEnabled?: boolean;
-  @IsOptional() @IsBoolean() inAppEnabled?: boolean;
-  @IsOptional() @IsString() digestFrequency?: string;
-  @IsOptional() @IsInt() @Min(1) hearingReminderHours?: number;
-}
 
 @Controller('notifications')
 @UseGuards(JwtAuthGuard)
 export class NotificationController {
-  constructor(
-    private readonly notificationService: NotificationService,
-    private readonly sse: SseService,
-  ) {}
-
-  // ── SSE stream ─────────────────────────────────────────
-
-  @Sse('stream')
-  stream(@CurrentUser() user: any): Observable<MessageEvent> {
-    return this.sse.streamForUser(user.tenantSlug, user.sub);
-  }
-
-  // ── CRUD ───────────────────────────────────────────────
+  constructor(private readonly notificationService: NotificationService) {}
 
   @Get()
   list(
@@ -59,17 +36,5 @@ export class NotificationController {
   @Post('mark-all-read')
   markAllRead(@CurrentUser() user: any) {
     return this.notificationService.markAllRead(user.tenantSlug, user.sub);
-  }
-
-  // ── Preferences ────────────────────────────────────────
-
-  @Get('preferences')
-  getPreferences(@CurrentUser() user: any) {
-    return this.notificationService.getPreferences(user.tenantSlug, user.sub);
-  }
-
-  @Patch('preferences')
-  updatePreferences(@CurrentUser() user: any, @Body() dto: UpdatePreferencesDto) {
-    return this.notificationService.updatePreferences(user.tenantSlug, user.sub, dto);
   }
 }

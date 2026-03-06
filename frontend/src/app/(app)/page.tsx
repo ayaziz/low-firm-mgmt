@@ -43,7 +43,7 @@ import EmptyState from '@/components/common/EmptyState';
 const PIE_COLORS = ['#1B3A5C', '#4A7C59', '#F59E0B', '#EF4444', '#8B5CF6', '#06B6D4'];
 
 export default function DashboardPage() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { user, hasAnyRole } = useAuth();
   const router = useRouter();
   const [loading, setLoading] = useState(true);
@@ -66,6 +66,11 @@ export default function DashboardPage() {
   const isLawyer = hasAnyRole('Lawyer');
   const isAccountant = hasAnyRole('Accountant');
   const isAdmin = hasAnyRole('TenantAdmin', 'SystemAdmin');
+
+  const formatCurrency = useCallback(
+    (amount: number) => new Intl.NumberFormat(i18n.language || undefined, { style: 'currency', currency: 'USD' }).format(amount || 0),
+    [i18n.language],
+  );
 
   useEffect(() => {
     async function load() {
@@ -208,7 +213,7 @@ export default function DashboardPage() {
               icon={<WarningIcon />}
               color="#EF4444"
               trend={stats.overdueInvoices > 0 ? 'up' : 'flat'}
-              trendLabel={stats.overdueInvoices > 0 ? `${stats.overdueInvoices} overdue` : 'None'}
+              trendLabel={stats.overdueInvoices > 0 ? t('dashboard.overdueCount', '{{count}} overdue', { count: stats.overdueInvoices }) : t('common.none', 'None')}
               onClick={() => router.push('/accounting')}
             />
           </Grid>
@@ -228,7 +233,7 @@ export default function DashboardPage() {
           <Grid item xs={6} sm={3}>
             <KPICard
               title={t('dashboard.totalReceivable')}
-              value={`$${stats.totalReceivable.toLocaleString()}`}
+              value={formatCurrency(stats.totalReceivable)}
               icon={<MoneyIcon />}
               color="#8B5CF6"
               onClick={() => router.push('/accounting')}
@@ -254,7 +259,7 @@ export default function DashboardPage() {
               icon={<TaskIcon />}
               color="#EF4444"
               trend="up"
-              trendLabel={`${stats.overdueTasks} overdue`}
+              trendLabel={t('dashboard.overdueCount', '{{count}} overdue', { count: stats.overdueTasks })}
               onClick={() => router.push('/tasks')}
             />
           </Grid>
