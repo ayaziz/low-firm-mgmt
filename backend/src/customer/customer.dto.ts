@@ -14,7 +14,7 @@ export class CreateContactDto {
 	phone?: string
 
 	@IsOptional()
-	@IsUUID()
+	@IsString()
 	role_id?: string
 
 	@IsOptional()
@@ -129,8 +129,9 @@ export class UpdateCustomerDto {
   @IsString()
   taxId?: string;
 
+  @IsOptional()
   @IsString()
-  rowVersion: string;
+  rowVersion?: string;
 }
 
 export class CreateCustomerCommunicationDto {

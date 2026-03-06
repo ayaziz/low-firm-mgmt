@@ -20,6 +20,7 @@ export const documentApi = {
     confidentialityLevel: string;
     tags?: string[];
     description?: string;
+    folderId?: string;
   }): Promise<{ document: Doc; uploadUrl: string }> {
     return post('/documents', data);
   },

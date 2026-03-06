@@ -1,3 +1,5 @@
+SET search_path TO tenant_demo_firm, public;
+
 -- Phase 3 Migration: Session Postponement Approval
 -- file: p3_10_session_postponement.sql
 -- Adds approval columns to session_reschedules table.
@@ -20,3 +22,4 @@ COMMIT;
 -- ALTER TABLE session_reschedules DROP COLUMN IF EXISTS approval_comment;
 -- ALTER TABLE session_reschedules DROP COLUMN IF EXISTS approved_by;
 -- ALTER TABLE session_reschedules DROP COLUMN IF EXISTS approval_status;
+

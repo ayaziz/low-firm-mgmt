@@ -142,8 +142,42 @@ CREATE TABLE IF NOT EXISTS folders (
 );
 
 CREATE INDEX IF NOT EXISTS idx_folders_parent ON folders (parent_folder_id);
-CREATE INDEX IF NOT EXISTS idx_folders_scope ON folders (scope, scope_id);
-CREATE INDEX IF NOT EXISTS idx_folders_path ON folders (path);
+-- Guard: only create old scope index if folders still has legacy 'scope' column
+-- (p3_07 drops & recreates folders with scope_type/scope_id, making this index obsolete)
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = current_schema()
+      AND table_name = 'folders'
+      AND column_name = 'scope'
+  ) THEN
+    IF NOT EXISTS (
+      SELECT 1 FROM pg_indexes
+      WHERE schemaname = current_schema() AND indexname = 'idx_folders_scope'
+    ) THEN
+      EXECUTE 'CREATE INDEX idx_folders_scope ON folders (scope, scope_id)';
+    END IF;
+  END IF;
+END $$;
+-- Guard: only create old path index if folders still has legacy 'path' column
+-- (p3_07 drops & recreates folders without a path column)
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = current_schema()
+      AND table_name = 'folders'
+      AND column_name = 'path'
+  ) THEN
+    IF NOT EXISTS (
+      SELECT 1 FROM pg_indexes
+      WHERE schemaname = current_schema() AND indexname = 'idx_folders_path'
+    ) THEN
+      EXECUTE 'CREATE INDEX idx_folders_path ON folders (path)';
+    END IF;
+  END IF;
+END $$;
 
 -- ─── Document Extensions (Folder + OCR) ───────────────────────
 

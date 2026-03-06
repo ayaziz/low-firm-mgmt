@@ -14,7 +14,7 @@ export const folderApi = {
 
   /** Get recursive tree for a scope */
   getTree(scopeType: string, scopeId: string): Promise<Folder[]> {
-    return get<Folder[]>(`/folders/tree`, { scopeType, scopeId });
+    return get<Folder[]>(`/folders/scope/${scopeType}/${scopeId}/tree`);
   },
 
   getById(id: string): Promise<Folder> {

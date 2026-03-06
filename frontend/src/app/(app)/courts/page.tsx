@@ -104,11 +104,11 @@ export default function CourtsPage() {
     setEditCourt(court);
     setCourtForm({
       name: court.name || '',
-      court_type: court.court_type || 'Civil',
-      jurisdiction: court.jurisdiction || '',
-      address: court.address || '',
+      court_type: (court as any).department || (court as any).court_type || 'Civil',
+      jurisdiction: (court as any).city || (court as any).jurisdiction || '',
+      address: (court as any).address_text || (court as any).address || '',
       phone: court.phone || '',
-      email: court.email || '',
+      email: '',
     });
     setCourtOpen(true);
   };
@@ -116,24 +116,19 @@ export default function CourtsPage() {
   const handleSaveCourt = async () => {
     setCourtSaving(true);
     try {
+      // Map form fields to backend DTO field names
+      const courtPayload = {
+        name: courtForm.name,
+        department: courtForm.court_type || undefined,  // court_type → department
+        city: courtForm.jurisdiction || undefined,        // jurisdiction → city (free text)
+        addressText: courtForm.address || undefined,      // address → addressText
+        phone: courtForm.phone || undefined,
+        // email omitted – not in backend DTO
+      };
       if (editCourt) {
-        await courtApi.update(editCourt.id, {
-          name: courtForm.name,
-          court_type: courtForm.court_type,
-          jurisdiction: courtForm.jurisdiction || undefined,
-          address: courtForm.address || undefined,
-          phone: courtForm.phone || undefined,
-          email: courtForm.email || undefined,
-        } as any);
+        await courtApi.update(editCourt.id, courtPayload as any);
       } else {
-        await courtApi.create({
-          name: courtForm.name,
-          court_type: courtForm.court_type,
-          jurisdiction: courtForm.jurisdiction || undefined,
-          address: courtForm.address || undefined,
-          phone: courtForm.phone || undefined,
-          email: courtForm.email || undefined,
-        });
+        await courtApi.create(courtPayload as any);
       }
       setCourtOpen(false);
       setEditCourt(null);

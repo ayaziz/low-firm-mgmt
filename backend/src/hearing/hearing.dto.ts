@@ -55,7 +55,7 @@ export class UpdateHearingDto {
 }
 
 export class TransitionHearingDto {
-  @IsEnum(['Scheduled', 'Completed', 'Postponed', 'Cancelled'])
+  @IsEnum(['Scheduled', 'Confirmed', 'InProgress', 'Adjourned', 'Completed', 'Postponed', 'Cancelled'])
   toStatus: string;
 
   @IsOptional()

@@ -28,12 +28,16 @@ export const customerApi = {
 
 	update(id: string, data: Partial<Customer>): Promise<Customer> {
 		// Map snake_case Customer fields → camelCase UpdateCustomerDto
-		const { national_id, passport_number, registration_id, tax_id, ...rest } = data as any;
+		// Strip fields not accepted by UpdateCustomerDto (forbidNonWhitelisted=true)
+		const { national_id, passport_number, registration_id, tax_id,
+				row_version, contacts, addresses, id: _id,
+				created_at, updated_at, customer_type, ...rest } = data as any;
 		const payload: Record<string, unknown> = { ...rest };
 		if (national_id !== undefined) payload.nationalId = national_id;
 		if (passport_number !== undefined) payload.passportNumber = passport_number;
 		if (registration_id !== undefined) payload.registrationId = registration_id;
 		if (tax_id !== undefined) payload.taxId = tax_id;
+		if (row_version !== undefined) payload.rowVersion = row_version;
 		return patch<Customer>(`/customers/${id}`, payload)
 	},
 

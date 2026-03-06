@@ -4,7 +4,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { useParams } from 'next/navigation';
 import { useTranslation } from 'react-i18next';
 import {
-  Box, Button, Card, CardContent, Checkbox, Divider, Grid,
+  Box, Button, Card, CardContent, Checkbox, Chip, Divider, Grid,
   IconButton, List, ListItem, ListItemIcon, ListItemText, MenuItem, Stack, Tab, Tabs, TextField, Typography,
 } from '@mui/material';
 import {
@@ -19,6 +19,8 @@ import KPICard from '@/components/common/KPICard';
 import InsightsRail from '@/components/common/InsightsRail';
 import LoadingSkeleton from '@/components/common/LoadingSkeleton';
 import EmptyState from '@/components/common/EmptyState';
+import FolderTree from '@/components/common/FolderTree';
+import StatusTimeline from '@/components/common/StatusTimeline';
 
 /* ------------------------------------------------------------------ */
 /*  Helpers                                                           */
@@ -60,6 +62,7 @@ export default function CustomerDetailPage() {
   const [financialSummary, setFinancialSummary] = useState<{
     last_payment_date: string | null; overdue: number; paid: number; outstanding: number;
   } | null>(null);
+  const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
 
   /* ---- load ---- */
   const load = useCallback(async () => {
@@ -107,12 +110,18 @@ export default function CustomerDetailPage() {
   };
 
   const handleAddContact = async () => {
+    if (!contactForm.name?.trim()) return;
     setSaving(true);
+    // Strip empty optional fields so backend validators (IsEmail, IsString) don't reject them
+    const payload: Record<string, string> = { name: contactForm.name };
+    if (contactForm.role_id) payload.role_id = contactForm.role_id;
+    if (contactForm.phone?.trim()) payload.phone = contactForm.phone.trim();
+    if (contactForm.email?.trim()) payload.email = contactForm.email.trim();
     try {
       if (editContact) {
-        await customerApi.updateContact(id, editContact.id, contactForm);
+        await customerApi.updateContact(id, editContact.id, payload);
       } else {
-        await customerApi.addContact(id, contactForm);
+        await customerApi.addContact(id, payload);
       }
       setContactOpen(false);
       setContactForm({ name: '', role_id: '', phone: '', email: '' });
@@ -226,9 +235,48 @@ export default function CustomerDetailPage() {
                         <Typography variant="caption" color="text.secondary">{t('common.createdAt', 'Created')}</Typography>
                         <Typography variant="body2">{new Date(customer.created_at).toLocaleDateString()}</Typography>
                       </Box>
+                      {(customer as any).kyc_status && (
+                        <Box>
+                          <Typography variant="caption" color="text.secondary">{t('customer.kycStatus', 'KYC Status')}</Typography>
+                          <Box mt={0.25}><StatusBadge status={(customer as any).kyc_status} /></Box>
+                        </Box>
+                      )}
+                      {(customer as any).risk_profile && (
+                        <Box>
+                          <Typography variant="caption" color="text.secondary">{t('customer.riskProfile', 'Risk Profile')}</Typography>
+                          <Box mt={0.25}><StatusBadge status={(customer as any).risk_profile} /></Box>
+                        </Box>
+                      )}
+                      {(customer as any).credit_rating && (
+                        <Box>
+                          <Typography variant="caption" color="text.secondary">{t('customer.creditRating', 'Credit Rating')}</Typography>
+                          <Typography variant="body2">{(customer as any).credit_rating}</Typography>
+                        </Box>
+                      )}
+                      {(customer as any).preferred_language && (
+                        <Box>
+                          <Typography variant="caption" color="text.secondary">{t('customer.preferredLanguage', 'Preferred Language')}</Typography>
+                          <Typography variant="body2">{(customer as any).preferred_language}</Typography>
+                        </Box>
+                      )}
+                      {(customer as any).preferred_comm_channel && (
+                        <Box>
+                          <Typography variant="caption" color="text.secondary">{t('customer.preferredCommChannel', 'Preferred Channel')}</Typography>
+                          <Typography variant="body2">{(customer as any).preferred_comm_channel}</Typography>
+                        </Box>
+                      )}
+                      {(customer as any).industry_sector && (
+                        <Box>
+                          <Typography variant="caption" color="text.secondary">{t('customer.industrySector', 'Industry')}</Typography>
+                          <Typography variant="body2">{(customer as any).industry_sector}</Typography>
+                        </Box>
+                      )}
                     </Stack>
                   </CardContent>
                 </Card>
+              </Grid>
+              <Grid item xs={12} md={6}>
+                <StatusTimeline entityType="customer" entityId={id} />
               </Grid>
             </Grid>
           </TabPanel>
@@ -305,39 +353,56 @@ export default function CustomerDetailPage() {
 
           {/* ── Documents ──────────────────────────────────── */}
           <TabPanel value={tab} index={3}>
-            <Typography variant="h6" mb={2}>{t('customer.documents', 'Documents')}</Typography>
-            {documents.length > 0 ? (
-              <Card>
-                <List disablePadding>
-                  {documents.map((doc, i) => (
-                    <React.Fragment key={doc.id}>
-                      {i > 0 && <Divider />}
-                      <ListItem
-                        secondaryAction={
-                          <IconButton
-                            edge="end"
-                            onClick={async () => {
-                              const res = await documentApi.download(doc.id);
-                              window.open(res.downloadUrl, '_blank');
-                            }}
-                          >
-                            <DownloadIcon fontSize="small" />
-                          </IconButton>
-                        }
-                      >
-                        <ListItemText
-                          primary={doc.title}
-                          secondary={[doc.doc_type, doc.confidentiality, new Date(doc.created_at).toLocaleDateString()].filter(Boolean).join(' · ')}
-                        />
-                        {doc.scan_status && <StatusBadge status={doc.scan_status} variant="outlined" size="small" />}
-                      </ListItem>
-                    </React.Fragment>
-                  ))}
-                </List>
-              </Card>
-            ) : (
-              <EmptyState icon={<DownloadIcon />} title={t('common.noData', 'No data')} message={t('customer.noDocuments', 'No documents yet')} />
-            )}
+            <Grid container spacing={2}>
+              <Grid item xs={12} md={3}>
+                <FolderTree
+                  scopeType="customer"
+                  scopeId={id}
+                  selectedFolderId={selectedFolderId ?? undefined}
+                  onSelectFolder={(f) => setSelectedFolderId(prev => (prev === f.id ? null : f.id))}
+                  showCreateButton
+                />
+              </Grid>
+              <Grid item xs={12} md={9}>
+                <Stack direction="row" justifyContent="space-between" alignItems="center" mb={2}>
+                  <Typography variant="h6">
+                    {t('customer.documents', 'Documents')}
+                    {selectedFolderId && (
+                      <Chip label={t('customer.filteredByFolder', 'Folder filter active')} size="small" onDelete={() => setSelectedFolderId(null)} sx={{ ml: 1 }} />
+                    )}
+                  </Typography>
+                </Stack>
+                {(() => {
+                  const filteredDocs = selectedFolderId ? documents.filter(d => (d as any).folder_id === selectedFolderId) : documents;
+                  return filteredDocs.length > 0 ? (
+                    <Card>
+                      <List disablePadding>
+                        {filteredDocs.map((doc, i) => (
+                          <React.Fragment key={doc.id}>
+                            {i > 0 && <Divider />}
+                            <ListItem
+                              secondaryAction={
+                                <IconButton edge="end" onClick={async () => { const res = await documentApi.download(doc.id); window.open(res.downloadUrl, '_blank'); }}>
+                                  <DownloadIcon fontSize="small" />
+                                </IconButton>
+                              }
+                            >
+                              <ListItemText
+                                primary={doc.title}
+                                secondary={[doc.doc_type, doc.confidentiality, (doc as any).folder_name, new Date(doc.created_at).toLocaleDateString()].filter(Boolean).join(' · ')}
+                              />
+                              {doc.scan_status && <StatusBadge status={doc.scan_status} variant="outlined" size="small" />}
+                            </ListItem>
+                          </React.Fragment>
+                        ))}
+                      </List>
+                    </Card>
+                  ) : (
+                    <EmptyState icon={<DownloadIcon />} title={t('common.noData', 'No data')} message={selectedFolderId ? t('customer.noDocumentsInFolder', 'No documents in this folder') : t('customer.noDocuments', 'No documents yet')} />
+                  );
+                })()}
+              </Grid>
+            </Grid>
           </TabPanel>
 
           {/* ── Compliance ─────────────────────────────────── */}

@@ -4,8 +4,8 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { useParams } from 'next/navigation';
 import { useTranslation } from 'react-i18next';
 import {
-  Autocomplete, Box, Button, Card, CardContent, Chip, Divider, Grid,
-  IconButton, List, ListItem, ListItemText, MenuItem, Stack, Tab, Tabs, TextField, Typography,
+  Autocomplete, Box, Button, Card, CardContent, Chip, Divider, FormControlLabel, Grid,
+  IconButton, List, ListItem, ListItemText, MenuItem, Stack, Switch, Tab, Tabs, TextField, Typography,
 } from '@mui/material';
 import {
   Add as AddIcon, Download as DownloadIcon, Edit as EditIcon,
@@ -25,6 +25,8 @@ import InsightsRail from '@/components/common/InsightsRail';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
 import LoadingSkeleton from '@/components/common/LoadingSkeleton';
 import EmptyState from '@/components/common/EmptyState';
+import FolderTree from '@/components/common/FolderTree';
+import StatusTimeline from '@/components/common/StatusTimeline';
 
 /* ------------------------------------------------------------------ */
 /*  Constants                                                         */
@@ -59,6 +61,7 @@ export default function CaseDetailPage() {
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState(0);
   const [completeness, setCompleteness] = useState<CompletenessResult | null>(null);
+  const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
 
   /* ---- sub-entities ---- */
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -84,7 +87,7 @@ export default function CaseDetailPage() {
 
   /* ---- forms ---- */
   const [taskForm, setTaskForm] = useState({ title: '', description: '', dueDate: '', assigneeUserId: '', linkedDocumentIds: [] as string[], estimatedHours: '' });
-  const [sessionForm, setSessionForm] = useState({ title: '', typeId: '', startDateTime: '', endDateTime: '', location: '', courtId: '', linkedDocumentIds: [] as string[] });
+  const [sessionForm, setSessionForm] = useState({ title: '', typeId: '', startDateTime: '', endDateTime: '', location: '', courtId: '', linkedDocumentIds: [] as string[], is_billable: true, actual_outcome: '', judge_id: '' });
   const [filingForm, setFilingForm] = useState({ typeId: '', filedDate: '', notes: '' });
   const [noteForm, setNoteForm] = useState({ content: '', referencedNoteId: '' });
   const [commForm, setCommForm] = useState({ direction: 'Inbound' as 'Inbound' | 'Outbound', typeId: '', dateTime: '', summary: '' });
@@ -183,7 +186,7 @@ export default function CaseDetailPage() {
     setTaskForm({ title: tk.title, description: tk.description || '', dueDate: tk.due_date ? tk.due_date.slice(0, 10) : '', assigneeUserId: (tk as any).assignee_user_id || '', linkedDocumentIds: (tk as any).linked_document_ids || [], estimatedHours: (tk as any).estimated_hours ?? '' });
     setTaskOpen(true);
   };
-  const openCreateSession = () => { setEditSession(null); setSessionForm({ title: '', typeId: '', startDateTime: '', endDateTime: '', location: '', courtId: '', linkedDocumentIds: [] }); setSessionOpen(true); };
+  const openCreateSession = () => { setEditSession(null); setSessionForm({ title: '', typeId: '', startDateTime: '', endDateTime: '', location: '', courtId: '', linkedDocumentIds: [], is_billable: true, actual_outcome: '', judge_id: '' }); setSessionOpen(true); };
   const openEditSession = (s: Session) => {
     setEditSession(s);
     setSessionForm({
@@ -194,6 +197,9 @@ export default function CaseDetailPage() {
       location: s.location || '',
       courtId: (s as any).court_id || '',
       linkedDocumentIds: (s as any).linked_document_ids || [],
+      is_billable: (s as any).is_billable !== false,
+      actual_outcome: (s as any).actual_outcome || '',
+      judge_id: (s as any).judge_id || '',
     });
     setSessionOpen(true);
   };
@@ -265,7 +271,7 @@ export default function CaseDetailPage() {
           reason: 'Rescheduled via edit',
         });
       } else {
-        await caseApi.createSession(id, {
+        await caseApi.createSession(id, { 
           title: sessionForm.title,
           typeId: sessionForm.typeId,
           startDateTime: sessionForm.startDateTime ? new Date(sessionForm.startDateTime).toISOString() : undefined,
@@ -273,10 +279,13 @@ export default function CaseDetailPage() {
           location: sessionForm.location || undefined,
           courtId: sessionForm.courtId || undefined,
           linkedDocumentIds: sessionForm.linkedDocumentIds.length ? sessionForm.linkedDocumentIds : undefined,
+          is_billable: sessionForm.is_billable,
+          actual_outcome: sessionForm.actual_outcome || undefined,
+          judge_id: sessionForm.judge_id || undefined,
         } as any);
       }
       setSessionOpen(false);
-      setSessionForm({ title: '', typeId: '', startDateTime: '', endDateTime: '', location: '', courtId: '', linkedDocumentIds: [] });
+      setSessionForm({ title: '', typeId: '', startDateTime: '', endDateTime: '', location: '', courtId: '', linkedDocumentIds: [], is_billable: true, actual_outcome: '', judge_id: '' });
       setEditSession(null);
       const res = await caseApi.listSessions(id);
       setSessions(Array.isArray(res) ? res : res.data ?? []);
@@ -324,6 +333,8 @@ export default function CaseDetailPage() {
   };
 
   const handleCreateComm = async () => {
+    // Validate required fields before submission
+    if (!commForm.typeId || !commForm.summary?.trim()) return;
     setSaving(true);
     try {
       if (editComm) {
@@ -338,7 +349,7 @@ export default function CaseDetailPage() {
           typeId: commForm.typeId,
           direction: commForm.direction,
           dateTime: commForm.dateTime ? new Date(commForm.dateTime).toISOString() : new Date().toISOString(),
-          summary: commForm.summary || undefined,
+          summary: commForm.summary,  // send as-is (not || undefined)
         } as any);
       }
       setCommOpen(false);
@@ -420,6 +431,7 @@ export default function CaseDetailPage() {
               <Tab label={`${t('case.documents', 'Documents')} (${documents.length})`} />
               <Tab label={t('case.financialSummary', 'Financial')} />
               <Tab label={t('case.audit', 'Audit')} />
+              <Tab label={t('case.statusHistory', 'History')} />
             </Tabs>
 
             {/* ── Overview ──────────────────────────────────── */}
@@ -438,9 +450,54 @@ export default function CaseDetailPage() {
                           <Typography variant="caption" color="text.secondary">{t('common.createdAt', 'Created')}</Typography>
                           <Typography variant="body2">{new Date(cs.created_at).toLocaleDateString()}</Typography>
                         </Box>
+                        {(cs as any).priority && (cs as any).priority !== 'Normal' && (
+                          <Box>
+                            <Typography variant="caption" color="text.secondary">{t('case.priority', 'Priority')}</Typography>
+                            <Box mt={0.25}><StatusBadge status={(cs as any).priority} /></Box>
+                          </Box>
+                        )}
+                        {(cs as any).risk_level && (
+                          <Box>
+                            <Typography variant="caption" color="text.secondary">{t('case.riskLevel', 'Risk Level')}</Typography>
+                            <Box mt={0.25}><StatusBadge status={(cs as any).risk_level} /></Box>
+                          </Box>
+                        )}
+                        {(cs as any).source && (
+                          <Box>
+                            <Typography variant="caption" color="text.secondary">{t('case.source', 'Source')}</Typography>
+                            <Typography variant="body2">{(cs as any).source}</Typography>
+                          </Box>
+                        )}
+                        {(cs as any).estimated_value != null && (
+                          <Box>
+                            <Typography variant="caption" color="text.secondary">{t('case.estimatedValue', 'Estimated Value')}</Typography>
+                            <Typography variant="body2">{Number((cs as any).estimated_value).toLocaleString()}</Typography>
+                          </Box>
+                        )}
+                        {(cs as any).judgment_date && (
+                          <Box>
+                            <Typography variant="caption" color="text.secondary">{t('case.judgmentDate', 'Judgment Date')}</Typography>
+                            <Typography variant="body2">{new Date((cs as any).judgment_date).toLocaleDateString()}</Typography>
+                          </Box>
+                        )}
+                        {(cs as any).judgment_outcome && (
+                          <Box>
+                            <Typography variant="caption" color="text.secondary">{t('case.judgmentOutcome', 'Judgment Outcome')}</Typography>
+                            <Typography variant="body2">{(cs as any).judgment_outcome}</Typography>
+                          </Box>
+                        )}
+                        {(cs as any).appeal_deadline && (
+                          <Box>
+                            <Typography variant="caption" color="text.secondary">{t('case.appealDeadline', 'Appeal Deadline')}</Typography>
+                            <Typography variant="body2" color="error.main">{new Date((cs as any).appeal_deadline).toLocaleDateString()}</Typography>
+                          </Box>
+                        )}
                       </Stack>
                     </CardContent>
                   </Card>
+                </Grid>
+                <Grid item xs={12} md={6}>
+                  <StatusTimeline entityType="case" entityId={id} />
                 </Grid>
               </Grid>
             </TabPanel>
@@ -629,31 +686,64 @@ export default function CaseDetailPage() {
 
             {/* ── Documents ─────────────────────────────────── */}
             <TabPanel value={tab} index={7}>
-              <Typography variant="h6" mb={2}>{t('case.documents', 'Documents')}</Typography>
-              {documents.length > 0 ? (
-                <Card>
-                  <List disablePadding>
-                    {documents.map((doc, i) => (
-                      <React.Fragment key={doc.id}>
-                        {i > 0 && <Divider />}
-                        <ListItem
-                          secondaryAction={
-                            <IconButton edge="end" onClick={async () => { const res = await documentApi.download(doc.id); window.open(res.downloadUrl, '_blank'); }}>
-                              <DownloadIcon fontSize="small" />
-                            </IconButton>
-                          }
-                        >
-                          <ListItemText
-                            primary={doc.title}
-                            secondary={[doc.doc_type, doc.confidentiality, new Date(doc.created_at).toLocaleDateString()].filter(Boolean).join(' · ')}
-                          />
-                          {doc.scan_status && <StatusBadge status={doc.scan_status} variant="outlined" size="small" />}
-                        </ListItem>
-                      </React.Fragment>
-                    ))}
-                  </List>
-                </Card>
-              ) : <EmptyState icon={<DownloadIcon />} title={t('common.noData', 'No data')} message={t('case.noDocuments', 'No documents yet')} />}
+              <Grid container spacing={2}>
+                {/* Left: Folder Tree */}
+                <Grid item xs={12} md={3}>
+                  <FolderTree
+                    scopeType="case"
+                    scopeId={id}
+                    selectedFolderId={selectedFolderId ?? undefined}
+                    onSelectFolder={(f) => setSelectedFolderId(prev => (prev === f.id ? null : f.id))}
+                    showCreateButton
+                  />
+                </Grid>
+                {/* Right: Document List */}
+                <Grid item xs={12} md={9}>
+                  <Stack direction="row" justifyContent="space-between" alignItems="center" mb={2}>
+                    <Typography variant="h6">
+                      {t('case.documents', 'Documents')}
+                      {selectedFolderId && <Chip label={t('case.filteredByFolder', 'Folder filter active')} size="small" onDelete={() => setSelectedFolderId(null)} sx={{ ml: 1 }} />}
+                    </Typography>
+                  </Stack>
+                  {(() => {
+                    const filteredDocs = selectedFolderId
+                      ? documents.filter(d => (d as any).folder_id === selectedFolderId)
+                      : documents;
+                    return filteredDocs.length > 0 ? (
+                      <Card>
+                        <List disablePadding>
+                          {filteredDocs.map((doc, i) => (
+                            <React.Fragment key={doc.id}>
+                              {i > 0 && <Divider />}
+                              <ListItem
+                                secondaryAction={
+                                  <IconButton edge="end" onClick={async () => { const res = await documentApi.download(doc.id); window.open(res.downloadUrl, '_blank'); }}>
+                                    <DownloadIcon fontSize="small" />
+                                  </IconButton>
+                                }
+                              >
+                                <ListItemText
+                                  primary={doc.title}
+                                  secondary={[doc.doc_type, doc.confidentiality, (doc as any).folder_name, new Date(doc.created_at).toLocaleDateString()].filter(Boolean).join(' · ')}
+                                />
+                                {doc.scan_status && <StatusBadge status={doc.scan_status} variant="outlined" size="small" />}
+                              </ListItem>
+                            </React.Fragment>
+                          ))}
+                        </List>
+                      </Card>
+                    ) : (
+                      <EmptyState icon={<DownloadIcon />} title={t('common.noData', 'No data')} message={selectedFolderId ? t('case.noDocumentsInFolder', 'No documents in this folder') : t('case.noDocuments', 'No documents yet')} />
+                    );
+                  })()}
+                </Grid>
+              </Grid>
+            </TabPanel>
+
+            {/* ── Status History ─────────────────────────────── */}
+            <TabPanel value={tab} index={10}>
+              <Typography variant="h6" mb={2}>{t('case.statusHistory', 'Status History')}</Typography>
+              <StatusTimeline entityType="case" entityId={id} />
             </TabPanel>
 
             {/* ── Financial Summary ─────────────────────────── */}
@@ -757,6 +847,12 @@ export default function CaseDetailPage() {
               onChange={(_, vals) => setSessionForm(f => ({ ...f, linkedDocumentIds: vals.map(v => v.id) }))}
               renderInput={(params) => <TextField {...params} label={t('case.linkedDocuments', 'Linked Documents')} />}
             />
+            <FormControlLabel
+              control={<Switch checked={sessionForm.is_billable} onChange={e => setSessionForm(f => ({ ...f, is_billable: e.target.checked }))} />}
+              label={t('case.isBillable', 'Billable Session')}
+            />
+            <TextField label={t('case.actualOutcome', 'Actual Outcome')} fullWidth multiline rows={2} value={sessionForm.actual_outcome} onChange={e => setSessionForm(f => ({ ...f, actual_outcome: e.target.value }))} />
+            <TextField label={t('case.judgeId', 'Judge ID / Reference')} fullWidth value={sessionForm.judge_id} onChange={e => setSessionForm(f => ({ ...f, judge_id: e.target.value }))} />
           </Stack>
         </DrawerForm>
 

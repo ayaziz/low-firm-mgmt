@@ -348,11 +348,22 @@ export class CaseService {
     await this.ensureNotArchived(tenantSlug, caseId);
     const sessionId = uuidv4();
     await this.prisma.executeTenant(
-      tenantSlug,
-      `INSERT INTO sessions (id, case_id, type_id, title, start_date_time, end_date_time, location, court_id, linked_document_ids, status, created_at, updated_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'Planned', NOW(), NOW())`,
-      [sessionId, caseId, dto.typeId, dto.title, dto.startDateTime, dto.endDateTime, dto.location || null, dto.courtId || null, dto.linkedDocumentIds || []],
-    );
+			tenantSlug,
+			`INSERT INTO sessions (id, case_id, type_id, title, start_date_time, end_date_time, location, court_id, linked_document_ids, status, created_at, updated_at,is_billable)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'Planned', NOW(), NOW(),$10)`,
+			[
+				sessionId,
+				caseId,
+				dto.typeId,
+				dto.title,
+				dto.startDateTime,
+				dto.endDateTime,
+				dto.location || null,
+				dto.courtId || null,
+				dto.linkedDocumentIds || [],
+        dto.isBillable || false,
+			],
+		)
     await this.audit.log({ tenantSlug, eventType: 'SESSION_CREATED', actorUserId: userId, entityType: 'Session', entityId: sessionId, payload: { caseId, title: dto.title } });
 
     // Notify all case members about the new session
@@ -581,12 +592,51 @@ export class CaseService {
   // --- Case Parties ---
   async addCaseParty(tenantSlug: string, caseId: string, dto: AddCasePartyDto, userId: string) {
     await this.ensureNotArchived(tenantSlug, caseId);
+
+    // Resolve partyId: frontend may send a customerId; auto-map to a party entity
+    let resolvedPartyId = dto.partyId;
+    const partyCheck: any[] = await this.prisma.queryTenant(
+      tenantSlug,
+      `SELECT id FROM parties WHERE id = $1 LIMIT 1`,
+      [dto.partyId],
+    );
+    if (!partyCheck?.length) {
+      // Not a direct party ID — check if it's a customerId
+      const linked: any[] = await this.prisma.queryTenant(
+        tenantSlug,
+        `SELECT id FROM parties WHERE customer_id = $1 LIMIT 1`,
+        [dto.partyId],
+      );
+      if (linked?.length) {
+        resolvedPartyId = linked[0].id;
+      } else {
+        // Auto-create a party linked to this customer
+        const customers: any[] = await this.prisma.queryTenant(
+          tenantSlug,
+          `SELECT * FROM customers WHERE id = $1 LIMIT 1`,
+          [dto.partyId],
+        );
+        if (!customers?.length) {
+          throw new NotFoundException(`No party or customer found with id ${dto.partyId}`);
+        }
+        const cust = customers[0];
+        const newPartyId = uuidv4();
+        await this.prisma.executeTenant(
+          tenantSlug,
+          `INSERT INTO parties (id, party_type, name, customer_id, created_at, updated_at)
+           VALUES ($1, $2, $3, $4, NOW(), NOW())`,
+          [newPartyId, cust.customer_type || 'Individual', cust.name, cust.id],
+        );
+        resolvedPartyId = newPartyId;
+      }
+    }
+
     const id = uuidv4();
     await this.prisma.executeTenant(
       tenantSlug,
       `INSERT INTO case_parties (id, case_id, party_id, party_role_type, participant_role_id, visibility_scope, notes, start_date, created_at)
        VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), NOW())`,
-      [id, caseId, dto.partyId, dto.partyRoleType, dto.participantRoleId || null,
+      [id, caseId, resolvedPartyId, dto.partyRoleType, dto.participantRoleId || null,
        dto.visibilityScope || 'LegalOnly', dto.notes || null],
     );
     return { id };

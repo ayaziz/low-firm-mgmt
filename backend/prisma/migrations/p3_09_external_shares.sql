@@ -8,7 +8,7 @@ CREATE TABLE IF NOT EXISTS external_share_links (
   id              UUID         PRIMARY KEY DEFAULT gen_random_uuid(),
   document_id     UUID         NOT NULL REFERENCES documents(id),
   token           VARCHAR(128) NOT NULL UNIQUE,
-  created_by      UUID         NOT NULL REFERENCES users(id),
+  created_by      UUID         NOT NULL, -- no FK: users.id is type text in public schema, incompatible with UUID
   expires_at      TIMESTAMPTZ,
   password_hash   VARCHAR(255),
   max_downloads   INT,

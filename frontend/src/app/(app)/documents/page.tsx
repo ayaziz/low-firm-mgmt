@@ -6,6 +6,9 @@ import { useTranslation } from 'react-i18next';
 import {
   Box,
   Button,
+  Card,
+  Chip,
+  Grid,
   MenuItem,
   Stack,
   TextField,
@@ -17,11 +20,12 @@ import {
   InsertDriveFile as FileIcon,
 } from '@mui/icons-material';
 import { documentApi, caseApi, adminApi } from '@/api';
-import type { Document as DocType, Case, MasterDataItem } from '@/types';
+import type { Document as DocType, Case, MasterDataItem, Folder } from '@/types';
 import PageHeader from '@/components/common/PageHeader';
 import DataGrid, { type Column } from '@/components/common/DataGrid';
 import StatusBadge from '@/components/common/StatusBadge';
 import DrawerForm from '@/components/common/DrawerForm';
+import FolderTree from '@/components/common/FolderTree';
 
 export default function DocumentListPage() {
   const { t } = useTranslation();
@@ -34,11 +38,16 @@ export default function DocumentListPage() {
   const [totalCount, setTotalCount] = useState(0);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [cases, setCases] = useState<Case[]>([]);
-  const [form, setForm] = useState({ title: '', caseId: '', docTypeId: '', confidentiality: 'Normal', description: '', tags: '' });
+  const [form, setForm] = useState({ title: '', caseId: '', docTypeId: '', confidentiality: 'Normal', description: '', tags: '', folderId: '' });
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [saving, setSaving] = useState(false);
   const [dragOver, setDragOver] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Folder sidebar state
+  const [selectedCaseId, setSelectedCaseId] = useState<string>('');
+  const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
+  const [casesForFilter, setCasesForFilter] = useState<Case[]>([]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -53,6 +62,11 @@ export default function DocumentListPage() {
   }, []);
 
   useEffect(() => { load(); }, [load]);
+
+  // Load cases for sidebar filter
+  useEffect(() => {
+    caseApi.list({ limit: 100 }).then(r => setCasesForFilter(r.data)).catch(() => {});
+  }, []);
 
   // Handle ?action=new from SpeedDial
   useEffect(() => {
@@ -85,6 +99,7 @@ export default function DocumentListPage() {
         confidentialityLevel: form.confidentiality,
         description: form.description || undefined,
         tags: form.tags ? form.tags.split(',').map(t => t.trim()).filter(Boolean) : undefined,
+        folderId: form.folderId || undefined,
       });
       if (result.uploadUrl) {
         await fetch(result.uploadUrl, {
@@ -102,7 +117,7 @@ export default function DocumentListPage() {
   };
 
   const resetForm = () => {
-    setForm({ title: '', caseId: '', docTypeId: '', confidentiality: 'Normal', description: '', tags: '' });
+    setForm({ title: '', caseId: '', docTypeId: '', confidentiality: 'Normal', description: '', tags: '', folderId: '' });
     setSelectedFile(null);
   };
 
@@ -117,6 +132,10 @@ export default function DocumentListPage() {
       }
     }
   };
+
+  const filteredDocs = selectedFolderId
+    ? docs.filter(d => (d as any).folder_id === selectedFolderId)
+    : docs;
 
   const columns: Column<DocType>[] = [
     { field: 'title', headerName: t('document.name'), sortable: true },
@@ -159,16 +178,61 @@ export default function DocumentListPage() {
         }
       />
 
-      <DataGrid<DocType>
-        columns={columns}
-        rows={docs}
-        loading={loading}
-        getRowId={(r) => r.id}
-        onRowClick={(row) => router.push(`/documents/${row.id}`)}
-        onRefresh={load}
-        emptyMessage={t('common.noData')}
-        totalCount={totalCount}
-      />
+      <Grid container spacing={2}>
+        {/* Left: Folder Sidebar */}
+        <Grid item xs={12} md={3}>
+          <Card sx={{ p: 2, mb: 2 }}>
+            <Typography variant="subtitle2" color="text.secondary" gutterBottom>
+              {t('document.filterByCase', 'Filter by Case')}
+            </Typography>
+            <TextField
+              select
+              fullWidth
+              size="small"
+              value={selectedCaseId}
+              onChange={(e) => { setSelectedCaseId(e.target.value); setSelectedFolderId(null); }}
+              label={t('case.title', 'Case')}
+            >
+              <MenuItem value="">— {t('common.all', 'All')} —</MenuItem>
+              {casesForFilter.map(c => (
+                <MenuItem key={c.id} value={c.id}>{c.title}</MenuItem>
+              ))}
+            </TextField>
+          </Card>
+          {selectedCaseId && (
+            <FolderTree
+              scopeType="case"
+              scopeId={selectedCaseId}
+              selectedFolderId={selectedFolderId ?? undefined}
+              onSelectFolder={(f) => setSelectedFolderId(prev => (prev === f.id ? null : f.id))}
+              showCreateButton
+            />
+          )}
+        </Grid>
+
+        {/* Right: Document List */}
+        <Grid item xs={12} md={9}>
+          {selectedFolderId && (
+            <Stack direction="row" alignItems="center" spacing={1} mb={1}>
+              <Chip
+                label={t('document.filteredByFolder', 'Folder filter active')}
+                size="small"
+                onDelete={() => setSelectedFolderId(null)}
+              />
+            </Stack>
+          )}
+          <DataGrid<DocType>
+            columns={columns}
+            rows={filteredDocs}
+            loading={loading}
+            getRowId={(r) => r.id}
+            onRowClick={(row) => router.push(`/documents/${row.id}`)}
+            onRefresh={load}
+            emptyMessage={t('common.noData')}
+            totalCount={filteredDocs.length}
+          />
+        </Grid>
+      </Grid>
 
       {/* Upload Drawer */}
       <DrawerForm
@@ -242,7 +306,7 @@ export default function DocumentListPage() {
             select
             fullWidth
             value={form.caseId}
-            onChange={(e) => setForm(f => ({ ...f, caseId: e.target.value }))}
+            onChange={(e) => setForm(f => ({ ...f, caseId: e.target.value, folderId: '' }))}
           >
             <MenuItem value="">— {t('common.noData')} —</MenuItem>
             {cases.map(c => (
@@ -251,6 +315,20 @@ export default function DocumentListPage() {
               </MenuItem>
             ))}
           </TextField>
+          {form.caseId && (
+            <Box>
+              <Typography variant="caption" color="text.secondary" gutterBottom>
+                {t('document.folder', 'Folder')}
+              </Typography>
+              <FolderTree
+                scopeType="case"
+                scopeId={form.caseId}
+                selectedFolderId={form.folderId || undefined}
+                onSelectFolder={(folder) => setForm(f => ({ ...f, folderId: f.folderId === folder.id ? '' : folder.id }))}
+                showCreateButton
+              />
+            </Box>
+          )}
           <TextField
             label={t('doctype.title')}
             select
@@ -296,3 +374,5 @@ export default function DocumentListPage() {
     </Box>
   );
 }
+
+
