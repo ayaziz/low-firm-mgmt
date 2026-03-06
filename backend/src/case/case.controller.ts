@@ -10,6 +10,7 @@ import {
   CreateSessionDto, UpdateSessionDto, RescheduleSessionDto,
   CreateNoteDto, UpdateNoteDto, CreateFilingDto, UpdateFilingDto,
   CreateCommunicationDto, UpdateCommunicationDto, AddCasePartyDto,
+  UpdateCasePartyDto,
 } from './case.dto';
 
 @Controller('cases')
@@ -90,6 +91,17 @@ export class CaseController {
   @Roles('TenantAdmin', 'SystemAdmin')
   removeMembership(@CurrentUser() user: any, @Param('id') id: string, @Param('userId') membershipUserId: string) {
     return this.caseService.removeMembershipByUser(user.tenantSlug, id, membershipUserId, user.sub);
+  }
+
+  @Patch(':id/memberships/:membershipId')
+  @Roles('TenantAdmin', 'SystemAdmin')
+  updateMembership(
+    @CurrentUser() user: any,
+    @Param('id') id: string,
+    @Param('membershipId') membershipId: string,
+    @Body() body: { role: string },
+  ) {
+    return this.caseService.updateMembership(user.tenantSlug, id, membershipId, body.role, user.sub);
   }
 
   // --- Case Customers ---
@@ -205,5 +217,26 @@ export class CaseController {
   @Get(':id/parties')
   listCaseParties(@CurrentUser() user: any, @Param('id') id: string) {
     return this.caseService.listCaseParties(user.tenantSlug, id);
+  }
+
+  @Patch(':id/parties/:partyLinkId')
+  @Roles('Lawyer', 'TenantAdmin', 'SystemAdmin')
+  updateCaseParty(
+    @CurrentUser() user: any,
+    @Param('id') id: string,
+    @Param('partyLinkId') partyLinkId: string,
+    @Body() dto: UpdateCasePartyDto,
+  ) {
+    return this.caseService.updateCaseParty(user.tenantSlug, id, partyLinkId, dto, user.sub);
+  }
+
+  @Delete(':id/parties/:partyLinkId')
+  @Roles('Lawyer', 'TenantAdmin', 'SystemAdmin')
+  deleteCaseParty(
+    @CurrentUser() user: any,
+    @Param('id') id: string,
+    @Param('partyLinkId') partyLinkId: string,
+  ) {
+    return this.caseService.deleteCaseParty(user.tenantSlug, id, partyLinkId, user.sub);
   }
 }

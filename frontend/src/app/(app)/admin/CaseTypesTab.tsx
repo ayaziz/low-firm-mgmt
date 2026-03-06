@@ -5,7 +5,7 @@ import { useTranslation } from 'react-i18next';
 import {
   Box, Button, IconButton, List, ListItem, ListItemText, Stack, TextField, Tooltip, Card, CardContent,
 } from '@mui/material';
-import { Add as AddIcon, Delete as DeleteIcon, Refresh as RefreshIcon } from '@mui/icons-material';
+import { Add as AddIcon, Delete as DeleteIcon, Edit as EditIcon, Refresh as RefreshIcon } from '@mui/icons-material';
 import { adminApi } from '@/api';
 import type { CaseType } from '@/types';
 import DrawerForm from '@/components/common/DrawerForm';
@@ -17,6 +17,7 @@ export default function CaseTypesTab() {
   const [caseTypes, setCaseTypes] = useState<CaseType[]>([]);
   const [loading, setLoading] = useState(true);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [editCaseType, setEditCaseType] = useState<CaseType | null>(null);
   const [form, setForm] = useState({ labelEn: '', labelAr: '', code: '' });
   const [saving, setSaving] = useState(false);
 
@@ -33,11 +34,35 @@ export default function CaseTypesTab() {
   const handleCreate = async () => {
     setSaving(true);
     try {
-      await adminApi.createCaseType({ labelEn: form.labelEn, labelAr: form.labelAr, code: form.code });
+      if (editCaseType) {
+        await adminApi.updateCaseType(editCaseType.id, {
+          label_en: form.labelEn,
+          label_ar: form.labelAr,
+        } as any);
+      } else {
+        await adminApi.createCaseType({ labelEn: form.labelEn, labelAr: form.labelAr, code: form.code });
+      }
       setDrawerOpen(false);
+      setEditCaseType(null);
       setForm({ labelEn: '', labelAr: '', code: '' });
       load();
     } finally { setSaving(false); }
+  };
+
+  const openCreate = () => {
+    setEditCaseType(null);
+    setForm({ labelEn: '', labelAr: '', code: '' });
+    setDrawerOpen(true);
+  };
+
+  const openEdit = (ct: CaseType) => {
+    setEditCaseType(ct);
+    setForm({
+      labelEn: ct.label_en || '',
+      labelAr: ct.label_ar || '',
+      code: ct.code || '',
+    });
+    setDrawerOpen(true);
   };
 
   const handleDelete = async (id: string) => {
@@ -51,7 +76,7 @@ export default function CaseTypesTab() {
         <Tooltip title={t('common.refresh', 'Refresh')}>
           <IconButton onClick={load}><RefreshIcon /></IconButton>
         </Tooltip>
-        <Button variant="contained" startIcon={<AddIcon />} onClick={() => setDrawerOpen(true)}>{t('common.add', 'Add')}</Button>
+        <Button variant="contained" startIcon={<AddIcon />} onClick={openCreate}>{t('common.add', 'Add')}</Button>
       </Stack>
 
       {loading && caseTypes.length === 0 ? <LoadingSkeleton variant="table" /> : caseTypes.length > 0 ? (
@@ -62,9 +87,14 @@ export default function CaseTypesTab() {
                 <ListItem
                   key={ct.id}
                   secondaryAction={
-                    <IconButton edge="end" size="small" color="error" onClick={() => handleDelete(ct.id)}>
-                      <DeleteIcon fontSize="small" />
-                    </IconButton>
+                    <Stack direction="row" spacing={0.5}>
+                      <IconButton edge="end" size="small" onClick={() => openEdit(ct)}>
+                        <EditIcon fontSize="small" />
+                      </IconButton>
+                      <IconButton edge="end" size="small" color="error" onClick={() => handleDelete(ct.id)}>
+                        <DeleteIcon fontSize="small" />
+                      </IconButton>
+                    </Stack>
                   }
                 >
                   <ListItemText primary={ct.label_en} secondary={`${ct.label_ar || ''} ${ct.code ? `(${ct.code})` : ''}`} />
@@ -77,11 +107,17 @@ export default function CaseTypesTab() {
         <EmptyState icon={<AddIcon />} title={t('common.noData', 'No data')} message={t('admin.noCaseTypes', 'No case types defined yet')} />
       )}
 
-      <DrawerForm open={drawerOpen} title={t('admin.addCaseType', 'Add Case Type')} onClose={() => setDrawerOpen(false)} onSubmit={handleCreate} loading={saving}>
+      <DrawerForm
+        open={drawerOpen}
+        title={editCaseType ? t('admin.editCaseType', 'Edit Case Type') : t('admin.addCaseType', 'Add Case Type')}
+        onClose={() => { setDrawerOpen(false); setEditCaseType(null); }}
+        onSubmit={handleCreate}
+        loading={saving}
+      >
         <Stack spacing={2.5}>
           <TextField label="Name (EN)" fullWidth required value={form.labelEn} onChange={e => setForm(f => ({ ...f, labelEn: e.target.value }))} />
           <TextField label="Name (AR)" fullWidth value={form.labelAr} onChange={e => setForm(f => ({ ...f, labelAr: e.target.value }))} />
-          <TextField label="Code" fullWidth value={form.code} onChange={e => setForm(f => ({ ...f, code: e.target.value }))} />
+          <TextField label="Code" fullWidth value={form.code} onChange={e => setForm(f => ({ ...f, code: e.target.value }))} disabled={!!editCaseType} />
         </Stack>
       </DrawerForm>
     </Box>

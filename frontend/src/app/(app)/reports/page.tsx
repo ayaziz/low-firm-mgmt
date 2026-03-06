@@ -34,10 +34,11 @@ import {
 } from 'recharts';
 import { reportApi } from '@/api';
 import { useAuth } from '@/context/AuthContext';
-import type { ReportResult } from '@/types';
+import type { ReportResult, KpiDashboard } from '@/types';
 import PageHeader from '@/components/common/PageHeader';
 import LoadingSkeleton from '@/components/common/LoadingSkeleton';
 import EmptyState from '@/components/common/EmptyState';
+import KPICard from '@/components/common/KPICard';
 
 const CHART_COLORS = ['#1B3A5C', '#2E7D32', '#ED6C02', '#D32F2F', '#1565C0', '#6A1B9A', '#00897B', '#EF6C00', '#546E7A'];
 
@@ -49,6 +50,7 @@ interface ReportDef {
 }
 
 const REPORTS: ReportDef[] = [
+  { slug: 'kpi-dashboard', label: 'KPI Dashboard', chart: 'table', roles: ['TenantAdmin', 'SystemAdmin'] },
   { slug: 'cases-by-state', label: 'Cases by State', chart: 'bar' },
   { slug: 'cases-by-type', label: 'Cases by Type', chart: 'pie' },
   { slug: 'cases-by-owner', label: 'Cases by Owner', chart: 'bar' },
@@ -61,21 +63,33 @@ const REPORTS: ReportDef[] = [
 ];
 
 export default function ReportsPage() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { hasAnyRole } = useAuth();
   const [selected, setSelected] = useState('cases-by-state');
   const [result, setResult] = useState<ReportResult | null>(null);
+  const [kpi, setKpi] = useState<KpiDashboard | null>(null);
   const [loading, setLoading] = useState(false);
   const [filters, setFilters] = useState<Record<string, string>>({});
 
   const visibleReports = REPORTS.filter(r => !r.roles || hasAnyRole(...(r.roles as any)));
   const currentDef = visibleReports.find(r => r.slug === selected) || visibleReports[0];
+  const formatCurrency = useCallback(
+    (amount: number) => new Intl.NumberFormat(i18n.language || undefined, { style: 'currency', currency: 'USD' }).format(amount || 0),
+    [i18n.language],
+  );
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await reportApi.generate(selected, filters);
-      setResult(res);
+      if (selected === 'kpi-dashboard') {
+        const res = await reportApi.kpiDashboard();
+        setKpi(res);
+        setResult(null);
+      } else {
+        const res = await reportApi.generate(selected, filters);
+        setResult(res);
+        setKpi(null);
+      }
     } finally {
       setLoading(false);
     }
@@ -193,7 +207,7 @@ export default function ReportsPage() {
                   onChange={e => { setSelected(e.target.value); setFilters({}); }}
                 >
                   {visibleReports.map(r => (
-                    <MenuItem key={r.slug} value={r.slug}>{r.label}</MenuItem>
+                    <MenuItem key={r.slug} value={r.slug}>{t(`reports.${r.slug}`, r.label)}</MenuItem>
                   ))}
                 </Select>
               </FormControl>
@@ -201,7 +215,7 @@ export default function ReportsPage() {
               {/* Context-sensitive filters */}
               {(selected === 'overdue-tasks') && (
                 <TextField
-                  fullWidth size="small" label="Priority"
+                  fullWidth size="small" label={t('case.priority', 'Priority')}
                   value={filters.priority || ''}
                   onChange={e => setFilters(f => ({ ...f, priority: e.target.value }))}
                   sx={{ mb: 1 }}
@@ -209,7 +223,7 @@ export default function ReportsPage() {
               )}
               {(selected === 'upcoming-sessions') && (
                 <TextField
-                  fullWidth size="small" label="Days ahead" type="number"
+                  fullWidth size="small" label={t('calendar.daysAhead', 'Days ahead')} type="number"
                   value={filters.days || '7'}
                   onChange={e => setFilters(f => ({ ...f, days: e.target.value }))}
                   sx={{ mb: 1 }}
@@ -218,18 +232,18 @@ export default function ReportsPage() {
               {(selected === 'completeness-gaps') && (
                 <>
                   <FormControl fullWidth size="small" sx={{ mb: 1 }}>
-                    <InputLabel>Entity Type</InputLabel>
+                    <InputLabel>{t('reports.entityType', 'Entity Type')}</InputLabel>
                     <Select
                       value={filters.entityType || 'customer'}
-                      label="Entity Type"
+                      label={t('reports.entityType', 'Entity Type')}
                       onChange={e => setFilters(f => ({ ...f, entityType: e.target.value }))}
                     >
-                      <MenuItem value="customer">Customer</MenuItem>
-                      <MenuItem value="case">Case</MenuItem>
+                      <MenuItem value="customer">{t('customer.title', 'Customer')}</MenuItem>
+                      <MenuItem value="case">{t('case.title', 'Case')}</MenuItem>
                     </Select>
                   </FormControl>
                   <TextField
-                    fullWidth size="small" label="Threshold (%)" type="number"
+                    fullWidth size="small" label={t('reports.thresholdPct', 'Threshold (%)')} type="number"
                     value={filters.thresholdPct || '80'}
                     onChange={e => setFilters(f => ({ ...f, thresholdPct: e.target.value }))}
                     sx={{ mb: 1 }}
@@ -239,12 +253,12 @@ export default function ReportsPage() {
               {(selected === 'cashflow') && (
                 <Stack spacing={1}>
                   <TextField
-                    fullWidth size="small" label="Start Month" placeholder="2024-01"
+                    fullWidth size="small" label={t('reports.startMonth', 'Start Month')} placeholder="2024-01"
                     value={filters.startMonth || ''}
                     onChange={e => setFilters(f => ({ ...f, startMonth: e.target.value }))}
                   />
                   <TextField
-                    fullWidth size="small" label="End Month" placeholder="2024-12"
+                    fullWidth size="small" label={t('reports.endMonth', 'End Month')} placeholder="2024-12"
                     value={filters.endMonth || ''}
                     onChange={e => setFilters(f => ({ ...f, endMonth: e.target.value }))}
                   />
@@ -267,7 +281,7 @@ export default function ReportsPage() {
                   onClick={handleExport}
                   fullWidth
                 >
-                  CSV
+                  {t('reports.csv', 'CSV')}
                 </Button>
               </Stack>
             </CardContent>
@@ -278,16 +292,33 @@ export default function ReportsPage() {
         <Grid item xs={12} md={9}>
           <Card>
             <CardHeader
-              title={currentDef.label}
+              title={t(`reports.${currentDef.slug}`, currentDef.label)}
               subheader={
                 result?.metadata
-                  ? `Generated at ${new Date(result.metadata.generatedAt).toLocaleString()}`
+                  ? t('reports.generatedAt', 'Generated at {{value}}', { value: new Date(result.metadata.generatedAt).toLocaleString() })
                   : undefined
               }
             />
             <CardContent>
               {loading ? (
                 <LoadingSkeleton variant="cards" columns={1} />
+              ) : selected === 'kpi-dashboard' && kpi ? (
+                <Grid container spacing={2}>
+                  {[
+                    { label: t('dashboard.activeCases', 'Active Cases'), value: kpi.cases?.open ?? 0 },
+                    { label: t('reports.openInvoices', 'Open Invoices'), value: kpi.invoices?.outstanding ?? 0 },
+                    { label: t('reports.totalPayments', 'Total Payments'), value: formatCurrency(kpi.invoices?.totalCollected ?? 0) },
+                    { label: t('reports.totalExpenses', 'Total Expenses'), value: formatCurrency(kpi.expenses?.totalAmount ?? 0) },
+                    { label: t('dashboard.pendingWages', 'Pending Wages'), value: kpi.wages?.pendingApproval ?? 0 },
+                    { label: t('dashboard.overdueTasks', 'Overdue Tasks'), value: kpi.tasks?.overdueCount ?? 0 },
+                    { label: t('dashboard.upcomingSessions', 'Upcoming Sessions'), value: kpi.sessions?.upcomingCount ?? 0 },
+                    { label: t('reports.activity24h', 'Activity (24h)'), value: kpi.activity?.last24h ?? 0 },
+                  ].map((item, idx) => (
+                    <Grid item xs={6} sm={4} md={3} key={idx}>
+                      <KPICard title={item.label} value={item.value} color={CHART_COLORS[idx % CHART_COLORS.length]} />
+                    </Grid>
+                  ))}
+                </Grid>
               ) : (
                 renderChart()
               )}

@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { EmailService } from './email.service';
+import { SseService } from './sse.service';
 import { v4 as uuidv4 } from 'uuid';
 
 @Injectable()
@@ -10,6 +11,7 @@ export class NotificationService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly email: EmailService,
+    private readonly sse: SseService,
   ) {}
 
   async create(tenantSlug: string, data: {
@@ -27,6 +29,18 @@ export class NotificationService {
       `INSERT INTO notifications (id, user_id, title, body, type, entity_type, entity_id, is_read, created_at)
        VALUES ($1, $2, $3, $4, $5, $6, $7, false, NOW())`,
       [id, data.userId, data.title, data.body || null, data.type, data.entityType || null, data.entityId || null]);
+
+    // Push real-time SSE event
+    try {
+      this.sse.emit({
+        tenantSlug,
+        userId: data.userId,
+        type: 'notification',
+        data: { id, title: data.title, body: data.body, notificationType: data.type, entityType: data.entityType, entityId: data.entityId },
+      });
+    } catch (err) {
+      this.logger.warn(`SSE emit failed for notification ${id}: ${(err as Error).message}`);
+    }
 
     // Optionally send email
     if (data.sendEmail) {
@@ -91,5 +105,53 @@ export class NotificationService {
       return;
     }
     await this.email.sendNotificationEmail(rows[0].email, title, body);
+  }
+
+  // ── Notification Preferences ──────────────────────────────
+
+  async getPreferences(tenantSlug: string, userId: string) {
+    const rows: any[] = await this.prisma.queryTenant(
+      tenantSlug,
+      `SELECT * FROM notification_preferences WHERE user_id = $1`,
+      [userId],
+    );
+    if (rows?.length) return rows[0];
+
+    // Return defaults
+    return {
+      user_id: userId,
+      email_enabled: true,
+      in_app_enabled: true,
+      digest_frequency: 'daily',
+      hearing_reminder_hours: 24,
+    };
+  }
+
+  async updatePreferences(tenantSlug: string, userId: string, prefs: {
+    emailEnabled?: boolean;
+    inAppEnabled?: boolean;
+    digestFrequency?: string;
+    hearingReminderHours?: number;
+  }) {
+    await this.prisma.executeTenant(
+      tenantSlug,
+      `INSERT INTO notification_preferences (id, user_id, email_enabled, in_app_enabled, digest_frequency, hearing_reminder_hours, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, NOW())
+       ON CONFLICT (user_id) DO UPDATE SET
+         email_enabled = COALESCE($3, notification_preferences.email_enabled),
+         in_app_enabled = COALESCE($4, notification_preferences.in_app_enabled),
+         digest_frequency = COALESCE($5, notification_preferences.digest_frequency),
+         hearing_reminder_hours = COALESCE($6, notification_preferences.hearing_reminder_hours),
+         updated_at = NOW()`,
+      [
+        uuidv4(),
+        userId,
+        prefs.emailEnabled ?? true,
+        prefs.inAppEnabled ?? true,
+        prefs.digestFrequency ?? 'daily',
+        prefs.hearingReminderHours ?? 24,
+      ],
+    );
+    return this.getPreferences(tenantSlug, userId);
   }
 }

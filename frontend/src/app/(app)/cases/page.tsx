@@ -24,10 +24,21 @@ export default function CaseListPage() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [caseTypes, setCaseTypes] = useState<CaseType[]>([]);
-  const [form, setForm] = useState({ title: '', customerId: '', caseTypeId: '', description: '', primaryCourtId: '', primaryJudgeId: '' });
+	const [lawyers, setLawyers] = useState<Array<{ id: string; displayName: string }>>([]);
+	const [form, setForm] = useState({
+		title: '',
+		customerIds: [] as string[],
+		caseTypeId: '',
+		description: '',
+		courtCaseNumber: '',
+		assignedLawyerUserId: '',
+		primaryCourtId: '',
+		primaryJudgeId: '',
+	});
   const [saving, setSaving] = useState(false);
   const [courts, setCourts] = useState<Court[]>([]);
   const [judges, setJudges] = useState<any[]>([]);
+	const canSubmit = !!form.title.trim() && !!form.caseTypeId && form.customerIds.length > 0;
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -51,30 +62,35 @@ export default function CaseListPage() {
 
   const openDrawer = async () => {
     setDrawerOpen(true);
-    const [custRes, ctRes, courtRes] = await Promise.all([
+		const [custRes, ctRes, courtRes, usersRes] = await Promise.all([
       customerApi.list({ limit: 100 }).catch(() => ({ data: [] as Customer[], cursor: null })),
       adminApi.listCaseTypes().catch(() => [] as CaseType[]),
       courtApi.list({ limit: 200 }).catch(() => ({ data: [] as Court[], nextCursor: null })),
+			adminApi.listUsers().catch(() => ({ data: [] as Array<{ id: string; displayName: string; roles: string[] }> })),
     ]);
     setCustomers(custRes.data);
     setCaseTypes(ctRes.filter((ct: CaseType) => ct.is_active));
     const activeCourts = (courtRes.data || []).filter((c: any) => c.is_active !== false);
     setCourts(activeCourts);
+		setLawyers((usersRes.data || []).filter((u: any) => Array.isArray(u.roles) && u.roles.includes('Lawyer')));
   };
 
   const handleCreate = async () => {
+		if (!canSubmit) return;
     setSaving(true);
     try {
       const created = await caseApi.create({
         title: form.title,
         description: form.description || undefined,
         caseTypeId: form.caseTypeId,
-        customerIds: [form.customerId],
+				customerIds: form.customerIds,
+				assignedLawyerUserId: form.assignedLawyerUserId || undefined,
+				courtCaseNumber: form.courtCaseNumber || undefined,
         primaryCourtId: form.primaryCourtId || undefined,
         primaryJudgeId: form.primaryJudgeId || undefined,
       } as any);
       setDrawerOpen(false);
-      setForm({ title: '', customerId: '', caseTypeId: '', description: '', primaryCourtId: '', primaryJudgeId: '' });
+			setForm({ title: '', customerIds: [], caseTypeId: '', description: '', courtCaseNumber: '', assignedLawyerUserId: '', primaryCourtId: '', primaryJudgeId: '' });
       router.push(`/cases/${created.id}`);
     } finally {
       setSaving(false);
@@ -145,15 +161,18 @@ export default function CaseListPage() {
 					setDrawerOpen(false)
 					setForm({
 						title: '',
-						customerId: '',
+						customerIds: [],
 						caseTypeId: '',
 						description: '',
+						courtCaseNumber: '',
+						assignedLawyerUserId: '',
 						primaryCourtId: '',
 						primaryJudgeId: '',
 					})
 				}}
 				title={t('case.create')}
 				onSubmit={handleCreate}
+				submitDisabled={!canSubmit}
 				loading={saving}
 			>
 				<Stack spacing={2}>
@@ -165,18 +184,43 @@ export default function CaseListPage() {
 						onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
 					/>
 					<TextField
-						label={t('case.customer')}
+						label={t('case.customers', 'Customers')}
 						select
 						fullWidth
 						required
-						value={form.customerId}
+						SelectProps={{ multiple: true }}
+						value={form.customerIds}
 						onChange={(e) =>
-							setForm((f) => ({ ...f, customerId: e.target.value }))
+							setForm((f) => ({ ...f, customerIds: e.target.value as unknown as string[] }))
 						}
 					>
 						{customers.map((c) => (
 							<MenuItem key={c.id} value={c.id}>
 								{c.name}
+							</MenuItem>
+						))}
+					</TextField>
+					<TextField
+						label={t('case.courtCaseNumber', 'Court Case Number')}
+						fullWidth
+						value={form.courtCaseNumber}
+						onChange={(e) =>
+							setForm((f) => ({ ...f, courtCaseNumber: e.target.value }))
+						}
+					/>
+					<TextField
+						label={t('case.assignedLawyer', 'Assigned Lawyer')}
+						select
+						fullWidth
+						value={form.assignedLawyerUserId}
+						onChange={(e) =>
+							setForm((f) => ({ ...f, assignedLawyerUserId: e.target.value }))
+						}
+					>
+						<MenuItem value="">— {t('common.none', 'None')} —</MenuItem>
+						{lawyers.map((u) => (
+							<MenuItem key={u.id} value={u.id}>
+								{u.displayName}
 							</MenuItem>
 						))}
 					</TextField>

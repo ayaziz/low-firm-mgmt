@@ -2,16 +2,18 @@
 
 import React, { useEffect, useState, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Box, Button, IconButton, MenuItem, Stack, Tab, Tabs, TextField, Tooltip } from '@mui/material';
-import { Add as AddIcon, Edit as EditIcon } from '@mui/icons-material';
-import { calendarApi, caseApi } from '@/api';
-import type { CalendarEvent, CalendarEventType, Case } from '@/types';
+import { Autocomplete, Box, Button, FormControlLabel, IconButton, MenuItem, Stack, Switch, Tab, Tabs, TextField, Tooltip } from '@mui/material';
+import { Add as AddIcon, Delete as DeleteIcon, Edit as EditIcon } from '@mui/icons-material';
+import { calendarApi, caseApi, adminApi } from '@/api';
+import type { CalendarEvent, CalendarEventType, Case, UserInfo } from '@/types';
 import PageHeader from '@/components/common/PageHeader';
 import DataGrid, { type Column } from '@/components/common/DataGrid';
 import DrawerForm from '@/components/common/DrawerForm';
 import StatusBadge from '@/components/common/StatusBadge';
 
 const EVENT_TYPES: CalendarEventType[] = ['Hearing', 'Meeting', 'Deadline', 'Task', 'Reminder', 'Other'];
+const RECURRENCE_TYPES = ['None', 'Daily', 'Weekly', 'Monthly', 'Yearly'] as const;
+const REMINDER_CHANNELS = ['InApp', 'Email', 'Both'] as const;
 
 const emptyForm = {
   title: '',
@@ -21,6 +23,12 @@ const emptyForm = {
   location: '',
   description: '',
   case_id: '',
+  recurrence: 'None',
+  recurrence_end_date: '',
+  all_day: false,
+  attendee_user_ids: [] as string[],
+  reminder_minutes_before: '',
+  reminder_channel: 'InApp',
 };
 
 export default function CalendarPage() {
@@ -34,6 +42,7 @@ export default function CalendarPage() {
   const [saving, setSaving] = useState(false);
   const [editEvent, setEditEvent] = useState<CalendarEvent | null>(null);
   const [cases, setCases] = useState<Case[]>([]);
+  const [users, setUsers] = useState<UserInfo[]>([]);
   const [form, setForm] = useState({ ...emptyForm });
 
   const load = useCallback(
@@ -61,8 +70,12 @@ export default function CalendarPage() {
   useEffect(() => { load(); }, [load]);
 
   const loadDropdowns = async () => {
-    const res = await caseApi.list({ limit: 200 }).catch(() => ({ data: [] as Case[] }));
-    setCases((res as any).data || []);
+    const [caseRes, usersRes] = await Promise.all([
+      caseApi.list({ limit: 200 }).catch(() => ({ data: [] as Case[] })),
+      adminApi.listUsers().catch(() => ({ data: [] as UserInfo[] })),
+    ]);
+    setCases((caseRes as any).data || []);
+    setUsers(Array.isArray(usersRes) ? usersRes : ((usersRes as any).data || []));
   };
 
   const openCreate = async () => {
@@ -82,6 +95,14 @@ export default function CalendarPage() {
       location: ev.location || '',
       description: (ev as any).description || '',
       case_id: (ev as any).case_id || '',
+      recurrence: (ev as any).recurrence || 'None',
+      recurrence_end_date: (ev as any).recurrence_end_date ? new Date((ev as any).recurrence_end_date).toISOString().slice(0, 10) : '',
+      all_day: !!((ev as any).all_day ?? ev.is_all_day),
+      attendee_user_ids: Array.isArray((ev as any).attendees)
+        ? (ev as any).attendees.map((a: any) => a.userId || a.user_id).filter(Boolean)
+        : [],
+      reminder_minutes_before: '',
+      reminder_channel: 'InApp',
     });
     setDrawerOpen(true);
     await loadDropdowns();
@@ -98,7 +119,17 @@ export default function CalendarPage() {
         location: form.location || undefined,
         description: form.description || undefined,
         case_id: form.case_id || undefined,
+        recurrence: form.recurrence === 'None' ? undefined : form.recurrence,
+        recurrence_end_date: form.recurrence_end_date ? new Date(form.recurrence_end_date).toISOString() : undefined,
+        is_all_day: form.all_day,
       } as any;
+      (payload as any).attendee_user_ids = form.attendee_user_ids.length ? form.attendee_user_ids : undefined;
+      if (form.reminder_minutes_before) {
+        (payload as any).reminders = [{
+          minutesBefore: Number(form.reminder_minutes_before),
+          channel: form.reminder_channel,
+        }];
+      }
       if (editEvent) {
         await calendarApi.update(editEvent.id, payload);
       } else {
@@ -111,6 +142,11 @@ export default function CalendarPage() {
     } finally {
       setSaving(false);
     }
+  };
+
+  const handleDelete = async (eventId: string) => {
+    await calendarApi.delete(eventId);
+    load();
   };
 
   const columns: Column<CalendarEvent>[] = [
@@ -162,15 +198,28 @@ export default function CalendarPage() {
       renderCell: (row) => row.location || '—',
     },
     {
+      field: 'attendees',
+      headerName: t('calendar.attendees', 'Attendees'),
+      width: 110,
+      renderCell: (row) => String(Array.isArray((row as any).attendees) ? (row as any).attendees.length : 0),
+    },
+    {
       field: '_actions',
-      headerName: '',
-      width: 60,
+      headerName: t('common.actions', 'Actions'),
+      width: 110,
       renderCell: (row) => (
-        <Tooltip title={t('common.edit', 'Edit')}>
-          <IconButton size="small" onClick={(e) => { e.stopPropagation(); openEdit(row); }}>
-            <EditIcon fontSize="small" />
-          </IconButton>
-        </Tooltip>
+        <Stack direction="row" spacing={0.5}>
+          <Tooltip title={t('common.edit', 'Edit')}>
+            <IconButton size="small" onClick={(e) => { e.stopPropagation(); openEdit(row); }}>
+              <EditIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
+          <Tooltip title={t('common.delete', 'Delete')}>
+            <IconButton size="small" color="error" onClick={(e) => { e.stopPropagation(); handleDelete(row.id); }}>
+              <DeleteIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
+        </Stack>
       ),
     },
   ];
@@ -242,6 +291,25 @@ export default function CalendarPage() {
             {cases.map(c => <MenuItem key={c.id} value={c.id}>{c.title} ({c.system_case_ref})</MenuItem>)}
           </TextField>
           <TextField
+            label={t('calendar.recurrence', 'Recurrence')}
+            select
+            fullWidth
+            value={form.recurrence}
+            onChange={e => setForm(f => ({ ...f, recurrence: e.target.value }))}
+          >
+            {RECURRENCE_TYPES.map(item => <MenuItem key={item} value={item}>{item}</MenuItem>)}
+          </TextField>
+          {form.recurrence !== 'None' && (
+            <TextField
+              label={t('calendar.recurrenceEnd', 'Recurrence End')}
+              type="date"
+              fullWidth
+              InputLabelProps={{ shrink: true }}
+              value={form.recurrence_end_date}
+              onChange={e => setForm(f => ({ ...f, recurrence_end_date: e.target.value }))}
+            />
+          )}
+          <TextField
             label={t('calendar.startTime', 'Start')}
             type="datetime-local"
             fullWidth required
@@ -269,6 +337,34 @@ export default function CalendarPage() {
             value={form.description}
             onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
           />
+          <FormControlLabel
+            control={<Switch checked={form.all_day} onChange={e => setForm(f => ({ ...f, all_day: e.target.checked }))} />}
+            label={t('calendar.allDay', 'All day')}
+          />
+          <Autocomplete
+            multiple
+            options={users}
+            getOptionLabel={(u: UserInfo) => u.displayName || u.email}
+            value={users.filter(u => form.attendee_user_ids.includes(u.id))}
+            onChange={(_, vals) => setForm(f => ({ ...f, attendee_user_ids: vals.map(v => v.id) }))}
+            renderInput={(params) => <TextField {...params} label={t('calendar.attendees', 'Attendees')} />}
+          />
+          <TextField
+            label={t('calendar.reminderMinutes', 'Reminder (minutes before)')}
+            type="number"
+            fullWidth
+            value={form.reminder_minutes_before}
+            onChange={e => setForm(f => ({ ...f, reminder_minutes_before: e.target.value }))}
+          />
+          <TextField
+            label={t('calendar.reminderChannel', 'Reminder Channel')}
+            select
+            fullWidth
+            value={form.reminder_channel}
+            onChange={e => setForm(f => ({ ...f, reminder_channel: e.target.value }))}
+          >
+            {REMINDER_CHANNELS.map(item => <MenuItem key={item} value={item}>{item}</MenuItem>)}
+          </TextField>
         </Stack>
       </DrawerForm>
     </Box>

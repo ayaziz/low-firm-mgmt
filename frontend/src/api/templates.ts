@@ -27,8 +27,8 @@ export const templateApi = {
     return patch<DocumentTemplate>(`/templates/${id}`, payload);
   },
 
-  render(templateId: string, data: Record<string, unknown>): Promise<{ rendered: string }> {
-    return post<{ rendered: string }>('/templates/render', { templateId, data });
+  render(templateId: string, data: Record<string, unknown>): Promise<{ rendered: string; templateName?: string; category?: string }> {
+    return post<{ rendered: string; templateName?: string; category?: string }>('/templates/render', { templateId, data });
   },
 
   generate(templateId: string, data: Record<string, unknown>, caseId: string, title: string): Promise<{ documentId: string; rendered: string }> {

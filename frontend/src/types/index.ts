@@ -13,7 +13,8 @@ export type CustomerStatus = 'Active' | 'Inactive' | 'Prospect';
 export type ConfidentialityLevel = 'Public' | 'Internal' | 'Confidential' | 'HighlyConfidential';
 export type ScanStatus = 'Pending' | 'Passed' | 'Failed';
 
-export type InvoiceStatus = 'Draft' | 'Finalized' | 'Sent' | 'Paid' | 'PartiallyPaid' | 'Voided';
+export type InvoiceStatus = 'Draft' | 'Finalized' | 'Review' | 'Approved' | 'Sent' | 'Paid' | 'PartiallyPaid' | 'Voided';
+export type WageStatus = 'Draft' | 'Submitted' | 'Approved' | 'Paid';
 export type ExpenseStatus = 'Draft' | 'Submitted' | 'Approved' | 'Rejected';
 
 export type TaskStatus = 'ToDo' | 'InProgress' | 'Done' | 'Cancelled';
@@ -57,6 +58,7 @@ export interface Customer {
 	customer_type: CustomerType
 	status: CustomerStatus
 	national_id?: string
+  passport_number?: string
 	registration_id?: string
 	tax_id?: string
 	notes?: string
@@ -267,12 +269,25 @@ export interface Wage {
   id: string;
   user_id: string;
   period: string;
-  base_amount: number;
-  bonus_amount: number;
+  amount: number;
+  gross_amount: number;
   deductions: number;
   net_amount: number;
+  staff_name?: string;
+  payment_status: WageStatus;
+  submitted_by?: string;
+  submitted_at?: string;
+  approved_by?: string;
+  approved_at?: string;
+  approval_comment?: string;
+  rejected_by?: string;
+  rejected_at?: string;
+  rejection_reason?: string;
+  paid_at?: string;
+  paid_by?: string;
   currency: string;
   notes?: string;
+  created_by: string;
   created_at: string;
 }
 
@@ -334,14 +349,14 @@ export interface SearchResult {
 
 // ── Audit ──
 export interface AuditEvent {
-  id: string;
-  entity_type: string;
-  entity_id: string;
-  action: string;
-  actor_id: string;
-  actor_name?: string;
-  details?: Record<string, unknown>;
-  created_at: string;
+	id: string
+	entity_type: string
+	entity_id: string
+	action: string
+	actor_id: string
+	actor_name?: string
+	details?: Record<string, unknown>
+	created_at: string
 }
 
 // ── Report ──
@@ -355,25 +370,31 @@ export interface ReportResult {
 }
 
 // ── Phase 2: Courts & Judges ──
-export type CourtType = 'Civil' | 'Criminal' | 'Family' | 'Commercial' | 'Administrative' | 'Labor' | 'Constitutional' | 'Appeal' | 'Cassation' | 'Other';
+export type JurisdictionLevel = 'District' | 'Appeal' | 'Supreme' | 'Specialized';
 
 export interface Court {
   id: string;
   name: string;
-  court_type: CourtType;
-  jurisdiction?: string;
-  address?: string;
+  department?: string;
+  circuit?: string;
+  jurisdiction_level?: JurisdictionLevel;
+  city?: string;
+  address_text?: string;
   phone?: string;
-  email?: string;
+  notes?: string;
   is_active: boolean;
   created_at: string;
   updated_at: string;
+  activeJudgeCount?: number;
+  court_type?: string;
+  jurisdiction?: string;
+  address?: string;
 }
 
 export interface Judge {
 	id: string
 	court_id: string
-	name: string
+	full_name: string
 	title?: string
 	specialization?: string
 	phone?: string
@@ -381,11 +402,13 @@ export interface Judge {
 	notes?: string
 	is_active: boolean
 	created_at: string
+	updated_at?: string
 	court_name?: string
+	name?: string
 }
 
 // ── Phase 2: Hearings ──
-export type HearingStatus = 'Scheduled' | 'Postponed' | 'Completed' | 'Cancelled';
+export type HearingStatus = 'Scheduled' | 'Confirmed' | 'InProgress' | 'Adjourned' | 'Completed' | 'Postponed' | 'Cancelled';
 
 export interface Hearing {
   id: string;
@@ -454,12 +477,11 @@ export type FolderScope = 'Case' | 'Customer' | 'General';
 
 export interface Folder {
   id: string;
-  case_id?: string;
-  parent_id?: string;
+  scope_type: 'case' | 'customer' | 'tenant';
+  scope_id: string;
+  parent_folder_id?: string;
   name: string;
-  scope: FolderScope;
-  path: string;
-  description?: string;
+  is_deleted?: boolean;
   created_by: string;
   created_at: string;
   updated_at: string;
@@ -527,6 +549,48 @@ export interface FulltextSearchResult {
   case_id: string;
   snippet: string;
   rank: number;
+}
+
+// ── Phase 3: Status History ──
+export interface StatusHistoryEntry {
+  id: string;
+  entity_type: string;
+  entity_id: string;
+  from_status: string | null;
+  to_status: string;
+  actor_user_id: string;
+  actor_name?: string;
+  comment?: string;
+  metadata?: Record<string, unknown>;
+  created_at: string;
+}
+
+// ── Phase 3: KPI Dashboard ──
+export interface KpiDashboard {
+  cases: { total: number; open: number; closed: number; newLast30Days: number };
+  invoices: {
+    total: number; totalInvoiced: number; totalCollected: number;
+    outstanding: number; draftCount: number; overdueCount: number;
+    collectedLast30Days: number;
+  };
+  expenses: { total: number; totalAmount: number; approvedAmount: number; pendingCount: number };
+  wages: { total: number; totalAmount: number; pendingApproval: number; approved: number };
+  tasks: { overdueCount: number };
+  sessions: { upcomingCount: number };
+  activity: { last24h: number };
+}
+
+// ── Phase 3: External Share ──
+export interface ExternalShareLink {
+  id: string;
+  document_id: string;
+  token: string;
+  expires_at?: string;
+  max_downloads?: number;
+  download_count: number;
+  is_revoked: boolean;
+  created_by: string;
+  created_at: string;
 }
 
 // ── Completeness ──

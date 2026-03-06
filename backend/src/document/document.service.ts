@@ -8,7 +8,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { StorageService } from './storage.service';
 import { v4 as uuidv4 } from 'uuid';
-import { CreateDocumentDto, CheckinDocumentDto, ShareDocumentDto } from './document.dto';
+import { CreateDocumentDto, CheckinDocumentDto, ShareDocumentDto, BulkDocumentIdsDto, BulkMoveToFolderDto } from './document.dto';
 
 const CHECKOUT_LOCK_HOURS = 4;
 const MAX_FILE_SIZE_MB = 50;
@@ -63,10 +63,12 @@ export class DocumentService {
     // Create document record
     await this.prisma.executeTenant(
       tenantSlug,
-      `INSERT INTO documents (id, title, doc_type_id, customer_id, case_id, confidentiality_level, description, tags, folder_id, current_version_id, is_checked_out, is_deleted, has_legal_hold, row_version, created_by, created_at, updated_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, false, false, false, $11, $12, NOW(), NOW())`,
+      `INSERT INTO documents (id, title, doc_type_id, customer_id, case_id, confidentiality_level, description, tags, folder_id, origin_module, origin_entity_type, origin_entity_id, expires_at, current_version_id, is_checked_out, is_deleted, has_legal_hold, row_version, created_by, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, false, false, false, $15, $16, NOW(), NOW())`,
       [docId, dto.title, dto.docTypeId, dto.customerId || null, dto.caseId || null,
-       dto.confidentialityLevel || 'Normal', dto.description || null, dto.tags || [], dto.folderId || null, versionId, rowVersion, userId],
+       dto.confidentialityLevel || 'Normal', dto.description || null, dto.tags || [], dto.folderId || null,
+       dto.originModule || null, dto.originEntityType || null, dto.originEntityId || null,
+       dto.expiresAt || null, versionId, rowVersion, userId],
     );
 
     // Create pending version
@@ -314,6 +316,74 @@ export class DocumentService {
     const hasMore = rows.length > limit;
     const data = hasMore ? rows.slice(0, limit) : rows;
 
+    return { data, nextCursor: hasMore && data.length > 0 ? data[data.length - 1].created_at : null, hasMore };
+  }
+
+  // ── Bulk Operations ──────────────────────────────────────
+
+  async bulkDelete(tenantSlug: string, dto: BulkDocumentIdsDto, userId: string) {
+    const placeholders = dto.documentIds.map((_, i) => `$${i + 1}`).join(', ');
+    // Only soft-delete docs NOT under legal hold
+    await this.prisma.executeTenant(
+      tenantSlug,
+      `UPDATE documents SET is_deleted = TRUE, updated_at = NOW()
+       WHERE id IN (${placeholders}) AND has_legal_hold = FALSE`,
+      dto.documentIds,
+    );
+    await this.audit.log({
+      tenantSlug, eventType: 'BULK_DOC_DELETED', actorUserId: userId,
+      entityType: 'Document', entityId: dto.documentIds[0],
+      payload: { documentIds: dto.documentIds },
+    });
+    return { deleted: dto.documentIds.length };
+  }
+
+  async bulkMoveToFolder(tenantSlug: string, dto: BulkMoveToFolderDto, userId: string) {
+    const placeholders = dto.documentIds.map((_, i) => `$${i + 2}`).join(', ');
+    await this.prisma.executeTenant(
+      tenantSlug,
+      `UPDATE documents SET folder_id = $1, updated_at = NOW()
+       WHERE id IN (${placeholders})`,
+      [dto.folderId || null, ...dto.documentIds],
+    );
+    await this.audit.log({
+      tenantSlug, eventType: 'BULK_DOC_MOVED', actorUserId: userId,
+      entityType: 'Document', entityId: dto.documentIds[0],
+      payload: { documentIds: dto.documentIds, folderId: dto.folderId },
+    });
+    return { moved: dto.documentIds.length };
+  }
+
+  async bulkRestore(tenantSlug: string, dto: BulkDocumentIdsDto, userId: string) {
+    const placeholders = dto.documentIds.map((_, i) => `$${i + 1}`).join(', ');
+    await this.prisma.executeTenant(
+      tenantSlug,
+      `UPDATE documents SET is_deleted = FALSE, updated_at = NOW() WHERE id IN (${placeholders})`,
+      dto.documentIds,
+    );
+    await this.audit.log({
+      tenantSlug, eventType: 'BULK_DOC_RESTORED', actorUserId: userId,
+      entityType: 'Document', entityId: dto.documentIds[0],
+      payload: { documentIds: dto.documentIds },
+    });
+    return { restored: dto.documentIds.length };
+  }
+
+  // ── Origin lookup (for Rich Upload integration) ───────────
+  async listByOrigin(tenantSlug: string, originEntityType: string, originEntityId: string, cursor?: string, limit = 20) {
+    let sql = `SELECT d.*, COALESCE(dv.original_filename, '') AS file_name, dv.scan_status
+               FROM documents d LEFT JOIN document_versions dv ON d.current_version_id = dv.id
+               WHERE d.origin_entity_type = $1 AND d.origin_entity_id = $2 AND d.is_deleted = FALSE`;
+    const params: any[] = [originEntityType, originEntityId];
+    let idx = 3;
+
+    if (cursor) { sql += ` AND d.created_at < $${idx++}`; params.push(cursor); }
+    sql += ` ORDER BY d.created_at DESC LIMIT $${idx}`;
+    params.push(limit + 1);
+
+    const rows: any[] = await this.prisma.queryTenant(tenantSlug, sql, params);
+    const hasMore = rows.length > limit;
+    const data = hasMore ? rows.slice(0, limit) : rows;
     return { data, nextCursor: hasMore && data.length > 0 ? data[data.length - 1].created_at : null, hasMore };
   }
 }

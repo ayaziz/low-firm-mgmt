@@ -3,6 +3,7 @@ import type { TimeEntry, TimeEntrySummary, PaginatedResult } from '@/types';
 
 /** Map snake_case TimeEntry fields → camelCase backend DTO */
 function toTimeEntryDto(data: Partial<TimeEntry>): Record<string, unknown> {
+  const payload = data as Record<string, unknown>;
   return {
     caseId: data.case_id,
     hearingId: data.hearing_id,
@@ -10,8 +11,9 @@ function toTimeEntryDto(data: Partial<TimeEntry>): Record<string, unknown> {
     hours: data.hours,
     description: data.description,
     activityType: data.activity_type,
-    ratePerHour: data.rate_per_hour,
+    ratePerHour: data.rate_per_hour ?? payload.rate,
     billable: data.billable,
+    taskId: payload.taskId ?? payload.task_id,
   };
 }
 

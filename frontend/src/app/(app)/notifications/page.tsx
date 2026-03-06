@@ -100,7 +100,7 @@ export default function NotificationsPage() {
                     </Stack>
                   }
                 />
-                {!n.is_read && <Chip label="New" size="small" color="primary" />}
+                {!n.is_read && <Chip label={t('common.new', 'New')} size="small" color="primary" />}
               </ListItemButton>
             ))}
           </List>

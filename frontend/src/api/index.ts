@@ -4,7 +4,7 @@ export { caseApi } from './cases';
 export { documentApi } from './documents';
 export { accountingApi } from './accounting';
 export { adminApi } from './admin';
-export { searchApi, notificationApi, auditApi, reportApi } from './misc';
+export { searchApi, notificationApi, auditApi, reportApi, statusHistoryApi } from './misc';
 export { courtApi } from './courts';
 export { hearingApi } from './hearings';
 export { calendarApi } from './calendar';

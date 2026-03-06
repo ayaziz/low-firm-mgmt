@@ -14,6 +14,10 @@ function toCalendarDto(data: Partial<CalendarEvent>): Record<string, unknown> {
     description: data.description,
     recurrence: data.recurrence,
     recurrenceEndDate: data.recurrence_end_date,
+    recurrenceRule: (data as any).recurrence_rule,
+    allDay: (data as any).all_day ?? data.is_all_day,
+    attendeeUserIds: (data as any).attendee_user_ids,
+    reminders: (data as any).reminders,
   };
 }
 

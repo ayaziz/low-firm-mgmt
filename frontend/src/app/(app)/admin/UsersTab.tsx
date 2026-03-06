@@ -30,7 +30,7 @@ export default function UsersTab() {
   const [loading, setLoading] = useState(true);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [editUser, setEditUser] = useState<UserItem | null>(null);
-  const [form, setForm] = useState({ email: '', displayName: '', password: '', roles: ['Lawyer'] });
+  const [form, setForm] = useState({ email: '', displayName: '', roles: ['Lawyer'] });
   const [saving, setSaving] = useState(false);
 
   const load = useCallback(async () => {
@@ -45,13 +45,13 @@ export default function UsersTab() {
 
   const openCreate = () => {
     setEditUser(null);
-    setForm({ email: '', displayName: '', password: '', roles: ['Lawyer'] });
+    setForm({ email: '', displayName: '', roles: ['Lawyer'] });
     setDrawerOpen(true);
   };
 
   const openEdit = (u: UserItem) => {
     setEditUser(u);
-    setForm({ email: u.email, displayName: u.displayName, password: '', roles: u.roles });
+    setForm({ email: u.email, displayName: u.displayName, roles: u.roles });
     setDrawerOpen(true);
   };
 
@@ -130,7 +130,6 @@ export default function UsersTab() {
         <Stack spacing={2.5}>
           <TextField label={t('auth.email', 'Email')} fullWidth required disabled={!!editUser} value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} />
           <TextField label={t('admin.displayName', 'Display Name')} fullWidth required value={form.displayName} onChange={e => setForm(f => ({ ...f, displayName: e.target.value }))} />
-          <TextField label={t('auth.password', 'Password')} type="password" fullWidth required={!editUser} value={form.password} onChange={e => setForm(f => ({ ...f, password: e.target.value }))} helperText={editUser ? 'Leave blank to keep current password' : ''} />
           <TextField label={t('admin.roles', 'Roles')} select fullWidth SelectProps={{ multiple: true }} value={form.roles} onChange={e => setForm(f => ({ ...f, roles: e.target.value as unknown as string[] }))}>
             {ROLE_OPTIONS.map(r => <MenuItem key={r} value={r}>{r}</MenuItem>)}
           </TextField>

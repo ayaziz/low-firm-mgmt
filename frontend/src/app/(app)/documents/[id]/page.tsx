@@ -56,8 +56,10 @@ export default function DocumentDetailPage() {
   const [doc, setDoc] = useState<(DocType & { versions: DocumentVersion[] }) | null>(null);
   const [loading, setLoading] = useState(true);
   const [shareDialogOpen, setShareDialogOpen] = useState(false);
-  const [shareEmail, setShareEmail] = useState('');
+  const [shareUserId, setShareUserId] = useState('');
   const isAdmin = hasAnyRole('TenantAdmin', 'SystemAdmin');
+  const isUuid = (value: string) =>
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value.trim());
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -90,10 +92,17 @@ export default function DocumentDetailPage() {
     input.onchange = async () => {
       const file = input.files?.[0];
       if (!file) return;
-      await documentApi.checkin(id, {
+      const result = await documentApi.checkin(id, {
         fileName: file.name,
         mimeType: file.type || 'application/octet-stream'
       });
+      if (result.uploadUrl) {
+        await fetch(result.uploadUrl, {
+          method: 'PUT',
+          body: file,
+          headers: { 'Content-Type': file.type || 'application/octet-stream' },
+        });
+      }
       load();
     };
     input.click();
@@ -105,10 +114,10 @@ export default function DocumentDetailPage() {
   };
 
   const handleShare = async () => {
-    if (!shareEmail) return;
-    await documentApi.share(id, { targetUserId: shareEmail, permission: 'view' });
+    if (!isUuid(shareUserId)) return;
+    await documentApi.share(id, { targetUserId: shareUserId.trim(), permission: 'View' });
     setShareDialogOpen(false);
-    setShareEmail('');
+    setShareUserId('');
   };
 
   const handleLegalHoldToggle = async () => {
@@ -182,6 +191,21 @@ export default function DocumentDetailPage() {
                 <DetailRow label={t('document.confidentiality')} value={doc.confidentiality} />
                 <DetailRow label={t('common.createdAt')} value={new Date(doc.created_at).toLocaleString()} />
                 {doc.case_id && <DetailRow label={t('case.title')} value={doc.case_id} />}
+                {(doc as any).folder_id && (
+                  <Box display="flex" justifyContent="space-between">
+                    <Typography variant="body2" color="text.secondary">{t('document.folder', 'Folder')}</Typography>
+                    <Chip label={(doc as any).folder_name || (doc as any).folder_id} size="small" />
+                  </Box>
+                )}
+                {(doc as any).expires_at && (
+                  <Box display="flex" justifyContent="space-between">
+                    <Typography variant="body2" color="text.secondary">{t('document.expiresAt', 'Expires')}</Typography>
+                    <Typography variant="body2" color="error.main">{new Date((doc as any).expires_at).toLocaleDateString()}</Typography>
+                  </Box>
+                )}
+                {(doc as any).origin_module && (
+                  <DetailRow label={t('document.originModule', 'Origin')} value={(doc as any).origin_module} />
+                )}
               </Stack>
             </CardContent>
           </Card>
@@ -275,6 +299,33 @@ export default function DocumentDetailPage() {
             </CardContent>
           </Card>
         </Grid>
+
+        {/* OCR Text */}
+        {(doc as any).ocr_text && (
+          <Grid item xs={12}>
+            <Card>
+              <CardHeader title={t('document.ocrText', 'Extracted Text (OCR)')} />
+              <CardContent>
+                <Box
+                  component="pre"
+                  sx={{
+                    whiteSpace: 'pre-wrap',
+                    wordBreak: 'break-word',
+                    fontFamily: 'monospace',
+                    fontSize: '0.75rem',
+                    bgcolor: 'grey.50',
+                    p: 2,
+                    borderRadius: 1,
+                    maxHeight: 300,
+                    overflowY: 'auto',
+                  }}
+                >
+                  {(doc as any).ocr_text}
+                </Box>
+              </CardContent>
+            </Card>
+          </Grid>
+        )}
       </Grid>
 
       {/* Share Dialog */}
@@ -283,17 +334,17 @@ export default function DocumentDetailPage() {
         <DialogContent>
           <Box mt={1}>
             <input
-              type="email"
-              placeholder="Email"
-              value={shareEmail}
-              onChange={e => setShareEmail(e.target.value)}
+              type="text"
+              placeholder="User ID (UUID)"
+              value={shareUserId}
+              onChange={e => setShareUserId(e.target.value)}
               style={{ width: '100%', padding: 8, fontSize: 14, borderRadius: 4, border: '1px solid #ccc' }}
             />
           </Box>
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setShareDialogOpen(false)}>{t('common.cancel')}</Button>
-          <Button variant="contained" onClick={handleShare} disabled={!shareEmail}>{t('document.share')}</Button>
+          <Button variant="contained" onClick={handleShare} disabled={!isUuid(shareUserId)}>{t('document.share')}</Button>
         </DialogActions>
       </Dialog>
     </Box>

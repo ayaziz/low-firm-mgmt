@@ -6,6 +6,9 @@ import { useTranslation } from 'react-i18next';
 import {
   Box,
   Button,
+  Card,
+  Chip,
+  Grid,
   MenuItem,
   Stack,
   TextField,
@@ -16,12 +19,13 @@ import {
   CloudUpload as UploadIcon,
   InsertDriveFile as FileIcon,
 } from '@mui/icons-material';
-import { documentApi, caseApi, adminApi } from '@/api';
-import type { Document as DocType, Case, MasterDataItem } from '@/types';
+import { documentApi, caseApi, adminApi, customerApi } from '@/api';
+import type { Document as DocType, Case, Customer, MasterDataItem, Folder } from '@/types';
 import PageHeader from '@/components/common/PageHeader';
 import DataGrid, { type Column } from '@/components/common/DataGrid';
 import StatusBadge from '@/components/common/StatusBadge';
 import DrawerForm from '@/components/common/DrawerForm';
+import FolderTree from '@/components/common/FolderTree';
 
 export default function DocumentListPage() {
   const { t } = useTranslation();
@@ -34,11 +38,30 @@ export default function DocumentListPage() {
   const [totalCount, setTotalCount] = useState(0);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [cases, setCases] = useState<Case[]>([]);
-  const [form, setForm] = useState({ title: '', caseId: '', docTypeId: '', confidentiality: 'Normal', description: '', tags: '' });
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [form, setForm] = useState({
+    title: '',
+    sourceType: 'case',
+    caseId: '',
+    customerId: '',
+    originModule: '',
+    originEntityType: '',
+    originEntityId: '',
+    docTypeId: '',
+    confidentiality: 'Normal',
+    description: '',
+    tags: '',
+    folderId: '',
+  });
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [saving, setSaving] = useState(false);
   const [dragOver, setDragOver] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Folder sidebar state
+  const [selectedCaseId, setSelectedCaseId] = useState<string>('');
+  const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
+  const [casesForFilter, setCasesForFilter] = useState<Case[]>([]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -54,6 +77,11 @@ export default function DocumentListPage() {
 
   useEffect(() => { load(); }, [load]);
 
+  // Load cases for sidebar filter
+  useEffect(() => {
+    caseApi.list({ limit: 100 }).then(r => setCasesForFilter(r.data)).catch(() => {});
+  }, []);
+
   // Handle ?action=new from SpeedDial
   useEffect(() => {
     if (searchParams.get('action') === 'new') {
@@ -64,11 +92,13 @@ export default function DocumentListPage() {
 
   const openDrawer = async () => {
     setDrawerOpen(true);
-    const [caseRes, dtRes] = await Promise.all([
+    const [caseRes, customerRes, dtRes] = await Promise.all([
       caseApi.list({ limit: 100 }).catch(() => ({ data: [], cursor: null })),
+      customerApi.list({ limit: 100 }).catch(() => ({ data: [], cursor: null })),
       adminApi.listMasterData('docType').catch(() => []),
     ]);
     setCases(caseRes.data);
+    setCustomers(customerRes.data);
     setDocTypes(dtRes);
   };
 
@@ -78,13 +108,18 @@ export default function DocumentListPage() {
     try {
       const result = await documentApi.create({
         title: form.title,
-        caseId: form.caseId || undefined,
+        caseId: form.sourceType === 'case' ? (form.caseId || undefined) : undefined,
+        customerId: form.sourceType === 'customer' ? (form.customerId || undefined) : undefined,
+        originModule: form.sourceType === 'origin' ? (form.originModule || undefined) : undefined,
+        originEntityType: form.sourceType === 'origin' ? (form.originEntityType || undefined) : undefined,
+        originEntityId: form.sourceType === 'origin' ? (form.originEntityId || undefined) : undefined,
         fileName: selectedFile.name,
         mimeType: selectedFile.type || 'application/octet-stream',
         docTypeId: form.docTypeId,
         confidentialityLevel: form.confidentiality,
         description: form.description || undefined,
         tags: form.tags ? form.tags.split(',').map(t => t.trim()).filter(Boolean) : undefined,
+        folderId: form.folderId || undefined,
       });
       if (result.uploadUrl) {
         await fetch(result.uploadUrl, {
@@ -102,7 +137,20 @@ export default function DocumentListPage() {
   };
 
   const resetForm = () => {
-    setForm({ title: '', caseId: '', docTypeId: '', confidentiality: 'Normal', description: '', tags: '' });
+    setForm({
+      title: '',
+      sourceType: 'case',
+      caseId: '',
+      customerId: '',
+      originModule: '',
+      originEntityType: '',
+      originEntityId: '',
+      docTypeId: '',
+      confidentiality: 'Normal',
+      description: '',
+      tags: '',
+      folderId: '',
+    });
     setSelectedFile(null);
   };
 
@@ -117,6 +165,10 @@ export default function DocumentListPage() {
       }
     }
   };
+
+  const filteredDocs = selectedFolderId
+    ? docs.filter(d => (d as any).folder_id === selectedFolderId)
+    : docs;
 
   const columns: Column<DocType>[] = [
     { field: 'title', headerName: t('document.name'), sortable: true },
@@ -159,16 +211,61 @@ export default function DocumentListPage() {
         }
       />
 
-      <DataGrid<DocType>
-        columns={columns}
-        rows={docs}
-        loading={loading}
-        getRowId={(r) => r.id}
-        onRowClick={(row) => router.push(`/documents/${row.id}`)}
-        onRefresh={load}
-        emptyMessage={t('common.noData')}
-        totalCount={totalCount}
-      />
+      <Grid container spacing={2}>
+        {/* Left: Folder Sidebar */}
+        <Grid item xs={12} md={3}>
+          <Card sx={{ p: 2, mb: 2 }}>
+            <Typography variant="subtitle2" color="text.secondary" gutterBottom>
+              {t('document.filterByCase', 'Filter by Case')}
+            </Typography>
+            <TextField
+              select
+              fullWidth
+              size="small"
+              value={selectedCaseId}
+              onChange={(e) => { setSelectedCaseId(e.target.value); setSelectedFolderId(null); }}
+              label={t('case.title', 'Case')}
+            >
+              <MenuItem value="">— {t('common.all', 'All')} —</MenuItem>
+              {casesForFilter.map(c => (
+                <MenuItem key={c.id} value={c.id}>{c.title}</MenuItem>
+              ))}
+            </TextField>
+          </Card>
+          {selectedCaseId && (
+            <FolderTree
+              scopeType="case"
+              scopeId={selectedCaseId}
+              selectedFolderId={selectedFolderId ?? undefined}
+              onSelectFolder={(f) => setSelectedFolderId(prev => (prev === f.id ? null : f.id))}
+              showCreateButton
+            />
+          )}
+        </Grid>
+
+        {/* Right: Document List */}
+        <Grid item xs={12} md={9}>
+          {selectedFolderId && (
+            <Stack direction="row" alignItems="center" spacing={1} mb={1}>
+              <Chip
+                label={t('document.filteredByFolder', 'Folder filter active')}
+                size="small"
+                onDelete={() => setSelectedFolderId(null)}
+              />
+            </Stack>
+          )}
+          <DataGrid<DocType>
+            columns={columns}
+            rows={filteredDocs}
+            loading={loading}
+            getRowId={(r) => r.id}
+            onRowClick={(row) => router.push(`/documents/${row.id}`)}
+            onRefresh={load}
+            emptyMessage={t('common.noData')}
+            totalCount={filteredDocs.length}
+          />
+        </Grid>
+      </Grid>
 
       {/* Upload Drawer */}
       <DrawerForm
@@ -238,19 +335,103 @@ export default function DocumentListPage() {
             onChange={(e) => setForm(f => ({ ...f, title: e.target.value }))}
           />
           <TextField
-            label={t('case.title')}
+            label={t('document.sourceType', 'Source Type')}
             select
             fullWidth
-            value={form.caseId}
-            onChange={(e) => setForm(f => ({ ...f, caseId: e.target.value }))}
+            value={form.sourceType}
+            onChange={(e) => setForm(f => ({ ...f, sourceType: e.target.value, caseId: '', customerId: '', folderId: '' }))}
           >
-            <MenuItem value="">— {t('common.noData')} —</MenuItem>
-            {cases.map(c => (
-              <MenuItem key={c.id} value={c.id}>
-                {c.title} ({c.system_case_ref})
-              </MenuItem>
-            ))}
+            <MenuItem value="case">{t('case.title', 'Case')}</MenuItem>
+            <MenuItem value="customer">{t('customer.title', 'Customer')}</MenuItem>
+            <MenuItem value="origin">{t('document.origin', 'Origin')}</MenuItem>
           </TextField>
+
+          {form.sourceType === 'case' && (
+            <TextField
+              label={t('case.title')}
+              select
+              fullWidth
+              value={form.caseId}
+              onChange={(e) => setForm(f => ({ ...f, caseId: e.target.value, folderId: '' }))}
+            >
+              <MenuItem value="">— {t('common.none', 'None')} —</MenuItem>
+              {cases.map(c => (
+                <MenuItem key={c.id} value={c.id}>
+                  {c.title} ({c.system_case_ref})
+                </MenuItem>
+              ))}
+            </TextField>
+          )}
+
+          {form.sourceType === 'customer' && (
+            <TextField
+              label={t('customer.title', 'Customer')}
+              select
+              fullWidth
+              value={form.customerId}
+              onChange={(e) => setForm(f => ({ ...f, customerId: e.target.value, folderId: '' }))}
+            >
+              <MenuItem value="">— {t('common.none', 'None')} —</MenuItem>
+              {customers.map(c => (
+                <MenuItem key={c.id} value={c.id}>
+                  {c.name}
+                </MenuItem>
+              ))}
+            </TextField>
+          )}
+
+          {form.sourceType === 'origin' && (
+            <Stack spacing={2}>
+              <TextField
+                label={t('document.originModule', 'Origin Module')}
+                fullWidth
+                value={form.originModule}
+                onChange={(e) => setForm(f => ({ ...f, originModule: e.target.value }))}
+              />
+              <TextField
+                label={t('document.originEntityType', 'Origin Entity Type')}
+                fullWidth
+                value={form.originEntityType}
+                onChange={(e) => setForm(f => ({ ...f, originEntityType: e.target.value }))}
+              />
+              <TextField
+                label={t('document.originEntityId', 'Origin Entity ID')}
+                fullWidth
+                value={form.originEntityId}
+                onChange={(e) => setForm(f => ({ ...f, originEntityId: e.target.value }))}
+              />
+            </Stack>
+          )}
+
+          {form.sourceType === 'case' && form.caseId && (
+            <Box>
+              <Typography variant="caption" color="text.secondary" gutterBottom>
+                {t('document.folder', 'Folder')}
+              </Typography>
+              <FolderTree
+                scopeType="case"
+                scopeId={form.caseId}
+                selectedFolderId={form.folderId || undefined}
+                onSelectFolder={(folder) => setForm(f => ({ ...f, folderId: f.folderId === folder.id ? '' : folder.id }))}
+                showCreateButton
+              />
+            </Box>
+          )}
+
+          {form.sourceType === 'customer' && form.customerId && (
+            <Box>
+              <Typography variant="caption" color="text.secondary" gutterBottom>
+                {t('document.folder', 'Folder')}
+              </Typography>
+              <FolderTree
+                scopeType="customer"
+                scopeId={form.customerId}
+                selectedFolderId={form.folderId || undefined}
+                onSelectFolder={(folder) => setForm(f => ({ ...f, folderId: f.folderId === folder.id ? '' : folder.id }))}
+                showCreateButton
+              />
+            </Box>
+          )}
           <TextField
             label={t('doctype.title')}
             select
@@ -296,3 +477,5 @@ export default function DocumentListPage() {
     </Box>
   );
 }
+
+

@@ -23,13 +23,19 @@ import {
 	UpdateExpenseDto,
 	UpdateInvoiceDto,
 	UpdatePaymentDto,
+	WageActionDto,
+	RejectWageDto,
+	InvoiceReviewActionDto,
+	RejectInvoiceReviewDto,
 } from './accounting.dto'
+import { StatusHistoryService } from '../status-history/status-history.service'
 
 @Injectable()
 export class AccountingService {
 	constructor(
 		private readonly prisma: PrismaService,
 		private readonly audit: AuditService,
+		private readonly statusHistory: StatusHistoryService,
 	) {}
 
 	// ===================== INVOICES =====================
@@ -189,9 +195,9 @@ export class AccountingService {
 
 	async markInvoiceSent(tenantSlug: string, invoiceId: string, userId: string) {
 		const inv = await this.getInvoiceById(tenantSlug, invoiceId)
-		if (inv.status !== 'Finalized')
+		if (!['Finalized', 'Approved'].includes(inv.status))
 			throw new UnprocessableEntityException(
-				'Invoice must be finalized before sending',
+				'Invoice must be finalized or approved before sending',
 			)
 
 		await this.prisma.executeTenant(
@@ -620,7 +626,7 @@ export class AccountingService {
 			`INSERT INTO wages (id, user_id, amount, period, notes, staff_name, deductions, gross_amount, net_amount, payment_status, created_by, created_at)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW())`,
 			[wageId, dto.userId, dto.amount, dto.period, dto.notes || null,
-			 dto.staffName || null, deductions, grossAmount, netAmount, dto.paymentStatus || 'Pending', userId],
+			 dto.staffName || null, deductions, grossAmount, netAmount, dto.paymentStatus || 'Draft', userId],
 		)
 		await this.audit.log({
 			tenantSlug,
@@ -664,6 +670,7 @@ export class AccountingService {
 	async updateWage(tenantSlug: string, wageId: string, dto: UpdateWageDto, userId: string) {
 		const rows: any[] = await this.prisma.queryTenant(tenantSlug, `SELECT * FROM wages WHERE id = $1`, [wageId])
 		if (!rows?.length) throw new NotFoundException('Wage not found')
+		if (!['Draft', 'Pending'].includes(rows[0].payment_status)) throw new UnprocessableEntityException('Only draft wages can be edited')
 
 		const sets: string[] = []
 		const params: any[] = []
@@ -675,7 +682,6 @@ export class AccountingService {
 		if (dto.deductions !== undefined) { sets.push(`deductions = $${idx++}`); params.push(dto.deductions) }
 		if (dto.grossAmount !== undefined) { sets.push(`gross_amount = $${idx++}`); params.push(dto.grossAmount) }
 		if (dto.netAmount !== undefined) { sets.push(`net_amount = $${idx++}`); params.push(dto.netAmount) }
-		if (dto.paymentStatus !== undefined) { sets.push(`payment_status = $${idx++}`); params.push(dto.paymentStatus) }
 		if (sets.length === 0) return rows[0]
 
 		params.push(wageId)
@@ -765,5 +771,121 @@ export class AccountingService {
 		await this.audit.log({ tenantSlug, eventType: 'PAYMENT_UPDATED', actorUserId: userId, entityType: 'Payment', entityId: paymentId, payload: dto })
 		const updated = await this.prisma.queryTenant(tenantSlug, `SELECT * FROM payments WHERE id = $1`, [paymentId])
 		return updated[0]
+	}
+
+	// ===================== WAGE APPROVAL FLOW =====================
+
+	async submitWage(tenantSlug: string, wageId: string, dto: WageActionDto, userId: string) {
+		const rows: any[] = await this.prisma.queryTenant(tenantSlug, `SELECT * FROM wages WHERE id = $1`, [wageId])
+		if (!rows?.length) throw new NotFoundException('Wage not found')
+		const wage = rows[0]
+		if (!['Draft', 'Pending'].includes(wage.payment_status))
+			throw new UnprocessableEntityException('Only draft wages can be submitted for approval')
+		if (!wage.amount || wage.amount <= 0)
+			throw new BadRequestException('Wage must have a positive amount before submission')
+
+		const fromStatus = wage.payment_status
+		await this.prisma.executeTenant(tenantSlug,
+			`UPDATE wages SET payment_status = 'Submitted', submitted_by = $1, submitted_at = NOW() WHERE id = $2`,
+			[userId, wageId])
+		await this.statusHistory.record({ tenantSlug, entityType: 'wage', entityId: wageId, fromStatus, toStatus: 'Submitted', actorUserId: userId, comment: dto.comment })
+		await this.audit.log({ tenantSlug, eventType: 'WAGE_SUBMITTED', actorUserId: userId, entityType: 'Wage', entityId: wageId })
+		const updated = await this.prisma.queryTenant(tenantSlug, `SELECT * FROM wages WHERE id = $1`, [wageId])
+		return updated[0]
+	}
+
+	async approveWage(tenantSlug: string, wageId: string, dto: WageActionDto, userId: string) {
+		const rows: any[] = await this.prisma.queryTenant(tenantSlug, `SELECT * FROM wages WHERE id = $1`, [wageId])
+		if (!rows?.length) throw new NotFoundException('Wage not found')
+		const wage = rows[0]
+		if (wage.payment_status !== 'Submitted')
+			throw new UnprocessableEntityException('Only submitted wages can be approved')
+		// Self-approval block
+		if (wage.submitted_by === userId)
+			throw new ForbiddenException('Cannot approve your own wage submission')
+
+		await this.prisma.executeTenant(tenantSlug,
+			`UPDATE wages SET payment_status = 'Approved', approved_by = $1, approved_at = NOW(), approval_comment = $2 WHERE id = $3`,
+			[userId, dto.comment || null, wageId])
+		await this.statusHistory.record({ tenantSlug, entityType: 'wage', entityId: wageId, fromStatus: 'Submitted', toStatus: 'Approved', actorUserId: userId, comment: dto.comment })
+		await this.audit.log({ tenantSlug, eventType: 'WAGE_APPROVED', actorUserId: userId, entityType: 'Wage', entityId: wageId, payload: { comment: dto.comment } })
+		const updated = await this.prisma.queryTenant(tenantSlug, `SELECT * FROM wages WHERE id = $1`, [wageId])
+		return updated[0]
+	}
+
+	async rejectWage(tenantSlug: string, wageId: string, dto: RejectWageDto, userId: string) {
+		const rows: any[] = await this.prisma.queryTenant(tenantSlug, `SELECT * FROM wages WHERE id = $1`, [wageId])
+		if (!rows?.length) throw new NotFoundException('Wage not found')
+		const wage = rows[0]
+		if (wage.payment_status !== 'Submitted')
+			throw new UnprocessableEntityException('Only submitted wages can be rejected')
+
+		await this.prisma.executeTenant(tenantSlug,
+			`UPDATE wages SET payment_status = 'Draft', rejected_by = $1, rejected_at = NOW(), rejection_reason = $2 WHERE id = $3`,
+			[userId, dto.reason, wageId])
+		await this.statusHistory.record({ tenantSlug, entityType: 'wage', entityId: wageId, fromStatus: 'Submitted', toStatus: 'Draft', actorUserId: userId, comment: dto.reason })
+		await this.audit.log({ tenantSlug, eventType: 'WAGE_REJECTED', actorUserId: userId, entityType: 'Wage', entityId: wageId, payload: { reason: dto.reason } })
+		const updated = await this.prisma.queryTenant(tenantSlug, `SELECT * FROM wages WHERE id = $1`, [wageId])
+		return updated[0]
+	}
+
+	async markWagePaid(tenantSlug: string, wageId: string, dto: WageActionDto, userId: string) {
+		const rows: any[] = await this.prisma.queryTenant(tenantSlug, `SELECT * FROM wages WHERE id = $1`, [wageId])
+		if (!rows?.length) throw new NotFoundException('Wage not found')
+		const wage = rows[0]
+		if (wage.payment_status !== 'Approved')
+			throw new UnprocessableEntityException('Only approved wages can be marked as paid')
+
+		await this.prisma.executeTenant(tenantSlug,
+			`UPDATE wages SET payment_status = 'Paid', paid_at = NOW(), paid_by = $1 WHERE id = $2`,
+			[userId, wageId])
+		await this.statusHistory.record({ tenantSlug, entityType: 'wage', entityId: wageId, fromStatus: 'Approved', toStatus: 'Paid', actorUserId: userId, comment: dto.comment })
+		await this.audit.log({ tenantSlug, eventType: 'WAGE_PAID', actorUserId: userId, entityType: 'Wage', entityId: wageId })
+		const updated = await this.prisma.queryTenant(tenantSlug, `SELECT * FROM wages WHERE id = $1`, [wageId])
+		return updated[0]
+	}
+
+	// ===================== INVOICE REVIEW FLOW =====================
+
+	async submitInvoiceForReview(tenantSlug: string, invoiceId: string, dto: InvoiceReviewActionDto, userId: string) {
+		const inv = await this.getInvoiceById(tenantSlug, invoiceId)
+		if (inv.status !== 'Finalized')
+			throw new UnprocessableEntityException('Only finalized invoices can be submitted for review')
+
+		await this.prisma.executeTenant(tenantSlug,
+			`UPDATE invoices SET status = 'Review', review_submitted_by = $1, review_submitted_at = NOW(), updated_at = NOW() WHERE id = $2`,
+			[userId, invoiceId])
+		await this.statusHistory.record({ tenantSlug, entityType: 'invoice', entityId: invoiceId, fromStatus: 'Finalized', toStatus: 'Review', actorUserId: userId, comment: dto.comment })
+		await this.audit.log({ tenantSlug, eventType: 'INVOICE_SUBMITTED_FOR_REVIEW', actorUserId: userId, entityType: 'Invoice', entityId: invoiceId })
+		return this.getInvoiceById(tenantSlug, invoiceId)
+	}
+
+	async approveInvoiceReview(tenantSlug: string, invoiceId: string, dto: InvoiceReviewActionDto, userId: string) {
+		const inv = await this.getInvoiceById(tenantSlug, invoiceId)
+		if (inv.status !== 'Review')
+			throw new UnprocessableEntityException('Only invoices in review can be approved')
+		// Self-approval block
+		if (inv.review_submitted_by === userId)
+			throw new ForbiddenException('Cannot approve your own invoice review submission')
+
+		await this.prisma.executeTenant(tenantSlug,
+			`UPDATE invoices SET status = 'Approved', review_approved_by = $1, review_decided_at = NOW(), updated_at = NOW() WHERE id = $2`,
+			[userId, invoiceId])
+		await this.statusHistory.record({ tenantSlug, entityType: 'invoice', entityId: invoiceId, fromStatus: 'Review', toStatus: 'Approved', actorUserId: userId, comment: dto.comment })
+		await this.audit.log({ tenantSlug, eventType: 'INVOICE_REVIEW_APPROVED', actorUserId: userId, entityType: 'Invoice', entityId: invoiceId })
+		return this.getInvoiceById(tenantSlug, invoiceId)
+	}
+
+	async rejectInvoiceReview(tenantSlug: string, invoiceId: string, dto: RejectInvoiceReviewDto, userId: string) {
+		const inv = await this.getInvoiceById(tenantSlug, invoiceId)
+		if (inv.status !== 'Review')
+			throw new UnprocessableEntityException('Only invoices in review can be rejected')
+
+		await this.prisma.executeTenant(tenantSlug,
+			`UPDATE invoices SET status = 'Draft', review_approved_by = NULL, review_submitted_by = NULL, review_submitted_at = NULL, review_decided_at = NULL, updated_at = NOW() WHERE id = $1`,
+			[invoiceId])
+		await this.statusHistory.record({ tenantSlug, entityType: 'invoice', entityId: invoiceId, fromStatus: 'Review', toStatus: 'Draft', actorUserId: userId, comment: dto.reason })
+		await this.audit.log({ tenantSlug, eventType: 'INVOICE_REVIEW_REJECTED', actorUserId: userId, entityType: 'Invoice', entityId: invoiceId, payload: { reason: dto.reason } })
+		return this.getInvoiceById(tenantSlug, invoiceId)
 	}
 }

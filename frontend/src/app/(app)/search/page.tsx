@@ -16,7 +16,7 @@ import EmptyState from '@/components/common/EmptyState';
 import LoadingSkeleton from '@/components/common/LoadingSkeleton';
 
 interface SearchResult {
-  id: string;
+  entityId: string;
   entityType: string;
   title: string;
   subtitle?: string;
@@ -51,7 +51,7 @@ export default function SearchPage() {
     setLoading(true);
     try {
       const res = await searchApi.search({ q, type: filter ?? undefined, limit: 50 });
-      setResults(Array.isArray(res) ? res as any : (res as any).data ?? []);
+      setResults(Array.isArray((res as any)?.results) ? (res as any).results : []);
     } finally { setLoading(false); }
   };
 
@@ -66,7 +66,12 @@ export default function SearchPage() {
 
   const handleFilterChange = (_: React.MouseEvent, val: string | null) => {
     setFilter(val);
-    if (query.trim()) doSearch(query);
+    if (query.trim()) {
+      setLoading(true);
+      searchApi.search({ q: query, type: val ?? undefined, limit: 50 })
+        .then(res => setResults(Array.isArray((res as any)?.results) ? (res as any).results : []))
+        .finally(() => setLoading(false));
+    }
   };
 
   const grouped = results.reduce<Record<string, SearchResult[]>>((acc, r) => {
@@ -102,7 +107,7 @@ export default function SearchPage() {
                   <Typography variant="subtitle2" color="text.secondary" textTransform="capitalize" mb={1}>{type}s ({items.length})</Typography>
                   <List dense disablePadding>
                     {items.map(item => (
-                      <ListItemButton key={item.id} onClick={() => router.push(`${entityPaths[type] ?? '/dashboard'}/${item.id}`)}>
+                      <ListItemButton key={item.entityId} onClick={() => router.push(`${entityPaths[type] ?? '/dashboard'}/${item.entityId}`)}>
                         <ListItemIcon sx={{ minWidth: 36 }}>{entityIcons[type] ?? <SearchIcon />}</ListItemIcon>
                         <ListItemText primary={item.title ?? item.name} secondary={item.subtitle ?? item.description ?? ''} />
                       </ListItemButton>

@@ -65,6 +65,7 @@ export interface DataGridProps<T> {
   maxHeight?: number | string;
   emptyMessage?: string;
   emptyAction?: React.ReactNode;
+  errorMessage?: string;
 }
 
 export default function DataGrid<T extends Record<string, any>>({
@@ -90,6 +91,7 @@ export default function DataGrid<T extends Record<string, any>>({
   maxHeight,
   emptyMessage,
   emptyAction,
+  errorMessage,
 }: DataGridProps<T>) {
   const { t } = useTranslation();
   const [localSearch, setLocalSearch] = useState('');
@@ -205,6 +207,12 @@ export default function DataGrid<T extends Record<string, any>>({
               <TableRow>
                 <TableCell colSpan={columns.length} align="center" sx={{ py: 6 }}>
                   <CircularProgress size={32} />
+                </TableCell>
+              </TableRow>
+            ) : errorMessage ? (
+              <TableRow>
+                <TableCell colSpan={columns.length}>
+                  <EmptyState message={errorMessage} action={emptyAction} />
                 </TableCell>
               </TableRow>
             ) : displayRows.length === 0 ? (

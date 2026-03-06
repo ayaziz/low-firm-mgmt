@@ -2,12 +2,19 @@ import { get, post, patch, del } from './client';
 import type { Folder, Document, PaginatedResult } from '@/types';
 
 export const folderApi = {
-  listByCase(caseId: string, params?: Record<string, string | number | boolean | undefined>): Promise<PaginatedResult<Folder>> {
-    return get<PaginatedResult<Folder>>(`/folders/case/${caseId}`, params);
+  /** List folders by scope (case / customer / tenant) */
+  listByScope(scopeType: string, scopeId: string, params?: Record<string, string | number | boolean | undefined>): Promise<PaginatedResult<Folder>> {
+    return get<PaginatedResult<Folder>>(`/folders/scope/${scopeType}/${scopeId}`, params);
   },
 
-  getTree(caseId: string): Promise<Folder[]> {
-    return get<Folder[]>(`/folders/case/${caseId}/tree`);
+  /** Convenience: list folders for a case */
+  listByCase(caseId: string, params?: Record<string, string | number | boolean | undefined>): Promise<PaginatedResult<Folder>> {
+    return this.listByScope('case', caseId, params);
+  },
+
+  /** Get recursive tree for a scope */
+  getTree(scopeType: string, scopeId: string): Promise<Folder[]> {
+    return get<Folder[]>(`/folders/scope/${scopeType}/${scopeId}/tree`);
   },
 
   getById(id: string): Promise<Folder> {
@@ -18,7 +25,7 @@ export const folderApi = {
     return get<PaginatedResult<Document>>(`/folders/${folderId}/documents`, params);
   },
 
-  create(data: Partial<Folder>): Promise<Folder> {
+  create(data: { name: string; scopeType: string; scopeId: string; parentFolderId?: string }): Promise<Folder> {
     return post<Folder>('/folders', data);
   },
 

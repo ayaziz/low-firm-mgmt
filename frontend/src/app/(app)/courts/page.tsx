@@ -27,7 +27,7 @@ import {
   Edit as EditIcon,
 } from '@mui/icons-material';
 import { courtApi } from '@/api';
-import type { Court, Judge, CourtType } from '@/types';
+import type { Court, Judge, JurisdictionLevel } from '@/types';
 import { useAuth } from '@/context/AuthContext';
 import PageHeader from '@/components/common/PageHeader';
 import DrawerForm from '@/components/common/DrawerForm';
@@ -35,9 +35,8 @@ import StatusBadge from '@/components/common/StatusBadge';
 import LoadingSkeleton from '@/components/common/LoadingSkeleton';
 import EmptyState from '@/components/common/EmptyState';
 
-const COURT_TYPES: CourtType[] = [
-  'Civil', 'Criminal', 'Family', 'Commercial', 'Administrative',
-  'Labor', 'Constitutional', 'Appeal', 'Cassation', 'Other',
+const JURISDICTION_LEVELS: JurisdictionLevel[] = [
+  'District', 'Appeal', 'Supreme', 'Specialized',
 ];
 
 export default function CourtsPage() {
@@ -52,7 +51,14 @@ export default function CourtsPage() {
   /* ----- Court drawer ----- */
   const [courtOpen, setCourtOpen] = useState(false);
   const [courtForm, setCourtForm] = useState({
-    name: '', court_type: 'Civil' as CourtType, jurisdiction: '', address: '', phone: '', email: '',
+    name: '',
+    department: '',
+    circuit: '',
+    jurisdictionLevel: 'District' as JurisdictionLevel,
+    city: '',
+    addressText: '',
+    phone: '',
+    notes: '',
   });
   const [courtSaving, setCourtSaving] = useState(false);
   const [editCourt, setEditCourt] = useState<Court | null>(null);
@@ -96,7 +102,16 @@ export default function CourtsPage() {
   /* ---------- court CRUD ---------- */
   const openCreateCourt = () => {
     setEditCourt(null);
-    setCourtForm({ name: '', court_type: 'Civil', jurisdiction: '', address: '', phone: '', email: '' });
+    setCourtForm({
+      name: '',
+      department: '',
+      circuit: '',
+      jurisdictionLevel: 'District',
+      city: '',
+      addressText: '',
+      phone: '',
+      notes: '',
+    });
     setCourtOpen(true);
   };
 
@@ -104,11 +119,13 @@ export default function CourtsPage() {
     setEditCourt(court);
     setCourtForm({
       name: court.name || '',
-      court_type: court.court_type || 'Civil',
-      jurisdiction: court.jurisdiction || '',
-      address: court.address || '',
+      department: court.department || '',
+      circuit: court.circuit || '',
+      jurisdictionLevel: (court.jurisdiction_level || 'District') as JurisdictionLevel,
+      city: court.city || '',
+      addressText: court.address_text || '',
       phone: court.phone || '',
-      email: court.email || '',
+      notes: court.notes || '',
     });
     setCourtOpen(true);
   };
@@ -116,28 +133,33 @@ export default function CourtsPage() {
   const handleSaveCourt = async () => {
     setCourtSaving(true);
     try {
+      const courtPayload = {
+        name: courtForm.name,
+        department: courtForm.department || undefined,
+        circuit: courtForm.circuit || undefined,
+        jurisdictionLevel: courtForm.jurisdictionLevel || undefined,
+        city: courtForm.city || undefined,
+        addressText: courtForm.addressText || undefined,
+        phone: courtForm.phone || undefined,
+        notes: courtForm.notes || undefined,
+      };
       if (editCourt) {
-        await courtApi.update(editCourt.id, {
-          name: courtForm.name,
-          court_type: courtForm.court_type,
-          jurisdiction: courtForm.jurisdiction || undefined,
-          address: courtForm.address || undefined,
-          phone: courtForm.phone || undefined,
-          email: courtForm.email || undefined,
-        } as any);
+        await courtApi.update(editCourt.id, courtPayload as any);
       } else {
-        await courtApi.create({
-          name: courtForm.name,
-          court_type: courtForm.court_type,
-          jurisdiction: courtForm.jurisdiction || undefined,
-          address: courtForm.address || undefined,
-          phone: courtForm.phone || undefined,
-          email: courtForm.email || undefined,
-        });
+        await courtApi.create(courtPayload as any);
       }
       setCourtOpen(false);
       setEditCourt(null);
-      setCourtForm({ name: '', court_type: 'Civil', jurisdiction: '', address: '', phone: '', email: '' });
+      setCourtForm({
+        name: '',
+        department: '',
+        circuit: '',
+        jurisdictionLevel: 'District',
+        city: '',
+        addressText: '',
+        phone: '',
+        notes: '',
+      });
       load();
     } finally { setCourtSaving(false); }
   };
@@ -154,7 +176,7 @@ export default function CourtsPage() {
     setEditJudge(judge);
     setSelectedCourtId(courtId);
     setJudgeForm({
-			fullName: judge.name || '',
+      fullName: judge.full_name || judge.name || '',
 			title: judge.title || '',
 			specialization: judge.specialization || '',
 			phone: judge.phone || '',
@@ -236,9 +258,9 @@ export default function CourtsPage() {
                 <Stack direction="row" spacing={2} alignItems="center" flex={1}>
                   <CourtIcon color="primary" fontSize="small" />
                   <Typography fontWeight={600}>{court.name}</Typography>
-                  <StatusBadge status={court.court_type} variant="outlined" />
-                  {court.jurisdiction && (
-                    <Typography variant="body2" color="text.secondary">{court.jurisdiction}</Typography>
+                  <StatusBadge status={court.jurisdiction_level || court.department || '—'} variant="outlined" />
+                  {court.city && (
+                    <Typography variant="body2" color="text.secondary">{court.city}</Typography>
                   )}
                   {!court.is_active && <StatusBadge status="Inactive" />}
                   {canManage && (
@@ -250,9 +272,19 @@ export default function CourtsPage() {
               </AccordionSummary>
               <AccordionDetails>
                 <Stack spacing={1} mb={2}>
-                  {court.address && (
+                  {court.department && (
                     <Typography variant="body2">
-                      <strong>{t('court.address', 'Address')}:</strong> {court.address}
+                      <strong>{t('court.department', 'Department')}:</strong> {court.department}
+                    </Typography>
+                  )}
+                  {court.circuit && (
+                    <Typography variant="body2">
+                      <strong>{t('court.circuit', 'Circuit')}:</strong> {court.circuit}
+                    </Typography>
+                  )}
+                  {court.address_text && (
+                    <Typography variant="body2">
+                      <strong>{t('court.address', 'Address')}:</strong> {court.address_text}
                     </Typography>
                   )}
                   {court.phone && (
@@ -260,9 +292,9 @@ export default function CourtsPage() {
                       <strong>{t('court.phone', 'Phone')}:</strong> {court.phone}
                     </Typography>
                   )}
-                  {court.email && (
+                  {court.notes && (
                     <Typography variant="body2">
-                      <strong>{t('court.email', 'Email')}:</strong> {court.email}
+                      <strong>{t('court.notes', 'Notes')}:</strong> {court.notes}
                     </Typography>
                   )}
                 </Stack>
@@ -290,12 +322,13 @@ export default function CourtsPage() {
                         <TableCell>{t('court.judgeTitle', 'Title')}</TableCell>
                         <TableCell>{t('court.chamber', 'Chamber')}</TableCell>
                         <TableCell>{t('court.contact', 'Contact')}</TableCell>
+                        {canManage && <TableCell>{t('common.actions', 'Actions')}</TableCell>}
                       </TableRow>
                     </TableHead>
                     <TableBody>
                       {judges[court.id].map(j => (
                         <TableRow key={j.id}>
-                          <TableCell>{j.name}</TableCell>
+                          <TableCell>{j.full_name || j.name}</TableCell>
                           <TableCell>{j.title || '—'}</TableCell>
                           <TableCell>{j.specialization || '—'}</TableCell>
                           <TableCell>{j.email || j.phone || '—'}</TableCell>
@@ -346,24 +379,36 @@ export default function CourtsPage() {
             onChange={e => setCourtForm(f => ({ ...f, name: e.target.value }))}
           />
           <TextField
-            label={t('court.courtType', 'Court Type')}
+            label={t('court.department', 'Department')}
+            fullWidth
+            value={courtForm.department}
+            onChange={e => setCourtForm(f => ({ ...f, department: e.target.value }))}
+          />
+          <TextField
+            label={t('court.circuit', 'Circuit')}
+            fullWidth
+            value={courtForm.circuit}
+            onChange={e => setCourtForm(f => ({ ...f, circuit: e.target.value }))}
+          />
+          <TextField
+            label={t('court.jurisdictionLevel', 'Jurisdiction Level')}
             select fullWidth
-            value={courtForm.court_type}
-            onChange={e => setCourtForm(f => ({ ...f, court_type: e.target.value as CourtType }))}
+            value={courtForm.jurisdictionLevel}
+            onChange={e => setCourtForm(f => ({ ...f, jurisdictionLevel: e.target.value as JurisdictionLevel }))}
           >
-            {COURT_TYPES.map(ct => <MenuItem key={ct} value={ct}>{ct}</MenuItem>)}
+            {JURISDICTION_LEVELS.map(level => <MenuItem key={level} value={level}>{level}</MenuItem>)}
           </TextField>
           <TextField
-            label={t('court.jurisdiction', 'Jurisdiction')}
+            label={t('court.city', 'City')}
             fullWidth
-            value={courtForm.jurisdiction}
-            onChange={e => setCourtForm(f => ({ ...f, jurisdiction: e.target.value }))}
+            value={courtForm.city}
+            onChange={e => setCourtForm(f => ({ ...f, city: e.target.value }))}
           />
           <TextField
             label={t('court.address', 'Address')}
             fullWidth
-            value={courtForm.address}
-            onChange={e => setCourtForm(f => ({ ...f, address: e.target.value }))}
+            value={courtForm.addressText}
+            onChange={e => setCourtForm(f => ({ ...f, addressText: e.target.value }))}
           />
           <TextField
             label={t('court.phone', 'Phone')}
@@ -372,10 +417,12 @@ export default function CourtsPage() {
             onChange={e => setCourtForm(f => ({ ...f, phone: e.target.value }))}
           />
           <TextField
-            label={t('court.email', 'Email')}
+            label={t('court.notes', 'Notes')}
             fullWidth
-            value={courtForm.email}
-            onChange={e => setCourtForm(f => ({ ...f, email: e.target.value }))}
+            multiline
+            minRows={2}
+            value={courtForm.notes}
+            onChange={e => setCourtForm(f => ({ ...f, notes: e.target.value }))}
           />
         </Stack>
       </DrawerForm>

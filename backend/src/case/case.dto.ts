@@ -153,31 +153,35 @@ export class UpdateTaskDto {
 }
 
 export class CreateSessionDto {
-  @IsString()
-  title: string;
+	@IsString()
+	title: string
 
-  @IsUUID()
-  typeId: string;
+	@IsUUID()
+	typeId: string
 
-  @IsDateString()
-  startDateTime: string;
+	@IsDateString()
+	startDateTime: string
 
-  @IsOptional()
-  @IsDateString()
-  endDateTime?: string;
+	@IsOptional()
+	@IsDateString()
+	endDateTime?: string
 
-  @IsOptional()
-  @IsString()
-  location?: string;
+	@IsOptional()
+	@IsString()
+	location?: string
 
-  @IsOptional()
-  @IsUUID()
-  courtId?: string;
+	@IsOptional()
+	@IsUUID()
+	courtId?: string
 
-  @IsOptional()
-  @IsArray()
-  @IsUUID('4', { each: true })
-  linkedDocumentIds?: string[];
+	@IsOptional()
+	@IsArray()
+	@IsUUID('4', { each: true })
+	linkedDocumentIds?: string[]
+
+	@IsOptional()
+	@IsBoolean()
+	isBillable: boolean
 }
 
 export class UpdateSessionDto {
@@ -347,6 +351,24 @@ export class AddCasePartyDto {
 
   @IsEnum(['Customer', 'Opposing', 'ExternalCounsel', 'Other'])
   partyRoleType: string;
+
+  @IsOptional()
+  @IsUUID()
+  participantRoleId?: string;
+
+  @IsOptional()
+  @IsEnum(['LegalOnly', 'FinanceAllowed'])
+  visibilityScope?: string;
+
+  @IsOptional()
+  @IsString()
+  notes?: string;
+}
+
+export class UpdateCasePartyDto {
+  @IsOptional()
+  @IsEnum(['Customer', 'Opposing', 'ExternalCounsel', 'Other'])
+  partyRoleType?: string;
 
   @IsOptional()
   @IsUUID()

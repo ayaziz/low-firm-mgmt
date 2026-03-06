@@ -365,7 +365,35 @@ Phase 3 transforms LOMA from a **data entry system** into an **intelligent legal
 
 ---
 
-## 8. Acceptance Criteria — Full Phase 3
+## 8. Feature Area: Rich Document Upload & System-wide Integration
+
+### 8.1 Unified Rich Upload Component
+
+**Functional Requirements**
+
+- FR-RU-01: A shared `RichDocumentUpload` component shall support drag-drop, file picker, and clipboard paste (images/PDF where browser permits).
+- FR-RU-02: Multi-file queue supports parallel uploads with per-file states: `Queued / Uploading / Scanning / OCR / Done / Failed`.
+- FR-RU-03: Users can edit metadata per-file before submit and in post-upload bulk-edit mode.
+- FR-RU-04: Upload validation enforces file size, extension/MIME policy, and context-specific required metadata.
+- FR-RU-05: Failed files can be retried individually without restarting successful uploads.
+
+### 8.2 Context-aware Integration Points
+
+- FR-RU-06: Upload is embedded in Case Detail (Documents tab + timeline quick action).
+- FR-RU-07: Upload is embedded in Customer Detail for KYC and general customer documents.
+- FR-RU-08: Upload is available in Session/Hearing and Filing forms for evidence attachments.
+- FR-RU-09: Upload is available in Invoice and Expense forms for finance supporting documents.
+- FR-RU-10: Upload is available in Task and Communication drawers for ad-hoc attachments.
+- FR-RU-11: Each upload persists origin metadata (`originModule`, `originEntityId`) for traceability and UI backlinking.
+
+### 8.3 Acceptance Criteria
+
+- Uploading 10 mixed files from Case Detail completes with per-file progress and statuses visible to user.
+- A failed scan/OCR on one file does not block other files from completing.
+- A document uploaded from Expense detail appears in both Expense attachments and Document Library with consistent metadata.
+- KYC upload enforces required doc type and prevents final submit when mandatory metadata is missing.
+
+## 9. Acceptance Criteria — Full Phase 3
 
 | # | Criteria |
 |---|----------|
@@ -380,7 +408,7 @@ Phase 3 transforms LOMA from a **data entry system** into an **intelligent legal
 | AC-09 | All existing Phase 1+2 tests still pass (no regression). |
 | AC-10 | Bilingual (EN/AR) support maintained for all new UI strings. |
 
-## 9. Non-Functional Requirements
+## 10. Non-Functional Requirements
 
 - All new API endpoints respond within **500 ms** at p95 under normal load.
 - OCR job processing: average completion within **30 s** per document (1–20 page PDF).

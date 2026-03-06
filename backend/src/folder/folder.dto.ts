@@ -4,14 +4,14 @@ export class CreateFolderDto {
   @IsString()
   name: string;
 
-  @IsOptional() @IsUUID()
-  caseId?: string;
+  @IsEnum(['case', 'customer', 'tenant'])
+  scopeType: string;
+
+  @IsUUID()
+  scopeId: string;
 
   @IsOptional() @IsUUID()
   parentId?: string;
-
-  @IsOptional() @IsEnum(['Customer', 'Case', 'Tenant'])
-  scope?: string;
 }
 
 export class UpdateFolderDto {

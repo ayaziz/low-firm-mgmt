@@ -11,95 +11,95 @@ export class FolderService {
     private readonly audit: AuditService,
   ) {}
 
+  // ── Create ─────────────────────────────────────────────────
   async create(tenantSlug: string, dto: CreateFolderDto, userId: string) {
     const folderId = uuidv4();
 
-    // Build path from parent
-    let path = `/${dto.name}`;
+    // Duplicate check at same parent level
+    const dupeParams: any[] = [dto.scopeType, dto.scopeId, dto.name];
+    let dupeSql: string;
     if (dto.parentId) {
-      const parent = await this.getById(tenantSlug, dto.parentId);
-      path = `${parent.path}/${dto.name}`;
-
-      // Check for duplicate at same level
-      const dupes: any[] = await this.prisma.queryTenant(
-        tenantSlug,
-        `SELECT id FROM folders WHERE parent_folder_id = $1 AND name = $2`,
-        [dto.parentId, dto.name],
-      );
-      if (dupes.length > 0) throw new ConflictException('Folder with this name already exists at this level');
-    } else if (dto.caseId) {
-      // Root-level for case — check no duplicate
-      const dupes: any[] = await this.prisma.queryTenant(
-        tenantSlug,
-        `SELECT id FROM folders WHERE scope_id = $1 AND parent_folder_id IS NULL AND name = $2`,
-        [dto.caseId, dto.name],
-      );
-      if (dupes.length > 0) throw new ConflictException('Root folder with this name already exists for this case');
+      await this.getById(tenantSlug, dto.parentId); // verify parent exists
+      dupeSql = `SELECT id FROM folders WHERE scope_type = $1 AND scope_id = $2 AND parent_folder_id = $3 AND name = $4 AND is_deleted = FALSE`;
+      dupeParams.splice(2, 0, dto.parentId);
+    } else {
+      dupeSql = `SELECT id FROM folders WHERE scope_type = $1 AND scope_id = $2 AND parent_folder_id IS NULL AND name = $3 AND is_deleted = FALSE`;
     }
+    const dupes: any[] = await this.prisma.queryTenant(tenantSlug, dupeSql, dupeParams);
+    if (dupes.length > 0) throw new ConflictException('Folder with this name already exists at this level');
 
     await this.prisma.executeTenant(
       tenantSlug,
-      `INSERT INTO folders (id, name, scope_id, parent_folder_id, scope, path, created_by, created_at, updated_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), NOW())`,
-      [folderId, dto.name, dto.caseId || null, dto.parentId || null,
-       dto.scope || 'Case', path, userId],
+      `INSERT INTO folders (id, scope_type, scope_id, parent_folder_id, name, created_by, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW())`,
+      [folderId, dto.scopeType, dto.scopeId, dto.parentId || null, dto.name, userId],
     );
 
     await this.audit.log({
       tenantSlug, eventType: 'FOLDER_CREATED', actorUserId: userId,
       entityType: 'Folder', entityId: folderId,
-      payload: { name: dto.name, caseId: dto.caseId, parentId: dto.parentId, path },
+      payload: { name: dto.name, scopeType: dto.scopeType, scopeId: dto.scopeId, parentId: dto.parentId },
     });
 
     return this.getById(tenantSlug, folderId);
   }
 
-  async listByCase(tenantSlug: string, caseId: string) {
+  // ── List by scope ──────────────────────────────────────────
+  async listByScope(tenantSlug: string, scopeType: string, scopeId: string) {
     const rows: any[] = await this.prisma.queryTenant(
       tenantSlug,
       `SELECT f.*,
          (SELECT COUNT(*) FROM documents d WHERE d.folder_id = f.id)::int AS document_count,
-         (SELECT COUNT(*) FROM folders c WHERE c.parent_folder_id = f.id)::int AS child_count
+         (SELECT COUNT(*) FROM folders c WHERE c.parent_folder_id = f.id AND c.is_deleted = FALSE)::int AS child_count
        FROM folders f
-       WHERE f.scope_id = $1
-       ORDER BY f.path ASC`,
-      [caseId],
+       WHERE f.scope_type = $1 AND f.scope_id = $2 AND f.is_deleted = FALSE
+       ORDER BY f.name ASC`,
+      [scopeType, scopeId],
     );
     return rows;
   }
 
-  async getTree(tenantSlug: string, caseId: string) {
-    // Return all folders for a case as a flat list with parent_id; frontend builds the tree
+  /** Backward-compatible alias used by controller GET case/:caseId */
+  async listByCase(tenantSlug: string, caseId: string) {
+    return this.listByScope(tenantSlug, 'case', caseId);
+  }
+
+  // ── Tree (flat list, frontend builds tree) ─────────────────
+  async getTree(tenantSlug: string, scopeType: string, scopeId: string) {
     const rows: any[] = await this.prisma.queryTenant(
       tenantSlug,
-      `SELECT f.id, f.name, f.parent_folder_id, f.path, f.scope,
+      `SELECT f.id, f.name, f.parent_folder_id, f.scope_type, f.scope_id,
          (SELECT COUNT(*) FROM documents d WHERE d.folder_id = f.id)::int AS document_count
        FROM folders f
-       WHERE f.scope_id = $1
-       ORDER BY f.path ASC`,
-      [caseId],
+       WHERE f.scope_type = $1 AND f.scope_id = $2 AND f.is_deleted = FALSE
+       ORDER BY f.name ASC`,
+      [scopeType, scopeId],
     );
     return rows;
   }
 
+  // ── Get by ID ──────────────────────────────────────────────
   async getById(tenantSlug: string, folderId: string) {
     const rows: any[] = await this.prisma.queryTenant(
       tenantSlug,
       `SELECT f.*,
          (SELECT COUNT(*) FROM documents d WHERE d.folder_id = f.id)::int AS document_count,
-         (SELECT COUNT(*) FROM folders c WHERE c.parent_folder_id = f.id)::int AS child_count
+         (SELECT COUNT(*) FROM folders c WHERE c.parent_folder_id = f.id AND c.is_deleted = FALSE)::int AS child_count
        FROM folders f
-       WHERE f.id = $1`,
+       WHERE f.id = $1 AND f.is_deleted = FALSE`,
       [folderId],
     );
     if (!rows || rows.length === 0) throw new NotFoundException('Folder not found');
     return rows[0];
   }
 
+  // ── List documents in folder ───────────────────────────────
   async getDocuments(tenantSlug: string, folderId: string, cursor?: string, limit = 20) {
     await this.getById(tenantSlug, folderId);
 
-    let sql = `SELECT d.id, d.title, d.file_name, d.mime_type, d.file_size, d.ocr_status, d.created_at
+    let sql = `SELECT d.id, d.title, d.file_name, d.mime_type, d.file_size,
+                      d.origin_module, d.origin_entity_type, d.origin_entity_id,
+                      d.expires_at, d.created_at
                FROM documents d WHERE d.folder_id = $1`;
     const params: any[] = [folderId];
     let idx = 2;
@@ -116,27 +116,17 @@ export class FolderService {
     return { data, nextCursor: hasMore && data.length > 0 ? data[data.length - 1].created_at : null, hasMore };
   }
 
+  // ── Update ─────────────────────────────────────────────────
   async update(tenantSlug: string, folderId: string, dto: UpdateFolderDto, userId: string) {
-    const folder = await this.getById(tenantSlug, folderId);
-
-    const setClauses: string[] = ['updated_at = NOW()'];
-    const params: any[] = [];
-    let idx = 1;
+    await this.getById(tenantSlug, folderId);
 
     if (dto.name !== undefined) {
-      setClauses.push(`name = $${idx++}`);
-      params.push(dto.name);
-      // Update path
-      const newPath = folder.path.replace(/\/[^/]*$/, `/${dto.name}`);
-      setClauses.push(`path = $${idx++}`);
-      params.push(newPath);
+      await this.prisma.executeTenant(
+        tenantSlug,
+        `UPDATE folders SET name = $1, updated_at = NOW() WHERE id = $2`,
+        [dto.name, folderId],
+      );
     }
-    params.push(folderId);
-    await this.prisma.executeTenant(
-      tenantSlug,
-      `UPDATE folders SET ${setClauses.join(', ')} WHERE id = $${idx}`,
-      params,
-    );
 
     await this.audit.log({
       tenantSlug, eventType: 'FOLDER_UPDATED', actorUserId: userId,
@@ -147,28 +137,34 @@ export class FolderService {
     return this.getById(tenantSlug, folderId);
   }
 
+  // ── Move ───────────────────────────────────────────────────
   async move(tenantSlug: string, folderId: string, dto: MoveFolderDto, userId: string) {
     const folder = await this.getById(tenantSlug, folderId);
 
-    // Prevent moving into own subtree
+    // Prevent moving into own subtree via recursive CTE
     if (dto.newParentId) {
-      const parent = await this.getById(tenantSlug, dto.newParentId);
-      if (parent.path.startsWith(folder.path)) {
-        throw new BadRequestException('Cannot move folder into its own subtree');
-      }
-      const newPath = `${parent.path}/${folder.name}`;
+      const cycle: any[] = await this.prisma.queryTenant(
+        tenantSlug,
+        `WITH RECURSIVE descendants AS (
+           SELECT id FROM folders WHERE id = $1
+           UNION ALL
+           SELECT f.id FROM folders f JOIN descendants d ON f.parent_folder_id = d.id
+         )
+         SELECT id FROM descendants WHERE id = $2`,
+        [folderId, dto.newParentId],
+      );
+      if (cycle.length > 0) throw new BadRequestException('Cannot move folder into its own subtree');
+
       await this.prisma.executeTenant(
         tenantSlug,
-        `UPDATE folders SET parent_folder_id = $1, path = $2, updated_at = NOW() WHERE id = $3`,
-        [dto.newParentId, newPath, folderId],
+        `UPDATE folders SET parent_folder_id = $1, updated_at = NOW() WHERE id = $2`,
+        [dto.newParentId, folderId],
       );
     } else {
-      // Move to root
-      const newPath = `/${folder.name}`;
       await this.prisma.executeTenant(
         tenantSlug,
-        `UPDATE folders SET parent_folder_id = NULL, path = $1, updated_at = NOW() WHERE id = $2`,
-        [newPath, folderId],
+        `UPDATE folders SET parent_folder_id = NULL, updated_at = NOW() WHERE id = $1`,
+        [folderId],
       );
     }
 
@@ -181,17 +177,15 @@ export class FolderService {
     return this.getById(tenantSlug, folderId);
   }
 
+  // ── Move document to folder ────────────────────────────────
   async moveDocument(tenantSlug: string, dto: MoveDocumentToFolderDto, userId: string) {
-    // Verify document exists
     const docs: any[] = await this.prisma.queryTenant(
-      tenantSlug,
-      `SELECT id FROM documents WHERE id = $1`,
-      [dto.documentId],
+      tenantSlug, `SELECT id FROM documents WHERE id = $1`, [dto.documentId],
     );
     if (!docs || docs.length === 0) throw new NotFoundException('Document not found');
 
     if (dto.folderId) {
-      await this.getById(tenantSlug, dto.folderId); // verify folder exists
+      await this.getById(tenantSlug, dto.folderId);
     }
 
     await this.prisma.executeTenant(
@@ -209,34 +203,35 @@ export class FolderService {
     return { success: true };
   }
 
+  // ── Create default folders for a case ──────────────────────
   async createDefaultFolders(tenantSlug: string, caseId: string, userId: string) {
     const defaultFolders = [
-      'Pleadings',
-      'Correspondence',
-      'Evidence',
-      'Court Orders',
-      'Client Documents',
-      'Financial',
+      'Pleadings', 'Correspondence', 'Evidence',
+      'Court Orders', 'Client Documents', 'Financial',
     ];
 
     for (const name of defaultFolders) {
-      await this.create(tenantSlug, { name, caseId, scope: 'Case' }, userId);
+      await this.create(tenantSlug, { name, scopeType: 'case', scopeId: caseId }, userId);
     }
   }
 
+  // ── Soft delete ────────────────────────────────────────────
   async delete(tenantSlug: string, folderId: string, userId: string) {
     const folder = await this.getById(tenantSlug, folderId);
 
-    // Check for children or documents
     if (folder.child_count > 0) throw new BadRequestException('Cannot delete folder with subfolders');
     if (folder.document_count > 0) throw new BadRequestException('Cannot delete folder with documents');
 
-    await this.prisma.executeTenant(tenantSlug, `DELETE FROM folders WHERE id = $1`, [folderId]);
+    await this.prisma.executeTenant(
+      tenantSlug,
+      `UPDATE folders SET is_deleted = TRUE, updated_at = NOW() WHERE id = $1`,
+      [folderId],
+    );
 
     await this.audit.log({
       tenantSlug, eventType: 'FOLDER_DELETED', actorUserId: userId,
       entityType: 'Folder', entityId: folderId,
-      payload: { name: folder.name, path: folder.path },
+      payload: { name: folder.name },
     });
 
     return { deleted: true };

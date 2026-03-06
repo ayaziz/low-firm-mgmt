@@ -17,7 +17,7 @@ import DataGrid, { type Column } from '@/components/common/DataGrid';
 import DrawerForm from '@/components/common/DrawerForm';
 import StatusBadge from '@/components/common/StatusBadge';
 
-const CATEGORIES = ['Contract', 'Motion', 'Letter', 'Filing', 'Report', 'Other'] as const;
+const CATEGORIES = ['Contract', 'Motion', 'Letter', 'Petition', 'Filing', 'Other'] as const;
 
 export default function TemplatesPage() {
   const { t } = useTranslation();
@@ -99,8 +99,8 @@ export default function TemplatesPage() {
 
   const handlePreview = async (tpl: DocumentTemplate) => {
     try {
-      const html = await templateApi.render(tpl.id, {});
-      setPreviewHtml(typeof html === 'string' ? html : (html as any)?.data ?? '');
+      const rendered = await templateApi.render(tpl.id, {});
+      setPreviewHtml((rendered as any)?.rendered ?? '');
       setPreviewTitle(tpl.name);
       setPreviewOpen(true);
     } catch {

@@ -43,7 +43,7 @@ import EmptyState from '@/components/common/EmptyState';
 const PIE_COLORS = ['#1B3A5C', '#4A7C59', '#F59E0B', '#EF4444', '#8B5CF6', '#06B6D4'];
 
 export default function DashboardPage() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { user, hasAnyRole } = useAuth();
   const router = useRouter();
   const [loading, setLoading] = useState(true);
@@ -58,11 +58,19 @@ export default function DashboardPage() {
     overdueInvoices: 0,
     totalReceivable: 0,
     totalHoursWeek: 0,
+    pendingWages: 0,
+    overdueTasks: 0,
+    upcomingSessions: 0,
   });
 
   const isLawyer = hasAnyRole('Lawyer');
   const isAccountant = hasAnyRole('Accountant');
   const isAdmin = hasAnyRole('TenantAdmin', 'SystemAdmin');
+
+  const formatCurrency = useCallback(
+    (amount: number) => new Intl.NumberFormat(i18n.language || undefined, { style: 'currency', currency: 'USD' }).format(amount || 0),
+    [i18n.language],
+  );
 
   useEffect(() => {
     async function load() {
@@ -76,6 +84,11 @@ export default function DashboardPage() {
         // Fetch report data for case pie chart
         promises.push(
           reportApi.generate('cases-by-state').catch(() => ({ columns: [], rows: [] })),
+        );
+
+        // Fetch KPI dashboard
+        promises.push(
+          reportApi.kpiDashboard().catch(() => null),
         );
 
         if (hasAnyRole('Accountant', 'TenantAdmin', 'SystemAdmin')) {
@@ -96,6 +109,7 @@ export default function DashboardPage() {
         const notifRes = results[1] as { count: number };
         const eventsRes = results[2] as { data: CalendarEvent[] };
         const reportRes = results[3] as ReportResult;
+        const kpiRes = results[4] as any;
 
         setRecentCases(casesRes.data);
         setUnreadCount(notifRes.count);
@@ -119,7 +133,7 @@ export default function DashboardPage() {
         let totalReceivable = 0;
 
         if (hasAnyRole('Accountant', 'TenantAdmin', 'SystemAdmin')) {
-          const invoicesRes = results[4] as { data: Invoice[] };
+          const invoicesRes = results[5] as { data: Invoice[] };
           setRecentInvoices(invoicesRes.data);
           pendingInvoices = invoicesRes.data.filter((i: Invoice) => i.status === 'Sent').length;
           overdueInvoices = invoicesRes.data.filter(
@@ -131,13 +145,23 @@ export default function DashboardPage() {
         }
 
         let totalHoursWeek = 0;
-        const timeSummaryIdx = hasAnyRole('Accountant', 'TenantAdmin', 'SystemAdmin') ? 5 : 4;
+        const timeSummaryIdx = hasAnyRole('Accountant', 'TenantAdmin', 'SystemAdmin') ? 6 : 5;
         if (hasAnyRole('Lawyer', 'TenantAdmin', 'SystemAdmin') && results[timeSummaryIdx]) {
           const summary = results[timeSummaryIdx] as { total_hours?: number };
           totalHoursWeek = summary.total_hours || 0;
         }
 
-        setStats({ activeCases, pendingInvoices, overdueInvoices, totalReceivable, totalHoursWeek });
+        // Extract KPI data
+        let pendingWages = 0;
+        let overdueTasks = 0;
+        let upcomingSessions = 0;
+        if (kpiRes) {
+          pendingWages = kpiRes.wages?.pendingApproval ?? kpiRes.wages?.pending_approval ?? 0;
+          overdueTasks = kpiRes.tasks?.overdueCount ?? kpiRes.tasks?.overdue_count ?? 0;
+          upcomingSessions = kpiRes.sessions?.upcomingCount ?? kpiRes.sessions?.upcoming_count ?? 0;
+        }
+
+        setStats({ activeCases, pendingInvoices, overdueInvoices, totalReceivable, totalHoursWeek, pendingWages, overdueTasks, upcomingSessions });
       } finally {
         setLoading(false);
       }
@@ -189,7 +213,7 @@ export default function DashboardPage() {
               icon={<WarningIcon />}
               color="#EF4444"
               trend={stats.overdueInvoices > 0 ? 'up' : 'flat'}
-              trendLabel={stats.overdueInvoices > 0 ? `${stats.overdueInvoices} overdue` : 'None'}
+              trendLabel={stats.overdueInvoices > 0 ? t('dashboard.overdueCount', '{{count}} overdue', { count: stats.overdueInvoices }) : t('common.none', 'None')}
               onClick={() => router.push('/accounting')}
             />
           </Grid>
@@ -209,10 +233,45 @@ export default function DashboardPage() {
           <Grid item xs={6} sm={3}>
             <KPICard
               title={t('dashboard.totalReceivable')}
-              value={`$${stats.totalReceivable.toLocaleString()}`}
+              value={formatCurrency(stats.totalReceivable)}
               icon={<MoneyIcon />}
               color="#8B5CF6"
               onClick={() => router.push('/accounting')}
+            />
+          </Grid>
+        )}
+        {(isAccountant || isAdmin) && stats.pendingWages > 0 && (
+          <Grid item xs={6} sm={3}>
+            <KPICard
+              title={t('dashboard.pendingWages', 'Pending Wages')}
+              value={stats.pendingWages}
+              icon={<MoneyIcon />}
+              color="#06B6D4"
+              onClick={() => router.push('/accounting')}
+            />
+          </Grid>
+        )}
+        {stats.overdueTasks > 0 && (
+          <Grid item xs={6} sm={3}>
+            <KPICard
+              title={t('dashboard.overdueTasks', 'Overdue Tasks')}
+              value={stats.overdueTasks}
+              icon={<TaskIcon />}
+              color="#EF4444"
+              trend="up"
+              trendLabel={t('dashboard.overdueCount', '{{count}} overdue', { count: stats.overdueTasks })}
+              onClick={() => router.push('/tasks')}
+            />
+          </Grid>
+        )}
+        {stats.upcomingSessions > 0 && (
+          <Grid item xs={6} sm={3}>
+            <KPICard
+              title={t('dashboard.upcomingSessions', 'Upcoming Sessions')}
+              value={stats.upcomingSessions}
+              icon={<CalendarIcon />}
+              color="#06B6D4"
+              onClick={() => router.push('/calendar')}
             />
           </Grid>
         )}

@@ -20,16 +20,17 @@ import DrawerForm from '@/components/common/DrawerForm';
 import StatusBadge from '@/components/common/StatusBadge';
 import KPICard from '@/components/common/KPICard';
 
-type TEStatus = 'Draft' | 'Submitted' | 'Approved' | 'Rejected';
+type TEStatus = 'Draft' | 'Submitted' | 'Approved' | 'Billed' | 'WriteOff';
 
 const TIME_ENTRY_TRANSITIONS: Record<TEStatus, TEStatus[]> = {
   Draft: ['Submitted'],
-  Submitted: ['Approved', 'Rejected'],
-  Rejected: ['Draft'],
-  Approved: [],
+  Submitted: ['Approved', 'Draft'],
+  Approved: ['Billed', 'WriteOff'],
+  Billed: [],
+  WriteOff: [],
 };
 
-const STATUS_OPTIONS: TEStatus[] = ['Draft', 'Submitted', 'Approved', 'Rejected'];
+const STATUS_OPTIONS: TEStatus[] = ['Draft', 'Submitted', 'Approved', 'Billed', 'WriteOff'];
 
 const ACTIVITY_TYPES = ['Research', 'Drafting', 'Court Appearance', 'Client Meeting', 'Filing', 'Review', 'Travel', 'Other'];
 
@@ -226,7 +227,7 @@ export default function TimeEntriesPage() {
         const transitions = TIME_ENTRY_TRANSITIONS[status] || [];
         const allowed = transitions.filter(ns => {
           if (ns === 'Submitted' || ns === 'Draft') return isOwner(row);
-          if (ns === 'Approved' || ns === 'Rejected') return canApprove;
+          if (ns === 'Approved' || ns === 'Billed' || ns === 'WriteOff') return canApprove;
           return false;
         });
         return (

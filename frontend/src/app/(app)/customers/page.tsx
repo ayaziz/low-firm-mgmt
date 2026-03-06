@@ -6,7 +6,7 @@ import { useTranslation } from 'react-i18next';
 import { Box, Button, MenuItem, Stack, TextField } from '@mui/material';
 import { Add as AddIcon } from '@mui/icons-material';
 import { customerApi } from '@/api';
-import type { Customer, CustomerType } from '@/types';
+import type { Customer, CustomerStatus, CustomerType } from '@/types';
 import { useAuth } from '@/context/AuthContext';
 import { CAPABILITIES } from '@/auth/capabilities';
 import PageHeader from '@/components/common/PageHeader';
@@ -22,8 +22,26 @@ export default function CustomerListPage() {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(true);
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const [form, setForm] = useState({ name: '', customer_type: 'Individual' as CustomerType, national_id: '' });
+  const [form, setForm] = useState({
+    name: '',
+    customer_type: 'Individual' as CustomerType,
+    status: 'Active' as CustomerStatus,
+    national_id: '',
+    passport_number: '',
+    registration_id: '',
+    tax_id: '',
+    notes: '',
+  });
   const [saving, setSaving] = useState(false);
+
+  const isIndividual = form.customer_type === 'Individual';
+  const isOrganization = form.customer_type === 'Organization';
+  const hasIndividualIdentity = !!form.national_id.trim() || !!form.passport_number.trim();
+  const hasOrganizationIdentity = !!form.registration_id.trim() && !!form.tax_id.trim();
+  const canSubmit =
+    !!form.name.trim() &&
+    (isIndividual ? hasIndividualIdentity : true) &&
+    (isOrganization ? hasOrganizationIdentity : true);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -46,11 +64,21 @@ export default function CustomerListPage() {
   }, [searchParams, router]);
 
   const handleCreate = async () => {
+    if (!canSubmit) return;
     setSaving(true);
     try {
       const created = await customerApi.create(form);
       setDrawerOpen(false);
-      setForm({ name: '', customer_type: 'Individual', national_id: '' });
+      setForm({
+        name: '',
+        customer_type: 'Individual',
+        status: 'Active',
+        national_id: '',
+        passport_number: '',
+        registration_id: '',
+        tax_id: '',
+        notes: '',
+      });
       router.push(`/customers/${created.id}`);
     } finally {
       setSaving(false);
@@ -109,6 +137,7 @@ export default function CustomerListPage() {
         onClose={() => setDrawerOpen(false)}
         title={t('customer.add')}
         onSubmit={handleCreate}
+        submitDisabled={!canSubmit}
         loading={saving}
       >
         <Stack spacing={2}>
@@ -124,17 +153,79 @@ export default function CustomerListPage() {
             select
             fullWidth
             value={form.customer_type}
-            onChange={(e) => setForm((f) => ({ ...f, customer_type: e.target.value as CustomerType }))}
+            onChange={(e) =>
+              setForm((f) => ({
+                ...f,
+                customer_type: e.target.value as CustomerType,
+                national_id: '',
+                passport_number: '',
+                registration_id: '',
+                tax_id: '',
+              }))
+            }
           >
             <MenuItem value="Individual">{t('customer.individual')}</MenuItem>
             <MenuItem value="Organization">{t('customer.organization')}</MenuItem>
           </TextField>
           <TextField
+            label={t('customer.status', 'Status')}
+            select
+            fullWidth
+            value={form.status}
+            onChange={(e) => setForm((f) => ({ ...f, status: e.target.value as CustomerStatus }))}
+          >
+            <MenuItem value="Active">{t('common.active', 'Active')}</MenuItem>
+            <MenuItem value="Inactive">{t('common.inactive', 'Inactive')}</MenuItem>
+            <MenuItem value="Prospect">{t('customer.prospect', 'Prospect')}</MenuItem>
+          </TextField>
+          <TextField
             label={t('customer.nationalId')}
             fullWidth
+            required={isIndividual && !form.passport_number.trim()}
             value={form.national_id}
             onChange={(e) => setForm((f) => ({ ...f, national_id: e.target.value }))}
+            disabled={!isIndividual}
+            helperText={isIndividual ? t('customer.identityHint', 'Provide national ID or passport number') : ''}
           />
+          <TextField
+            label={t('customer.passportNumber', 'Passport Number')}
+            fullWidth
+            required={isIndividual && !form.national_id.trim()}
+            value={form.passport_number}
+            onChange={(e) => setForm((f) => ({ ...f, passport_number: e.target.value }))}
+            disabled={!isIndividual}
+          />
+          <TextField
+            label={t('customer.registrationId', 'Registration ID')}
+            fullWidth
+            required={isOrganization}
+            value={form.registration_id}
+            onChange={(e) => setForm((f) => ({ ...f, registration_id: e.target.value }))}
+            disabled={!isOrganization}
+          />
+          <TextField
+            label={t('customer.taxId', 'Tax ID')}
+            fullWidth
+            required={isOrganization}
+            value={form.tax_id}
+            onChange={(e) => setForm((f) => ({ ...f, tax_id: e.target.value }))}
+            disabled={!isOrganization}
+          />
+          <TextField
+            label={t('customer.notes', 'Notes')}
+            fullWidth
+            multiline
+            rows={2}
+            value={form.notes}
+            onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
+          />
+          {!canSubmit && (
+            <Box sx={{ color: 'error.main', fontSize: 13 }}>
+              {isIndividual
+                ? t('customer.individualIdentityRequired', 'Individual customers require national ID or passport number.')
+                : t('customer.organizationIdentityRequired', 'Organization customers require registration ID and tax ID.')}
+            </Box>
+          )}
         </Stack>
       </DrawerForm>
     </Box>

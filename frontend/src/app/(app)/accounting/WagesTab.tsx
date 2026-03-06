@@ -3,17 +3,23 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
-  Box, Button, IconButton, MenuItem, Stack, Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
-  TextField, Paper, Tooltip,
+  Box, Button, Collapse, IconButton, MenuItem, Stack, Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
+  TextField, Paper,
 } from '@mui/material';
-import { Add as AddIcon, Refresh as RefreshIcon, Download as DownloadIcon, Edit as EditIcon } from '@mui/icons-material';
+import {
+  Add as AddIcon, Refresh as RefreshIcon, Download as DownloadIcon, Edit as EditIcon,
+  ExpandMore as ExpandIcon, ExpandLess as CollapseIcon,
+} from '@mui/icons-material';
 import { accountingApi, adminApi } from '@/api';
 import type { UserInfo } from '@/types';
 import DrawerForm from '@/components/common/DrawerForm';
 import EmptyState from '@/components/common/EmptyState';
 import LoadingSkeleton from '@/components/common/LoadingSkeleton';
+import StatusBadge from '@/components/common/StatusBadge';
+import ApprovalActions from '@/components/common/ApprovalActions';
+import StatusTimeline from '@/components/common/StatusTimeline';
 
-const emptyForm = { userId: '', period: '', amount: '', staffName: '', deductions: '', grossAmount: '', netAmount: '', paymentStatus: 'Pending' };
+const emptyForm = { userId: '', period: '', amount: '', staffName: '', deductions: '', grossAmount: '', netAmount: '' };
 
 export default function WagesTab() {
   const { t } = useTranslation();
@@ -26,6 +32,7 @@ export default function WagesTab() {
   const [form, setForm] = useState({ ...emptyForm });
   const [users, setUsers] = useState<UserInfo[]>([]);
   const [editWage, setEditWage] = useState<any | null>(null);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
 
   const load = useCallback(async (c?: string | null) => {
     setLoading(true);
@@ -53,7 +60,6 @@ export default function WagesTab() {
           deductions: form.deductions ? Number(form.deductions) : undefined,
           grossAmount: form.grossAmount ? Number(form.grossAmount) : undefined,
           netAmount: form.netAmount ? Number(form.netAmount) : undefined,
-          paymentStatus: form.paymentStatus || undefined,
         });
       } else {
         await accountingApi.createWage({
@@ -64,7 +70,6 @@ export default function WagesTab() {
           deductions: form.deductions ? Number(form.deductions) : undefined,
           grossAmount: form.grossAmount ? Number(form.grossAmount) : undefined,
           netAmount: form.netAmount ? Number(form.netAmount) : undefined,
-          paymentStatus: form.paymentStatus || undefined,
         });
       }
       setDrawerOpen(false);
@@ -91,12 +96,11 @@ export default function WagesTab() {
     setForm({
       userId: w.user_id || '',
       period: w.period || '',
-      amount: String(w.base_amount ?? w.amount ?? ''),
+      amount: String(w.amount ?? ''),
       staffName: w.staff_name || '',
       deductions: w.deductions != null ? String(w.deductions) : '',
       grossAmount: w.gross_amount != null ? String(w.gross_amount) : '',
       netAmount: w.net_amount != null ? String(w.net_amount) : '',
-      paymentStatus: w.payment_status || 'Pending',
     });
     setDrawerOpen(true);
     await loadUsers();
@@ -106,6 +110,28 @@ export default function WagesTab() {
     try {
       await accountingApi.exportWagesCsv();
     } catch { /* handled by api layer */ }
+  };
+
+  /* Approval action handlers */
+  const handleSubmitWage = (id: string) => async (comment?: string) => {
+    await accountingApi.submitWage(id, comment);
+    load();
+  };
+  const handleApproveWage = (id: string) => async (comment?: string) => {
+    await accountingApi.approveWage(id, comment);
+    load();
+  };
+  const handleRejectWage = (id: string) => async (reason: string) => {
+    await accountingApi.rejectWage(id, reason);
+    load();
+  };
+  const handleMarkPaid = (id: string) => async (comment?: string) => {
+    await accountingApi.markWagePaid(id, comment);
+    load();
+  };
+
+  const toggleExpand = (id: string) => {
+    setExpandedId(prev => (prev === id ? null : id));
   };
 
   return (
@@ -122,30 +148,61 @@ export default function WagesTab() {
             <Table size="small">
               <TableHead>
                 <TableRow>
+                  <TableCell />
                   <TableCell>{t('accounting.employee', 'Employee')}</TableCell>
                   <TableCell>{t('accounting.period', 'Period')}</TableCell>
-                  <TableCell>{t('accounting.baseSalary', 'Base Salary')}</TableCell>
-                  <TableCell>{t('accounting.bonus', 'Bonus')}</TableCell>
+                  <TableCell>{t('accounting.amount', 'Amount')}</TableCell>
                   <TableCell>{t('accounting.deductions', 'Deductions')}</TableCell>
+                  <TableCell>{t('accounting.grossAmount', 'Gross')}</TableCell>
                   <TableCell>{t('accounting.netPay', 'Net Pay')}</TableCell>
+                  <TableCell>{t('common.status', 'Status')}</TableCell>
                   <TableCell>{t('common.date', 'Date')}</TableCell>
                   <TableCell>{t('common.actions', 'Actions')}</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
                 {wages.map(w => (
-                  <TableRow key={w.id} hover>
-                    <TableCell>{w.employee_name ?? w.user_id}</TableCell>
-                    <TableCell>{w.period}</TableCell>
-                    <TableCell>{Number(w.base_amount ?? 0).toFixed(2)}</TableCell>
-                    <TableCell>{Number(w.bonus_amount ?? 0).toFixed(2)}</TableCell>
-                    <TableCell>{Number(w.deductions ?? 0).toFixed(2)}</TableCell>
-                    <TableCell>{Number(w.net_amount ?? 0).toFixed(2)}</TableCell>
-                    <TableCell>{w.created_at ? new Date(w.created_at).toLocaleDateString() : '—'}</TableCell>
-                    <TableCell>
-                      <IconButton size="small" onClick={() => openEdit(w)}><EditIcon fontSize="small" /></IconButton>
-                    </TableCell>
-                  </TableRow>
+                  <React.Fragment key={w.id}>
+                    <TableRow hover>
+                      <TableCell sx={{ width: 32, p: 0.5 }}>
+                        <IconButton size="small" onClick={() => toggleExpand(w.id)}>
+                          {expandedId === w.id ? <CollapseIcon fontSize="small" /> : <ExpandIcon fontSize="small" />}
+                        </IconButton>
+                      </TableCell>
+                      <TableCell>{w.staff_name ?? w.employee_name ?? w.user_id}</TableCell>
+                      <TableCell>{w.period}</TableCell>
+                      <TableCell>{Number(w.amount ?? 0).toFixed(2)}</TableCell>
+                      <TableCell>{Number(w.deductions ?? 0).toFixed(2)}</TableCell>
+                      <TableCell>{Number(w.gross_amount ?? 0).toFixed(2)}</TableCell>
+                      <TableCell>{Number(w.net_amount ?? 0).toFixed(2)}</TableCell>
+                      <TableCell><StatusBadge status={w.payment_status ?? w.status ?? 'Draft'} /></TableCell>
+                      <TableCell>{w.created_at ? new Date(w.created_at).toLocaleDateString() : '—'}</TableCell>
+                      <TableCell>
+                        <Stack direction="row" spacing={0.5} alignItems="center">
+                          {(w.payment_status === 'Draft' || w.status === 'Draft') && (
+                            <IconButton size="small" onClick={() => openEdit(w)}><EditIcon fontSize="small" /></IconButton>
+                          )}
+                          <ApprovalActions
+                            entityType="wage"
+                            status={w.payment_status ?? w.status ?? 'Draft'}
+                            onSubmit={handleSubmitWage(w.id)}
+                            onApprove={handleApproveWage(w.id)}
+                            onReject={handleRejectWage(w.id)}
+                            onMarkPaid={handleMarkPaid(w.id)}
+                          />
+                        </Stack>
+                      </TableCell>
+                    </TableRow>
+                    <TableRow>
+                      <TableCell colSpan={10} sx={{ py: 0, borderBottom: expandedId === w.id ? undefined : 'none' }}>
+                        <Collapse in={expandedId === w.id} timeout="auto" unmountOnExit>
+                          <Box sx={{ py: 2, px: 1 }}>
+                            <StatusTimeline entityType="wage" entityId={w.id} />
+                          </Box>
+                        </Collapse>
+                      </TableCell>
+                    </TableRow>
+                  </React.Fragment>
                 ))}
               </TableBody>
             </Table>
@@ -172,11 +229,6 @@ export default function WagesTab() {
           <TextField label={t('accounting.deductions', 'Deductions')} type="number" fullWidth value={form.deductions} onChange={e => setForm(f => ({ ...f, deductions: e.target.value }))} />
           <TextField label={t('accounting.grossAmount', 'Gross Amount')} type="number" fullWidth value={form.grossAmount} onChange={e => setForm(f => ({ ...f, grossAmount: e.target.value }))} />
           <TextField label={t('accounting.netAmount', 'Net Amount')} type="number" fullWidth value={form.netAmount} onChange={e => setForm(f => ({ ...f, netAmount: e.target.value }))} />
-          <TextField label={t('accounting.paymentStatus', 'Payment Status')} select fullWidth value={form.paymentStatus} onChange={e => setForm(f => ({ ...f, paymentStatus: e.target.value }))}>
-            <MenuItem value="Pending">Pending</MenuItem>
-            <MenuItem value="Paid">Paid</MenuItem>
-            <MenuItem value="Cancelled">Cancelled</MenuItem>
-          </TextField>
         </Stack>
       </DrawerForm>
     </Box>

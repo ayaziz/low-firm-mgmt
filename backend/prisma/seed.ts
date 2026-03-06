@@ -93,6 +93,42 @@ async function main() {
     client2.release();
   }
 
+  // Apply Phase 3 migrations in order (skip p3_11 which is a seed/data file)
+  const p3MigrationFiles = [
+    'p3_01_customer_enrichment.sql',
+    'p3_02_case_enrichment.sql',
+    'p3_03_session_enrichment.sql',
+    'p3_04_wage_approval.sql',
+    'p3_05_invoice_review.sql',
+    'p3_06_status_history.sql',
+    'p3_07_folders_fix.sql',
+    'p3_08_document_ocr.sql',
+    'p3_09_external_shares.sql',
+    'p3_10_session_postponement.sql',
+    'p3_12_hearing_status_extended.sql',
+    'p3_13_contacts_role_string.sql',
+  ];
+
+  for (const migFile of p3MigrationFiles) {
+    const migSql = fs.readFileSync(path.join(__dirname, 'migrations', migFile), 'utf-8');
+    const client3 = await pgPool.connect();
+    try {
+      await client3.query(`SET search_path TO "${schemaName}", public`);
+      await client3.query(migSql);
+      console.log(`Phase 3 migration applied: ${migFile}`);
+    } catch (e: any) {
+      // Ignore "already exists" errors to make this idempotent
+      if (e.message && (e.message.includes('already exists') || e.message.includes('duplicate column'))) {
+        console.log(`Phase 3 migration skipped (already applied): ${migFile}`);
+      } else {
+        console.error(`Failed to apply ${migFile}:`, e.message);
+        throw e;
+      }
+    } finally {
+      client3.release();
+    }
+  }
+
   // Seed master data
   const masterData = [
     // Contact roles
@@ -680,8 +716,8 @@ async function main() {
     { user_id: users[0].id, staff_name: 'Ahmed Lawyer',     period: lastMonth,    amount: 15000, deductions: 1500, payment_status: 'Paid',    created_by: users[2].id },
     { user_id: users[1].id, staff_name: 'Sara Lawyer',      period: lastMonth,    amount: 14000, deductions: 1400, payment_status: 'Paid',    created_by: users[2].id },
     { user_id: users[2].id, staff_name: 'Omar Accountant',  period: lastMonth,    amount: 12000, deductions: 1200, payment_status: 'Paid',    created_by: users[3].id },
-    { user_id: users[0].id, staff_name: 'Ahmed Lawyer',     period: currentMonth, amount: 15000, deductions: 1500, payment_status: 'Planned', created_by: users[2].id },
-    { user_id: users[1].id, staff_name: 'Sara Lawyer',      period: currentMonth, amount: 14000, deductions: 1400, payment_status: 'Planned', created_by: users[2].id },
+    { user_id: users[0].id, staff_name: 'Ahmed Lawyer',     period: currentMonth, amount: 15000, deductions: 1500, payment_status: 'Draft',   created_by: users[2].id },
+    { user_id: users[1].id, staff_name: 'Sara Lawyer',      period: currentMonth, amount: 14000, deductions: 1400, payment_status: 'Draft',   created_by: users[2].id },
   ];
 
   for (const w of wagesData) {

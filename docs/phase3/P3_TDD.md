@@ -611,3 +611,41 @@ erDiagram
   EXTERNAL_SHARE_LINKS ||--o{ EXTERNAL_SHARE_ACCESSES : "tracked by"
   FOLDERS ||--o{ FOLDERS : "parent of"
 ```
+
+
+## 10. Rich Document Upload Integration Blueprint
+
+### 10.1 Backend Additions
+- New endpoint for context-aware upload bootstrap:
+  - `POST /api/v1/documents/upload-sessions`
+  - Body: `{ originModule, originEntityType, originEntityId, files[], defaults }`
+  - Response: per-file signed URLs + server-side validation results.
+- New finalize endpoint to persist metadata + origin backlinks atomically after object upload:
+  - `POST /api/v1/documents/upload-sessions/{id}/finalize`
+- Origin trace columns on `documents`:
+  - `origin_module VARCHAR(50)`
+  - `origin_entity_type VARCHAR(50)`
+  - `origin_entity_id UUID`
+
+### 10.2 Frontend Integration Contract
+- Shared component: `components/RichDocumentUpload.tsx`
+- Shared hook: `hooks/useRichUploadQueue.ts`
+- Required host props: `scopeType`, `scopeId`, `originModule`, `defaultDocType`, `requiredMetadataSchema`
+- Host modules to integrate:
+  - CaseDetailDocuments
+  - CustomerKycPanel
+  - SessionForm / HearingForm
+  - FilingForm
+  - ExpenseForm / InvoiceForm
+  - TaskDrawer
+  - CommunicationDrawer
+
+### 10.3 Event and Timeline Projection
+- Each successful upload emits `DOCUMENT_UPLOADED` with origin metadata.
+- Case/Customer/Finance activity feeds project upload events with deep-links to Document Detail.
+- Status timeline for document includes queue stage transitions for operational transparency.
+
+### 10.4 Operational Constraints
+- Queue concurrency configurable per tenant profile (default 3).
+- Upload session TTL default 20 minutes, renewable once by client.
+- Max aggregate payload per batch configurable (default 500MB) while preserving per-file cap.

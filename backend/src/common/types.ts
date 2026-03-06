@@ -49,7 +49,7 @@ export type CasePartyRoleType = 'Customer' | 'Opposing' | 'ExternalCounsel' | 'O
 
 export type JurisdictionLevel = 'District' | 'Appeal' | 'Supreme' | 'Specialized';
 export type HearingType = 'Initial' | 'Continuation' | 'Ruling' | 'Appeal' | 'Procedural';
-export type HearingStatus = 'Scheduled' | 'Completed' | 'Postponed' | 'Cancelled';
+export type HearingStatus = 'Scheduled' | 'Confirmed' | 'InProgress' | 'Adjourned' | 'Completed' | 'Postponed' | 'Cancelled';
 export type CalendarEventType = 'Hearing' | 'Meeting' | 'Deadline' | 'Task' | 'Reminder' | 'Other';
 export type CalendarEventStatus = 'Scheduled' | 'Confirmed' | 'Completed' | 'Cancelled';
 export type CalendarRecurrence = 'None' | 'Daily' | 'Weekly' | 'Monthly' | 'Yearly';
@@ -62,10 +62,13 @@ export type TimeEntryStatus = 'Draft' | 'Submitted' | 'Approved' | 'Billed' | 'W
 export type NotificationChannel = 'InApp' | 'Email' | 'Both';
 
 export const VALID_HEARING_TRANSITIONS: Record<HearingStatus, HearingStatus[]> = {
-  Scheduled: ['Completed', 'Postponed', 'Cancelled'],
-  Postponed: ['Scheduled', 'Cancelled'],
-  Completed: [],
-  Cancelled: [],
+  Scheduled:  ['Confirmed', 'Postponed', 'Cancelled'],
+  Confirmed:  ['InProgress', 'Adjourned', 'Postponed', 'Cancelled'],
+  InProgress: ['Adjourned', 'Completed', 'Postponed', 'Cancelled'],
+  Adjourned:  ['Scheduled', 'Cancelled'],
+  Postponed:  ['Scheduled', 'Cancelled'],
+  Completed:  [],
+  Cancelled:  [],
 };
 
 export const VALID_TIME_ENTRY_TRANSITIONS: Record<TimeEntryStatus, TimeEntryStatus[]> = {

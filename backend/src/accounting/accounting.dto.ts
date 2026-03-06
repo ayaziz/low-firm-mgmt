@@ -65,7 +65,7 @@ export class CreateWageDto {
   @IsOptional() @IsNumber() deductions?: number;
   @IsOptional() @IsNumber() grossAmount?: number;
   @IsOptional() @IsNumber() netAmount?: number;
-  @IsOptional() @IsEnum(['Pending', 'Paid', 'Cancelled']) paymentStatus?: string;
+  @IsOptional() @IsEnum(['Draft', 'Submitted', 'Approved', 'Paid']) paymentStatus?: string;
 }
 
 export class UpdateWageDto {
@@ -76,7 +76,24 @@ export class UpdateWageDto {
   @IsOptional() @IsNumber() deductions?: number;
   @IsOptional() @IsNumber() grossAmount?: number;
   @IsOptional() @IsNumber() netAmount?: number;
-  @IsOptional() @IsEnum(['Pending', 'Paid', 'Cancelled']) paymentStatus?: string;
+}
+
+// --- Wage Approval ---
+export class WageActionDto {
+  @IsOptional() @IsString() comment?: string;
+}
+
+export class RejectWageDto {
+  @IsString() reason: string;
+}
+
+// --- Invoice Review ---
+export class InvoiceReviewActionDto {
+  @IsOptional() @IsString() comment?: string;
+}
+
+export class RejectInvoiceReviewDto {
+  @IsString() reason: string;
 }
 
 export class UpdateExpenseDto {

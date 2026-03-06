@@ -58,6 +58,10 @@ export const caseApi = {
     return post<Session>(`/cases/${caseId}/sessions`, data);
   },
 
+  updateSession(caseId: string, sessionId: string, data: Record<string, unknown>): Promise<Session> {
+    return patch<Session>(`/cases/${caseId}/sessions/${sessionId}`, data);
+  },
+
   rescheduleSession(caseId: string, sessionId: string, data: { newDateTime: string; reason: string }): Promise<Session> {
     return post<Session>(`/cases/${caseId}/sessions/${sessionId}/reschedule`, data);
   },
@@ -102,12 +106,23 @@ export const caseApi = {
   },
 
   // Memberships
-  listMemberships(caseId: string): Promise<Array<{ userId: string; role: string; displayName: string }>> {
-    return get(`/cases/${caseId}/memberships`);
+  async listMemberships(caseId: string): Promise<Array<{ id: string; userId: string; role: string; displayName: string }>> {
+    const res = await get<Array<Record<string, unknown>>>(`/cases/${caseId}/memberships`);
+    const rows = Array.isArray(res) ? res : [];
+    return rows.map((row) => ({
+      id: String(row.id || ''),
+      userId: String(row.userId || row.user_id || ''),
+      role: String(row.role || ''),
+      displayName: String(row.displayName || row.user_name || row.user_email || row.user_id || ''),
+    }));
   },
 
   addMembership(caseId: string, userId: string, role: string): Promise<void> {
     return post(`/cases/${caseId}/memberships`, { userId, role });
+  },
+
+  updateMembership(caseId: string, membershipId: string, role: string): Promise<void> {
+    return patch(`/cases/${caseId}/memberships/${membershipId}`, { role });
   },
 
   removeMembership(caseId: string, userId: string): Promise<void> {
@@ -115,12 +130,27 @@ export const caseApi = {
   },
 
   // Case parties
-  listParties(caseId: string): Promise<Array<{ id: string; party_id: string; role_in_case: string; party_name: string }>> {
-    return get(`/cases/${caseId}/parties`);
+  async listParties(caseId: string): Promise<Array<{ id: string; party_id: string; role_in_case: string; party_name: string }>> {
+    const res = await get<Array<Record<string, unknown>>>(`/cases/${caseId}/parties`);
+    const rows = Array.isArray(res) ? res : [];
+    return rows.map((row) => ({
+      id: String(row.id || ''),
+      party_id: String(row.party_id || ''),
+      role_in_case: String(row.role_in_case || row.party_role_type || ''),
+      party_name: String(row.party_name || row.party_id || ''),
+    }));
   },
 
   addParty(caseId: string, data: { partyId: string; partyRoleType: string }): Promise<void> {
     return post(`/cases/${caseId}/parties`, data);
+  },
+
+  updateParty(caseId: string, partyLinkId: string, data: { partyRoleType?: string; notes?: string }): Promise<void> {
+    return patch(`/cases/${caseId}/parties/${partyLinkId}`, data);
+  },
+
+  removeParty(caseId: string, partyLinkId: string): Promise<void> {
+    return del(`/cases/${caseId}/parties/${partyLinkId}`);
   },
 
   // Case customers (post-creation linking)

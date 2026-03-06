@@ -1,10 +1,11 @@
-import { UnprocessableEntityException, NotFoundException } from '@nestjs/common';
+import { UnprocessableEntityException, NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common';
 import { AccountingService } from './accounting.service';
 
 describe('AccountingService', () => {
   let service: AccountingService;
   let mockPrisma: any;
   let mockAudit: any;
+  let mockStatusHistory: any;
 
   beforeEach(() => {
     mockPrisma = {
@@ -14,7 +15,10 @@ describe('AccountingService', () => {
     mockAudit = {
       log: jest.fn(),
     };
-    service = new AccountingService(mockPrisma, mockAudit);
+    mockStatusHistory = {
+      record: jest.fn(),
+    };
+    service = new AccountingService(mockPrisma, mockAudit, mockStatusHistory);
   });
 
   describe('createPayment', () => {
@@ -157,6 +161,119 @@ describe('AccountingService', () => {
       const result = await service.createPayment(tenantSlug, baseDto, userId);
 
       expect(result.invoiceStatus).toBe('Paid'); // 400+100 = 500 = total
+    });
+  });
+
+  // ===================== WAGE APPROVAL FLOW =====================
+
+  describe('submitWage', () => {
+    const tenantSlug = 'test-firm';
+    const userId = 'user-1';
+
+    it('should submit a Draft wage', async () => {
+      mockPrisma.queryTenant
+        .mockResolvedValueOnce([{ id: 'w1', payment_status: 'Draft', amount: 5000 }])
+        .mockResolvedValueOnce([{ id: 'w1', payment_status: 'Submitted' }]);
+      mockPrisma.executeTenant.mockResolvedValue(undefined);
+
+      const result = await service.submitWage(tenantSlug, 'w1', {}, userId);
+      expect(result.payment_status).toBe('Submitted');
+      expect(mockStatusHistory.record).toHaveBeenCalledWith(
+        expect.objectContaining({ fromStatus: 'Draft', toStatus: 'Submitted' }),
+      );
+    });
+
+    it('should reject submitting an already Approved wage', async () => {
+      mockPrisma.queryTenant.mockResolvedValueOnce([{ id: 'w1', payment_status: 'Approved', amount: 5000 }]);
+
+      await expect(
+        service.submitWage(tenantSlug, 'w1', {}, userId),
+      ).rejects.toThrow(UnprocessableEntityException);
+    });
+
+    it('should reject submitting a wage with zero amount', async () => {
+      mockPrisma.queryTenant.mockResolvedValueOnce([{ id: 'w1', payment_status: 'Draft', amount: 0 }]);
+
+      await expect(
+        service.submitWage(tenantSlug, 'w1', {}, userId),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('should throw NotFoundException for missing wage', async () => {
+      mockPrisma.queryTenant.mockResolvedValueOnce([]);
+
+      await expect(
+        service.submitWage(tenantSlug, 'w-missing', {}, userId),
+      ).rejects.toThrow(NotFoundException);
+    });
+  });
+
+  describe('approveWage', () => {
+    const tenantSlug = 'test-firm';
+
+    it('should approve a Submitted wage', async () => {
+      mockPrisma.queryTenant
+        .mockResolvedValueOnce([{ id: 'w1', payment_status: 'Submitted', submitted_by: 'user-A' }])
+        .mockResolvedValueOnce([{ id: 'w1', payment_status: 'Approved' }]);
+      mockPrisma.executeTenant.mockResolvedValue(undefined);
+
+      const result = await service.approveWage(tenantSlug, 'w1', {}, 'user-B');
+      expect(result.payment_status).toBe('Approved');
+    });
+
+    it('should block self-approval', async () => {
+      mockPrisma.queryTenant.mockResolvedValueOnce([{ id: 'w1', payment_status: 'Submitted', submitted_by: 'user-A' }]);
+
+      await expect(
+        service.approveWage(tenantSlug, 'w1', {}, 'user-A'),
+      ).rejects.toThrow(ForbiddenException);
+    });
+
+    it('should reject approving a Draft wage', async () => {
+      mockPrisma.queryTenant.mockResolvedValueOnce([{ id: 'w1', payment_status: 'Draft' }]);
+
+      await expect(
+        service.approveWage(tenantSlug, 'w1', {}, 'user-B'),
+      ).rejects.toThrow(UnprocessableEntityException);
+    });
+  });
+
+  describe('rejectWage', () => {
+    const tenantSlug = 'test-firm';
+
+    it('should reject a Submitted wage and revert to Draft', async () => {
+      mockPrisma.queryTenant
+        .mockResolvedValueOnce([{ id: 'w1', payment_status: 'Submitted' }])
+        .mockResolvedValueOnce([{ id: 'w1', payment_status: 'Draft' }]);
+      mockPrisma.executeTenant.mockResolvedValue(undefined);
+
+      const result = await service.rejectWage(tenantSlug, 'w1', { reason: 'Incorrect amount' }, 'user-B');
+      expect(result.payment_status).toBe('Draft');
+      expect(mockStatusHistory.record).toHaveBeenCalledWith(
+        expect.objectContaining({ fromStatus: 'Submitted', toStatus: 'Draft', comment: 'Incorrect amount' }),
+      );
+    });
+  });
+
+  describe('markWagePaid', () => {
+    const tenantSlug = 'test-firm';
+
+    it('should mark an Approved wage as Paid', async () => {
+      mockPrisma.queryTenant
+        .mockResolvedValueOnce([{ id: 'w1', payment_status: 'Approved' }])
+        .mockResolvedValueOnce([{ id: 'w1', payment_status: 'Paid' }]);
+      mockPrisma.executeTenant.mockResolvedValue(undefined);
+
+      const result = await service.markWagePaid(tenantSlug, 'w1', {}, 'user-B');
+      expect(result.payment_status).toBe('Paid');
+    });
+
+    it('should reject marking a non-Approved wage as paid', async () => {
+      mockPrisma.queryTenant.mockResolvedValueOnce([{ id: 'w1', payment_status: 'Submitted' }]);
+
+      await expect(
+        service.markWagePaid(tenantSlug, 'w1', {}, 'user-B'),
+      ).rejects.toThrow(UnprocessableEntityException);
     });
   });
 });

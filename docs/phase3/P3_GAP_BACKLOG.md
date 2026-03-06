@@ -84,6 +84,15 @@
 
 ---
 
+| P3-056 | P0 | Backend | `documents` | No context-aware rich upload session API | Existing upload flow is document-library centric | Add `POST /documents/upload-sessions` + finalize endpoint with per-file validation and signed URL bootstrap | TODO |
+| P3-057 | P1 | DB | `documents` | No origin-trace metadata on documents | Upload source module/entity not persisted | Add `origin_module`, `origin_entity_type`, `origin_entity_id`; index by `(origin_entity_type, origin_entity_id)` | TODO |
+| P3-058 | P0 | Frontend | `documents` | Shared Rich Upload component missing | Upload UX duplicated/inconsistent across modules | Build `RichDocumentUpload.tsx` with queue/progress/retry and metadata editor | TODO |
+| P3-059 | P1 | Frontend | `case/customer` | Case/Customer views lack embedded contextual uploader | Users must navigate away to documents page | Integrate uploader in Case Documents tab, timeline quick action, and Customer KYC panel | TODO |
+| P3-060 | P1 | Frontend | `finance` | Expense/Invoice forms lack in-form attachment upload | Finance evidence upload disconnected from workflow context | Integrate uploader in Expense/Invoice forms with finance doc-type presets | TODO |
+| P3-061 | P2 | Frontend | `tasks/comms/sessions/filings` | Workflow forms lack universal attachment entry point | Attachments added late or missed | Add uploader to Task drawer, Communication drawer, Session/Hearing and Filing forms | TODO |
+
+---
+
 ## Progress Tracker
 
 | Sprint | Items | Completed | Remaining |
@@ -94,7 +103,8 @@
 | S4 — Notifications | P3-031 to P3-033 | 0 | 3 |
 | S5 — Reporting | P3-034 to P3-044 | 0 | 11 |
 | S6 — Calendar + OCR + UX | P3-045 to P3-055 | 0 | 11 |
-| **Total** | **55** | **0** | **55** |
+| S7 — Rich Upload Integration | P3-056 to P3-061 | 0 | 6 |
+| **Total** | **61** | **0** | **61** |
 
 ---
 

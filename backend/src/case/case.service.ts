@@ -3,6 +3,8 @@ import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { NotificationService } from '../notification/notification.service';
 import { v4 as uuidv4 } from 'uuid';
+import { StatusHistoryService } from '../status-history/status-history.service'
+
 import { VALID_STATE_TRANSITIONS } from '../common/types';
 import {
   CreateCaseDto, TransitionCaseDto, SetOnHoldDto, ReopenCaseDto,
@@ -10,6 +12,7 @@ import {
   CreateSessionDto, UpdateSessionDto, RescheduleSessionDto,
   CreateNoteDto, CreateFilingDto, UpdateFilingDto,
   CreateCommunicationDto, AddCasePartyDto,
+  UpdateCasePartyDto,
 } from './case.dto';
 
 @Injectable()
@@ -18,6 +21,7 @@ export class CaseService {
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
     private readonly notifications: NotificationService,
+    private readonly statusHistory: StatusHistoryService,
   ) {}
 
   async create(tenantSlug: string, dto: CreateCaseDto, userId: string) {
@@ -76,6 +80,16 @@ export class CaseService {
       entityType: 'Case',
       entityId: caseId,
       payload: { title: dto.title, systemCaseRef, customerIds: dto.customerIds },
+    });
+    // Initial status_history record
+    await this.statusHistory.record({
+      tenantSlug,
+      entityType: 'Case',
+      entityId: caseId,
+      fromStatus: null,
+      toStatus: 'Intake',
+      actorUserId: userId,
+      comment: 'Case created',
     });
 
     return this.getById(tenantSlug, caseId);
@@ -147,6 +161,18 @@ export class CaseService {
       entityId: caseId,
       payload: { from: currentState, to: dto.toState, reason: dto.reason },
     });
+
+  // update staus_history
+    await this.statusHistory.record({
+      tenantSlug,
+      entityType: 'Case',
+      entityId: caseId,
+      fromStatus: currentState,
+      toStatus: dto.toState,
+      actorUserId: userId,
+      comment: dto.reason,
+    });
+
 
     return this.getById(tenantSlug, caseId);
   }
@@ -250,6 +276,7 @@ export class CaseService {
       [role, membershipId, caseId],
     );
     await this.audit.log({ tenantSlug, eventType: 'CASE_MEMBERSHIP_ROLE_CHANGED', actorUserId: userId, entityType: 'CaseMembership', entityId: membershipId, payload: { caseId, newRole: role } });
+    return { success: true };
   }
 
   // --- Case Customers ---
@@ -348,11 +375,22 @@ export class CaseService {
     await this.ensureNotArchived(tenantSlug, caseId);
     const sessionId = uuidv4();
     await this.prisma.executeTenant(
-      tenantSlug,
-      `INSERT INTO sessions (id, case_id, type_id, title, start_date_time, end_date_time, location, court_id, linked_document_ids, status, created_at, updated_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'Planned', NOW(), NOW())`,
-      [sessionId, caseId, dto.typeId, dto.title, dto.startDateTime, dto.endDateTime, dto.location || null, dto.courtId || null, dto.linkedDocumentIds || []],
-    );
+			tenantSlug,
+			`INSERT INTO sessions (id, case_id, type_id, title, start_date_time, end_date_time, location, court_id, linked_document_ids, status, created_at, updated_at,is_billable)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'Planned', NOW(), NOW(),$10)`,
+			[
+				sessionId,
+				caseId,
+				dto.typeId,
+				dto.title,
+				dto.startDateTime,
+				dto.endDateTime,
+				dto.location || null,
+				dto.courtId || null,
+				dto.linkedDocumentIds || [],
+        dto.isBillable || false,
+			],
+		)
     await this.audit.log({ tenantSlug, eventType: 'SESSION_CREATED', actorUserId: userId, entityType: 'Session', entityId: sessionId, payload: { caseId, title: dto.title } });
 
     // Notify all case members about the new session
@@ -581,12 +619,51 @@ export class CaseService {
   // --- Case Parties ---
   async addCaseParty(tenantSlug: string, caseId: string, dto: AddCasePartyDto, userId: string) {
     await this.ensureNotArchived(tenantSlug, caseId);
+
+    // Resolve partyId: frontend may send a customerId; auto-map to a party entity
+    let resolvedPartyId = dto.partyId;
+    const partyCheck: any[] = await this.prisma.queryTenant(
+      tenantSlug,
+      `SELECT id FROM parties WHERE id = $1 LIMIT 1`,
+      [dto.partyId],
+    );
+    if (!partyCheck?.length) {
+      // Not a direct party ID — check if it's a customerId
+      const linked: any[] = await this.prisma.queryTenant(
+        tenantSlug,
+        `SELECT id FROM parties WHERE customer_id = $1 LIMIT 1`,
+        [dto.partyId],
+      );
+      if (linked?.length) {
+        resolvedPartyId = linked[0].id;
+      } else {
+        // Auto-create a party linked to this customer
+        const customers: any[] = await this.prisma.queryTenant(
+          tenantSlug,
+          `SELECT * FROM customers WHERE id = $1 LIMIT 1`,
+          [dto.partyId],
+        );
+        if (!customers?.length) {
+          throw new NotFoundException(`No party or customer found with id ${dto.partyId}`);
+        }
+        const cust = customers[0];
+        const newPartyId = uuidv4();
+        await this.prisma.executeTenant(
+          tenantSlug,
+          `INSERT INTO parties (id, party_type, name, customer_id, created_at, updated_at)
+           VALUES ($1, $2, $3, $4, NOW(), NOW())`,
+          [newPartyId, cust.customer_type || 'Individual', cust.name, cust.id],
+        );
+        resolvedPartyId = newPartyId;
+      }
+    }
+
     const id = uuidv4();
     await this.prisma.executeTenant(
       tenantSlug,
       `INSERT INTO case_parties (id, case_id, party_id, party_role_type, participant_role_id, visibility_scope, notes, start_date, created_at)
        VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), NOW())`,
-      [id, caseId, dto.partyId, dto.partyRoleType, dto.participantRoleId || null,
+      [id, caseId, resolvedPartyId, dto.partyRoleType, dto.participantRoleId || null,
        dto.visibilityScope || 'LegalOnly', dto.notes || null],
     );
     return { id };
@@ -595,9 +672,85 @@ export class CaseService {
   async listCaseParties(tenantSlug: string, caseId: string) {
     return this.prisma.queryTenant(
       tenantSlug,
-      `SELECT * FROM case_parties WHERE case_id = $1 ORDER BY created_at DESC`,
+      `SELECT cp.*, cp.party_role_type AS role_in_case,
+              COALESCE(p.name, c.name) AS party_name
+       FROM case_parties cp
+       LEFT JOIN parties p ON p.id = cp.party_id
+       LEFT JOIN customers c ON c.id = p.customer_id
+       WHERE cp.case_id = $1
+       ORDER BY cp.created_at DESC`,
       [caseId],
     );
+  }
+
+  async updateCaseParty(tenantSlug: string, caseId: string, partyLinkId: string, dto: UpdateCasePartyDto, userId: string) {
+    await this.ensureNotArchived(tenantSlug, caseId);
+
+    const setClauses: string[] = [];
+    const params: any[] = [];
+    let idx = 1;
+
+    if (dto.partyRoleType !== undefined) {
+      setClauses.push(`party_role_type = $${idx++}`);
+      params.push(dto.partyRoleType);
+    }
+    if (dto.participantRoleId !== undefined) {
+      setClauses.push(`participant_role_id = $${idx++}`);
+      params.push(dto.participantRoleId);
+    }
+    if (dto.visibilityScope !== undefined) {
+      setClauses.push(`visibility_scope = $${idx++}`);
+      params.push(dto.visibilityScope);
+    }
+    if (dto.notes !== undefined) {
+      setClauses.push(`notes = $${idx++}`);
+      params.push(dto.notes);
+    }
+
+    if (setClauses.length === 0) {
+      return { success: true };
+    }
+
+    params.push(partyLinkId);
+    params.push(caseId);
+
+    await this.prisma.executeTenant(
+      tenantSlug,
+      `UPDATE case_parties SET ${setClauses.join(', ')} WHERE id = $${idx} AND case_id = $${idx + 1}`,
+      params,
+    );
+
+    await this.audit.log({
+      tenantSlug,
+      eventType: 'CASE_PARTY_UPDATED',
+      actorUserId: userId,
+      entityType: 'CaseParty',
+      entityId: partyLinkId,
+      payload: { caseId, changes: dto },
+    });
+
+    return { success: true };
+  }
+
+  async deleteCaseParty(tenantSlug: string, caseId: string, partyLinkId: string, userId: string) {
+    await this.ensureNotArchived(tenantSlug, caseId);
+
+    await this.prisma.executeTenant(
+      tenantSlug,
+      `DELETE FROM case_parties WHERE id = $1 AND case_id = $2`,
+      [partyLinkId, caseId],
+    );
+
+    await this.audit.log({
+      tenantSlug,
+      eventType: 'CASE_PARTY_REMOVED',
+      actorUserId: userId,
+      entityType: 'CaseParty',
+      entityId: partyLinkId,
+      payload: { caseId },
+    });
+
+    return { success: true };
   }
 
   private async ensureNotArchived(tenantSlug: string, caseId: string) {
